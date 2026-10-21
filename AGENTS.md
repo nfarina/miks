@@ -43,6 +43,8 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   `MIKS_BACKGROUND=1 MIKS_HOME=/tmp/mk yarn dev`. Keep `MIKS_HOME` short;
   macOS caps socket paths at 104 bytes. `MIKS_BACKGROUND` keeps its windows
   from taking focus (no Dock icon, `showInactive`); screenshots still work.
+  Such a window renders no frames, so scroll events wait for one: take a
+  screenshot after setting `scrollTop` from an eval.
   A page's own `window.close()` skips BrowserWindow's `close` event, so it
   can't test anything hooked there.
 - `yarn install:app` builds Miks.app, signs it with the keychain's Developer
