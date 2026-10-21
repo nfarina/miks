@@ -3,6 +3,7 @@ import { PanelLayout, PanelLayoutContext, StyledPanelLayout } from "crosswing/co
 import { StyledTextArea, TextArea } from "crosswing/components/forms/TextArea";
 import { fonts } from "crosswing/fonts";
 import { ModalContext } from "crosswing/modals/context";
+import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView";
 import { tooltip } from "crosswing/modals/popup";
 import { ArrowUp, ChevronRight, Square, TextQuote } from "lucide-react";
 import type { ChatEntry, Tab } from "miks/shared/protocol";
@@ -672,9 +673,23 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     setQuote({
       text: selected,
       top: rect.top - bounds.top + scroller.scrollTop - 34,
-      left: Math.min(Math.max(rect.left - bounds.left + rect.width / 2 - 36, 8), bounds.width - 88),
+      left: Math.min(Math.max(rect.left - bounds.left + rect.width / 2 - 52, 8), bounds.width - 124),
     });
   }
+
+  // ⌃Q quotes too, wherever the keyboard is: before the terminal or the
+  // composer can take it.
+  useEffect(() => {
+    if (!quote) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "q" || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      addQuote();
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, [quote, text]);
 
   function addQuote() {
     if (!quote) return;
@@ -814,7 +829,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
             onMouseUp={(event) => event.stopPropagation()}
             onClick={addQuote}
           >
-            <TextQuote size={14} /> Quote
+            <TextQuote size={14} /> Quote <HotkeyView hotkeys={{ key: "ctrl+q" }} />
           </button>
         )}
       </div>
@@ -1311,6 +1326,11 @@ const StyledChatPanel = styled.div`
       font: ${fonts.displayMedium({ size: 12, line: "16px" })};
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
       cursor: pointer;
+
+      > ${StyledHotkeyView} {
+        margin-left: 2px;
+        font: ${fonts.displayBold({ size: 11, line: "16px" })};
+      }
     }
   }
 
