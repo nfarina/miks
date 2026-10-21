@@ -547,6 +547,8 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   const atBottom = useRef(true);
   // Where following stopped to keep a reply's start on screen (see below).
   const pinnedAt = useRef<number | null>(null);
+  // The conversation came all at once (opening it, or a rewind), not as it went.
+  const loaded = useRef(false);
   const { showToast } = use(ModalContext);
   const status = tab.agent?.status;
 
@@ -554,6 +556,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   useEffect(() => {
     if (!visible) return;
     return daemon.watchChat(tab.id, (event) => {
+      if (event.reset) loaded.current = true;
       setChat((current) => ({
         session: event.session,
         entries: event.reset ? event.entries : [...(current?.entries ?? []), ...event.entries].slice(-MAX_ENTRIES),
@@ -582,12 +585,15 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   // But not past the start of the words it ends with: you watch tool calls
   // go by, then read the reply from its top. Whether words are the turn's
   // last isn't known until it ends, so any are; a tool call after them
-  // carries on to the bottom.
+  // carries on to the bottom. Not for one loaded all at once (opening Miks
+  // again), which was read as it went, if at all, and goes to the bottom.
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
+    const wasLoaded = loaded.current;
+    loaded.current = false;
     if (!scroller || !atBottom.current) return;
     const bottom = scroller.scrollHeight - scroller.clientHeight;
-    const start = replyStart(scroller);
+    const start = wasLoaded ? null : replyStart(scroller);
     const target = start ? Math.max(Math.min(bottom, start.offsetTop - 12), scroller.scrollTop) : bottom;
     pinnedAt.current = target < bottom - 1 ? target : null;
     scroller.scrollTop = target;
