@@ -545,7 +545,10 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
   const atBottom = useRef(true);
+  // Where following stopped to keep a reply's start on screen (see below).
+  const pinnedAt = useRef<number | null>(null);
   const { showToast } = use(ModalContext);
+  const status = tab.agent?.status;
 
   // Only while it's showing; a hidden panel needn't follow anything.
   useEffect(() => {
@@ -576,10 +579,19 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   }, [visible, chat?.session]);
 
   // New messages keep it at the bottom, unless you've scrolled up to read.
+  // But not past the start of the words it ends with: you watch tool calls
+  // go by, then read the reply from its top. Whether words are the turn's
+  // last isn't known until it ends, so any are; a tool call after them
+  // carries on to the bottom.
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
-    if (scroller && atBottom.current) scroller.scrollTop = scroller.scrollHeight;
-  }, [chat, pending]);
+    if (!scroller || !atBottom.current) return;
+    const bottom = scroller.scrollHeight - scroller.clientHeight;
+    const start = replyStart(scroller);
+    const target = start ? Math.max(Math.min(bottom, start.offsetTop - 12), scroller.scrollTop) : bottom;
+    pinnedAt.current = target < bottom - 1 ? target : null;
+    scroller.scrollTop = target;
+  }, [chat, pending, status]);
 
   // ⌃D hides the panel for the terminal, where two more quit Claude Code.
   function hide() {
@@ -614,7 +626,6 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     focusComposer();
   }
 
-  const status = tab.agent?.status;
   const session = chat?.session ?? null;
   // A permission prompt or a question takes keys, not messages.
   const asking = status === "waiting";
@@ -672,7 +683,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     const bounds = scroller.getBoundingClientRect();
     setQuote({
       text: selected,
-      top: rect.top - bounds.top + scroller.scrollTop - 34,
+      top: rect.top - bounds.top + scroller.scrollTop - 38,
       left: Math.min(Math.max(rect.left - bounds.left + rect.width / 2 - 52, 8), bounds.width - 124),
     });
   }
@@ -757,7 +768,9 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
         ref={scrollerRef}
         onScroll={(event) => {
           const scroller = event.currentTarget;
-          atBottom.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+          const pinned = pinnedAt.current !== null && Math.abs(scroller.scrollTop - pinnedAt.current) < 2;
+          if (!pinned) pinnedAt.current = null;
+          atBottom.current = pinned || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
         }}
         onScrollEnd={() => (jumpingTo.current = null)}
         // Focusable, so a click in the conversation puts the keyboard here,
@@ -874,6 +887,17 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
       </form>
     </>
   );
+}
+
+/** The start of the words the conversation ends with (its "Reply" line, if marked), if it does. */
+function replyStart(scroller: HTMLElement): HTMLElement | null {
+  let start: HTMLElement | null = null;
+  for (let child = scroller.lastElementChild; child; child = child.previousElementSibling) {
+    if (child.matches(".working, .quote")) continue;
+    if (!child.matches(".reply, .final-reply")) break;
+    start = child as HTMLElement;
+  }
+  return start;
 }
 
 function Reply({ text }: { text: string }) {
