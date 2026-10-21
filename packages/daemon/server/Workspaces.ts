@@ -15,6 +15,7 @@ import {
 } from "../shared/protocol.ts";
 import { type FileContents, readForPanel, writeFromPanel } from "./Files.ts";
 import { Pane } from "./Pane.ts";
+import { BackgroundTasks } from "./BackgroundTasks.ts";
 import { Transcript } from "./Transcript.ts";
 
 /** What survives a daemon restart, in `state.json`. */
@@ -64,6 +65,8 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * after having been seen running (it starts a moment after it registers).
    */
   private readonly keeps = new Map<string, { command: string; seenRunning: boolean }>();
+  /** What each tab's Claude session has running in the background. */
+  private readonly backgrounds = new Map<string, BackgroundTasks>();
   /** A finished turn waits a moment before it's `done` (see applyHook). */
   private readonly pendingDone = new Map<string, NodeJS.Timeout>();
   /**
@@ -343,6 +346,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       const transcriptPath = typeof payload?.transcript_path === "string" ? payload.transcript_path : undefined;
       this.claudeSessions.set(tabId, { id: sessionId, transcriptPath });
       this.updateChat(tabId);
+      if (transcriptPath) this.followBackground(tabId, transcriptPath);
     }
 
     const set = (status: AgentState["status"], message?: string) =>
@@ -392,6 +396,9 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
         return;
       }
       case "SessionEnd":
+        // Claude Code takes its background work with it.
+        this.backgrounds.get(tabId)?.close();
+        this.backgrounds.delete(tabId);
         this.agents.delete(tabId);
         this.claudeSessions.delete(tabId);
         this.updateChat(tabId);
@@ -410,6 +417,16 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * it yourself there's nothing new to see. Only the change from spinning to
    * ✳ counts, never a ✳ on its own, which can trail a prompt just submitted.
    */
+  private followBackground(tabId: string, transcriptPath: string) {
+    let background = this.backgrounds.get(tabId);
+    if (!background) {
+      background = new BackgroundTasks();
+      background.on("change", () => this.emit("change"));
+      this.backgrounds.set(tabId, background);
+    }
+    background.follow(transcriptPath);
+  }
+
   private applyTitle(tabId: string, title: string, previous: string) {
     const agent = this.agents.get(tabId);
     if (agent?.status !== "working") return;
@@ -698,6 +715,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   killAll() {
     this.stopping = true;
     for (const chat of this.chats.values()) chat.transcript?.close();
+    for (const background of this.backgrounds.values()) background.close();
     for (const tabId of [...this.files.keys()]) this.closeFile(tabId, { quietly: true });
     for (const timer of this.pendingDone.values()) clearTimeout(timer);
     for (const pane of this.panes.values()) pane.kill();
@@ -715,6 +733,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       kept: this.keeps.has(id) || !!this.resumableSession(id),
       file: this.files.get(id)?.file,
       page: this.pages.get(id),
+      background: this.backgrounds.get(id)?.counts(),
     };
   }
 
@@ -733,6 +752,8 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     this.chats.delete(tabId);
     this.closeFile(tabId);
     this.pages.delete(tabId);
+    this.backgrounds.get(tabId)?.close();
+    this.backgrounds.delete(tabId);
     this.cwds.delete(tabId);
 
     const workspace = this.workspaces.find((w) => w.tabIds.includes(tabId));

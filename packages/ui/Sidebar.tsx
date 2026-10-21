@@ -7,7 +7,7 @@ import { styled } from "styled-components";
 import { daemon } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { displayPath, useSettings } from "./settings";
-import { STATUS_LABELS, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
+import { backgroundSummary, STATUS_LABELS, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
 import { StatusDot } from "./StatusDot";
 
 const DRAG_GROUP = "workspaces";
@@ -145,6 +145,7 @@ function WorkspaceRow({
   const cwd = activeTab?.cwd ?? workspace.cwd;
   const status = workspaceStatus(workspace);
   const message = status === "waiting" ? waitingMessage(workspace) : null;
+  const background = backgroundSummary(workspace);
   const title = workspaceTitle(workspace);
 
   function onRenameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -190,6 +191,7 @@ function WorkspaceRow({
           <div className="detail">
             {message ?? (status ? STATUS_LABELS[status] : plural(workspace.tabs.length, "tab"))}
           </div>
+          {background && <div className="background">· {background}</div>}
         </div>
       </div>
     </StyledWorkspaceRow>
@@ -271,6 +273,14 @@ const StyledWorkspaceRow = styled.div`
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
+        color: ${colors.textSecondary()};
+        font: ${fonts.display({ size: 12 })};
+      }
+
+      /* Kept whole: a long message gives way first. */
+      > .background {
+        flex-shrink: 0;
         white-space: nowrap;
         color: ${colors.textSecondary()};
         font: ${fonts.display({ size: 12 })};

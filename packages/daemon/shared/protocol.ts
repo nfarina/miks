@@ -67,7 +67,12 @@ export type Tab = {
   file?: OpenFile;
   /** A page `miks browse` put in the tab's panel. */
   page?: OpenPage;
+  /** What its Claude session has running in the background, while anything is. */
+  background?: Background;
 };
+
+/** A Claude Code session's background work, as its own footer counts it ("1 shell, 1 monitor"). */
+export type Background = { shells: number; monitors: number; agents: number };
 
 /** A file `miks open` or `miks edit` put in a tab's panel. */
 export type OpenFile = {

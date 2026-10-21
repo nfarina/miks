@@ -11,6 +11,8 @@ I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundle
 - Workspaces and tabs, drag to reorder; ⌘1–9, ⌘⌃[ ] (or ⌘⌃← →) and ⌘⇧[ ] (on into the next workspace) to get around
 - Live Claude Code status in the sidebar, plus a notification when an agent
   finishes or needs you (unless you're already looking)
+- What each session has going in the background (shells, monitors, agents),
+  next to its status
 - Terminals live in a background daemon, so reloading the UI never touches
   a session. Quitting ends them like any terminal app (asking first if
   anything's running), or turn on "Keep terminals running"

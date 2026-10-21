@@ -211,6 +211,15 @@ resizes); keep it passing.
   Claude session: one in that tab is the command's), until it's been seen
   in front and the shell is back. `Tab.kept` (↻ in the tab bar) covers that
   and resumable Claude sessions.
+- What a session has running in the background (its footer's "1 shell, 1
+  monitor") has no hook: `server/BackgroundTasks.ts` follows the transcript
+  from its end for each start (`toolUseResult`: `backgroundTaskId`, a
+  Monitor's `taskId` and `timeoutMs`, an agent's `async_launched`) and its
+  `<task-notification>` with a `<status>`. A shell's end can reach the
+  transcript only once Claude Code delivers it, and some ends never do, so a
+  shell also ends when nothing has its output file open (its own shell writes
+  it; foreground commands use the same folder), and a monitor (no output
+  file) at its deadline. Verified against a real session.
 - `claude -p` fires every hook, with SessionEnd 25ms after Stop (captured
   live), so Stop waits `DONE_DELAY` before `done`: one-shot runs (scripts)
   show working, then nothing, and never notify.

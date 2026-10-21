@@ -14,6 +14,21 @@ export function waitingMessage(workspace: Workspace): string | null {
   return workspace.tabs.find((tab) => tab.agent?.status === "waiting")?.agent?.message ?? null;
 }
 
+/** What the workspace's Claude sessions have running in the background, as their footers say it: "1 shell, 1 monitor". */
+export function backgroundSummary(workspace: Workspace): string | null {
+  const total = { shells: 0, monitors: 0, agents: 0 };
+  for (const tab of workspace.tabs) {
+    for (const kind of ["shells", "monitors", "agents"] as const) total[kind] += tab.background?.[kind] ?? 0;
+  }
+  const parts = [
+    [total.shells, "shell"],
+    [total.monitors, "monitor"],
+    [total.agents, "agent"],
+  ] as const;
+  const summary = parts.filter(([count]) => count > 0).map(([count, noun]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
+  return summary.length > 0 ? summary.join(", ") : null;
+}
+
 export function workspaceTitle(workspace: Workspace): string {
   const activeTab = workspace.tabs.find((tab) => tab.id === workspace.activeTabId);
   return workspace.title ?? (activeTab ? tabTitle(activeTab) : "Workspace");
