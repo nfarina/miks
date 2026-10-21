@@ -27,6 +27,8 @@ export type AgentState = {
   since: number;
   /** How many lines the turn that just ended replied with. Since protocol 5. */
   replyLines?: number;
+  /** The start of that reply, as written (markdown), for a notification. */
+  reply?: string;
 };
 
 /**

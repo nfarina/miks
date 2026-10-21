@@ -376,13 +376,15 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       case "Stop": {
         const reply = payload?.last_assistant_message;
         const replyLines = typeof reply === "string" ? reply.split("\n").length : undefined;
+        // More than a notification shows; the whole reply is in the panel.
+        const replyStart = typeof reply === "string" ? reply.slice(0, 500) : undefined;
         // A one-shot `claude -p` (a script's, say) ends its session right
         // after its turn, 25ms later in practice; nothing for you to see, so
         // no `done` (and no notification). An interactive session stays.
         const timer = setTimeout(() => {
           this.pendingDone.delete(tabId);
           if (!this.agents.has(tabId)) return;
-          this.agents.set(tabId, { kind: "claude", status: "done", since: Date.now(), replyLines });
+          this.agents.set(tabId, { kind: "claude", status: "done", since: Date.now(), replyLines, reply: replyStart });
           this.emit("change");
         }, DONE_DELAY);
         timer.unref();

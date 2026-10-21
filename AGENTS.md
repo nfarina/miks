@@ -328,7 +328,8 @@ resizes); keep it passing.
   the list shifts.
 - Notifications come from the renderer (`useAgentNotifications` in
   `App.tsx`): only for status changes seen while connected, and not for the
-  tab on screen in a focused window.
+  tab on screen in a focused window. A finished turn's shows the start of its reply
+  (the Stop hook's `last_assistant_message`, as `AgentState.reply`), as plain text.
 - Claude Code sets DEC mode 2031 at startup and never queries the scheme, so
   the daemon (`Pane.ts`) reports the current one as soon as the mode is set,
   then on every change the UI reports (`appearance`). xterm.js has no 2031.

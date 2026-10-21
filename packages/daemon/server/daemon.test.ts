@@ -874,6 +874,8 @@ test("the chat panel gets a tab's conversation, then each new message, through i
   // The reply's length, for opening the panel on long ones.
   await postHook(tabId, { hook_event_name: "Stop", session_id: "second", transcript_path: second, last_assistant_message: "a\nb\nc" });
   await waitFor(() => daemon.workspaces.getState().workspaces[0].tabs[0].agent?.replyLines === 3);
+  // And its start, for the notification.
+  expect(daemon.workspaces.getState().workspaces[0].tabs[0].agent?.reply).toBe("a\nb\nc");
   client.close();
 });
 

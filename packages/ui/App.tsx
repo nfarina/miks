@@ -11,6 +11,7 @@ import { styled } from "styled-components";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
 import { daemon, type Target, useDaemon, useTarget } from "./daemon";
+import { renderMarkdown } from "./markdown";
 import { getSettings, setFontSize, updateSettings, useSettings } from "./settings";
 import { Sidebar } from "./Sidebar";
 import { workspaceTitle } from "./status";
@@ -394,6 +395,17 @@ function useAppearanceReporting(connected: boolean) {
  * looking at it. Only for changes seen while connected: the statuses a fresh
  * connection reports are old news.
  */
+/** Markdown as the words it shows, a line per paragraph, item or heading: a notification's body is plain text. */
+function plainText(markdown: string): string {
+  const { body } = new DOMParser().parseFromString(renderMarkdown(markdown), "text/html");
+  for (const block of body.querySelectorAll("p, li, h1, h2, h3, h4, h5, h6, pre, tr")) block.append("\n");
+  return (body.textContent ?? "")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 function useAgentNotifications(state: DaemonState | null) {
   const { notifications } = useSettings();
   const previous = useRef<Map<string, AgentStatus | undefined> | null>(null);
@@ -420,7 +432,10 @@ function useAgentNotifications(state: DaemonState | null) {
         if (onScreen && document.hasFocus()) continue;
 
         const notification = new Notification(workspaceTitle(workspace), {
-          body: status === "waiting" ? (tab.agent?.message ?? "Needs your input") : "Done",
+          body:
+            status === "waiting"
+              ? (tab.agent?.message ?? "Needs your input")
+              : (plainText(tab.agent?.reply ?? "") || "Done"),
           // One per tab: a newer status replaces an older one still showing.
           tag: tab.id,
         });
