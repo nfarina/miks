@@ -7,6 +7,8 @@ import http from "http";
 import path from "path";
 import { connectDaemon as openDaemonSocket } from "miks/shared/connect";
 import { logPath, miksHome, socketPath } from "miks/shared/paths";
+import type { Background } from "miks/shared/protocol";
+import { describeBackground } from "miks/shared/background";
 import { DEFAULT_SETTINGS, displayPath, type Remote, type Settings } from "miks/shared/settings";
 import os from "os";
 import type { WebSocket } from "ws";
@@ -1078,15 +1080,17 @@ async function stopDaemonForQuit(): Promise<boolean> {
  * won't come back, and ones that will but are mid-task (a Claude turn).
  */
 async function runningPrograms(socketFile = socketPath(), { restored = false } = {}): Promise<string[]> {
-  type Running = { program: string; cwd: string | null; kept?: boolean; active?: boolean };
+  type Running = { program: string; cwd: string | null; kept?: boolean; active?: boolean; background?: Background };
   const result = await daemonGet("/api/running", socketFile);
   if (Array.isArray(result?.running)) {
     return (result.running as Running[])
-      // A daemon from before `kept` comes back with nothing.
-      .filter(({ kept, active }) => !restored || !kept || active)
-      .map(({ program, cwd, kept, active }) => {
+      // A daemon from before `kept` comes back with nothing. A resumed
+      // Claude session doesn't start its background work again.
+      .filter(({ kept, active, background }) => !restored || !kept || active || background)
+      .map(({ program, cwd, kept, active, background }) => {
         const where = cwd ? ` in ${displayPath(cwd, settings.hidePathPrefix, app.getPath("home"))}` : "";
-        return `${program}${where}${restored && kept && active ? " (mid-task)" : ""}`;
+        const notes = [restored && kept && active && "mid-task", describeBackground(background)].filter(Boolean);
+        return `${program}${where}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}`;
       });
   }
 

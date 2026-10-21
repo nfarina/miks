@@ -219,7 +219,9 @@ resizes); keep it passing.
   transcript only once Claude Code delivers it, and some ends never do, so a
   shell also ends when nothing has its output file open (its own shell writes
   it; foreground commands use the same folder), and a monitor (no output
-  file) at its deadline. Verified against a real session.
+  file) at its deadline. Verified against a real session. A resumed session
+  doesn't start them again, so closing, quitting and restarting ask about
+  them (`background` in `/api/running`).
 - `claude -p` fires every hook, with SessionEnd 25ms after Stop (captured
   live), so Stop waits `DONE_DELAY` before `done`: one-shot runs (scripts)
   show working, then nothing, and never notify.

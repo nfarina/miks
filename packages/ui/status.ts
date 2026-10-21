@@ -1,4 +1,5 @@
 import { colors } from "crosswing/colors";
+import { describeBackground, totalBackground } from "miks/shared/background";
 import { AgentStatus, Tab, Workspace } from "miks/shared/protocol";
 
 /** Most urgent first: what a workspace shows when its tabs disagree. */
@@ -16,17 +17,7 @@ export function waitingMessage(workspace: Workspace): string | null {
 
 /** What the workspace's Claude sessions have running in the background, as their footers say it: "1 shell, 1 monitor". */
 export function backgroundSummary(workspace: Workspace): string | null {
-  const total = { shells: 0, monitors: 0, agents: 0 };
-  for (const tab of workspace.tabs) {
-    for (const kind of ["shells", "monitors", "agents"] as const) total[kind] += tab.background?.[kind] ?? 0;
-  }
-  const parts = [
-    [total.shells, "shell"],
-    [total.monitors, "monitor"],
-    [total.agents, "agent"],
-  ] as const;
-  const summary = parts.filter(([count]) => count > 0).map(([count, noun]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
-  return summary.length > 0 ? summary.join(", ") : null;
+  return describeBackground(totalBackground(workspace.tabs.map((tab) => tab.background)));
 }
 
 export function workspaceTitle(workspace: Workspace): string {

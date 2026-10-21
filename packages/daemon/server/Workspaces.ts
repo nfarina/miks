@@ -6,6 +6,7 @@ import os from "os";
 import path from "path";
 import {
   type AgentState,
+  type Background,
   type ChatEntry,
   type DaemonState,
   type OpenFile,
@@ -136,7 +137,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * to resume); `active`: it's mid-task (a Claude turn working or waiting on
    * you), which even a restore would cut short.
    */
-  running(): { program: string; cwd: string | null; kept: boolean; active: boolean }[] {
+  running(): { program: string; cwd: string | null; kept: boolean; active: boolean; background?: Background }[] {
     return this.workspaces.flatMap((workspace) =>
       workspace.tabIds.flatMap((id) => {
         const program = this.panes.get(id)?.running();
@@ -148,6 +149,8 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
             cwd: this.cwds.get(id) ?? null,
             kept: this.keeps.has(id) || !!this.resumableSession(id),
             active: status === "working" || status === "waiting",
+            // A resumed session doesn't start these again.
+            background: this.backgrounds.get(id)?.counts(),
           },
         ];
       }),

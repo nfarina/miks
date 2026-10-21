@@ -423,6 +423,21 @@ test("a program in front of the shell is reported as running", async () => {
   });
 });
 
+test("a Claude session's background work is reported with what's running", async () => {
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const tabId = activeTab(daemon.workspaces.getState());
+  const transcript = path.join(home, "session.jsonl");
+  fs.writeFileSync(transcript, "");
+  await postHook(tabId, { hook_event_name: "SessionStart", session_id: "s1", transcript_path: transcript });
+  daemon.workspaces.getPane(tabId)!.write("sleep 30\n");
+  await waitFor(() => daemon.workspaces.running()[0]?.program === "sleep");
+
+  const toolUseResult = { taskId: "m1", timeoutMs: 600000, persistent: false };
+  fs.appendFileSync(transcript, `${JSON.stringify({ parentUuid: "p", type: "user", uuid: "u1", timestamp: new Date().toISOString(), toolUseResult })}\n`);
+  await waitFor(() => daemon.workspaces.running()[0]?.background?.monitors === 1);
+  expect(daemon.workspaces.getState().workspaces[0].tabs[0].background).toEqual({ shells: 0, monitors: 1, agents: 0 });
+});
+
 test("a new tab starts where the current one is", async () => {
   daemon.workspaces.createWorkspace({ cwd: home });
   const workspaceId = daemon.workspaces.getState().workspaces[0].id;
