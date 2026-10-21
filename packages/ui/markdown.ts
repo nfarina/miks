@@ -37,7 +37,7 @@ const marked = new Marked(
   }),
 );
 
-/** Markdown as safe HTML. */
-export function renderMarkdown(text: string): string {
-  return DOMPurify.sanitize(marked.parse(text, { async: false }));
+/** Markdown as safe HTML. With `breaks`, each newline is one, as typed (your own messages). */
+export function renderMarkdown(text: string, { breaks = false }: { breaks?: boolean } = {}): string {
+  return DOMPurify.sanitize(marked.parse(text, { async: false, breaks }));
 }

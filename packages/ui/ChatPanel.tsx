@@ -811,7 +811,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
             <ToolCalls key={item.entries[0].id} entries={item.entries} />
           ) : item.kind === "prompt" ? (
             <div key={item.entry.id} className="prompt">
-              <div className="bubble">{item.entry.text}</div>
+              <Bubble text={item.entry.text} />
             </div>
           ) : item.final ? (
             <Fragment key={item.entry.id}>
@@ -824,7 +824,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
         )}
         {pending.map((sent) => (
           <div key={sent.id} className="prompt" data-pending>
-            <div className="bubble">{sent.text}</div>
+            <Bubble text={sent.text} />
           </div>
         ))}
         {session && status === "working" && <div className="working">Working…</div>}
@@ -898,6 +898,11 @@ function replyStart(scroller: HTMLElement): HTMLElement | null {
     start = child as HTMLElement;
   }
   return start;
+}
+
+/** One of your messages, in markdown too, its line breaks as you typed them. */
+function Bubble({ text }: { text: string }) {
+  return <div className="bubble" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, { breaks: true }) }} />;
 }
 
 function Reply({ text }: { text: string }) {
@@ -1049,7 +1054,7 @@ const StyledChatPanel = styled.div`
       }
 
       > .bubble {
-        white-space: pre-wrap;
+        min-width: 0;
         overflow-wrap: anywhere;
         padding: 8px 12px;
         border-radius: 14px;
@@ -1060,6 +1065,90 @@ const StyledChatPanel = styled.div`
 
         ::selection {
           background: ${colors.white({ alpha: 0.35 })};
+        }
+
+        > *:first-child {
+          margin-top: 0;
+        }
+        > *:last-child {
+          margin-bottom: 0;
+        }
+
+        p,
+        ul,
+        ol,
+        blockquote,
+        pre,
+        table {
+          margin: 0 0 8px;
+        }
+
+        ul,
+        ol {
+          padding-left: 20px;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+          margin: 10px 0 6px;
+          font: ${fonts.displayBold({ size: 15, line: "21px" })};
+        }
+
+        a {
+          color: inherit;
+          text-underline-offset: 2px;
+        }
+
+        blockquote {
+          padding-left: 10px;
+          border-left: 3px solid ${colors.white({ alpha: 0.45 })};
+          color: ${colors.white({ alpha: 0.85 })};
+        }
+
+        hr {
+          border: none;
+          border-top: 1px solid ${colors.white({ alpha: 0.35 })};
+          margin: 10px 0;
+        }
+
+        /* On the blue, white throughout: the replies' code colors are for a light page. */
+        code {
+          font: ${fonts.displayMono({ size: 12.5, line: "18px" })};
+          color: inherit;
+
+          * {
+            color: inherit;
+          }
+        }
+
+        code:not(pre > code) {
+          padding: 1px 4px;
+          border-radius: 4px;
+          background: ${colors.white({ alpha: 0.18 })};
+        }
+
+        pre {
+          padding: 8px 10px;
+          border-radius: 8px;
+          background: ${colors.black({ alpha: 0.2 })};
+          overflow-x: auto;
+          overflow-wrap: normal;
+        }
+
+        table {
+          border-collapse: collapse;
+          display: block;
+          overflow-x: auto;
+          max-width: 100%;
+
+          th,
+          td {
+            padding: 3px 8px;
+            text-align: left;
+            border: 1px solid ${colors.white({ alpha: 0.35 })};
+          }
         }
       }
     }
