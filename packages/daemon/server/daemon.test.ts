@@ -322,6 +322,25 @@ test("a session with no transcript isn't resumed", async () => {
   daemon = await serve({ socketPath, statePath, command: COMMAND });
 });
 
+test("a tab's page comes back where it had gone", async () => {
+  await daemon.close();
+  const statePath = path.join(home, "state.json");
+  const socketPath = path.join(home, "miks.sock");
+
+  const first = await serve({ socketPath, statePath, command: COMMAND });
+  first.workspaces.createWorkspace({ cwd: home });
+  const tabId = activeTab(first.workspaces.getState());
+  first.workspaces.openPage(tabId, "http://localhost:2727/");
+  const { id } = first.workspaces.getState().workspaces[0].tabs[0].page!;
+  first.workspaces.pageNavigated(tabId, "http://localhost:2727/dash");
+  // Still the same page: the panel doesn't load it again.
+  expect(first.workspaces.getState().workspaces[0].tabs[0].page).toEqual({ id, url: "http://localhost:2727/dash" });
+  await first.close();
+
+  daemon = await serve({ socketPath, statePath, command: COMMAND });
+  expect(daemon.workspaces.getState().workspaces[0].tabs[0].page?.url).toBe("http://localhost:2727/dash");
+});
+
 test("panes don't inherit Claude Code's own variables", async () => {
   process.env.CLAUDE_CODE_CHILD_SESSION = "1";
   process.env.CLAUDECODE = "1";

@@ -142,6 +142,8 @@ export type ClientMessage =
   | { type: "createTab"; workspaceId: string }
   /** Closes the tab's page (`miks browse`). */
   | { type: "closePage"; tabId: string }
+  /** Where the tab's page has gone, to restore it there. */
+  | { type: "pageNavigated"; tabId: string; url: string }
   /** Moves a workspace to a position in the sidebar (counted without it). */
   | { type: "moveWorkspace"; workspaceId: string; index: number }
   /** Moves a tab to a position in its workspace's tab bar (counted without it). */

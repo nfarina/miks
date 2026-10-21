@@ -55,8 +55,10 @@ export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; o
     if (!view) return;
 
     const update = () => {
-      if (!editing) setAddress(view.getURL());
+      const url = view.getURL();
+      if (!editing) setAddress(url);
       setHistory({ back: view.canGoBack(), forward: view.canGoForward() });
+      daemon.send({ type: "pageNavigated", tabId: tab.id, url });
     };
     const listeners: [string, (event: any) => void][] = [
       ["dom-ready", () => (ready.current = true)],

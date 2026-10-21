@@ -302,7 +302,8 @@ resizes); keep it passing.
   strips the preload (`window.miks` types into shells) and Node, and allows
   only the window's own partition; a page's new windows load in its place.
   A hidden page is `visibility: hidden`, not `display: none`, so its
-  webview keeps its size. Verified with the fake-ssh remote: a page and a
+  webview keeps its size. The page is saved with its tab, at wherever it has
+  navigated to (`pageNavigated`), so a restore reopens it there. Verified with the fake-ssh remote: a page and a
   fetch to another port both came from the remote daemon (by `lsof`).
 - ⌘⇧F (or the tab bar's button beside the panel's) has the panel fill the
   tab, per tab like open or not: CSS over the same PanelLayout (nothing

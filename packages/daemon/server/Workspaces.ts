@@ -28,7 +28,7 @@ export type SavedState = {
     title: string | null;
     cwd: string;
     activeTab: number;
-    tabs: { cwd: string; claudeSessionId?: string; historyId?: string; keep?: string }[];
+    tabs: { cwd: string; claudeSessionId?: string; historyId?: string; keep?: string; page?: string }[];
   }[];
 };
 
@@ -432,6 +432,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
             claudeSessionId: this.resumableSession(tabId),
             historyId: this.historyIds.get(tabId),
             keep: this.keeps.get(tabId)?.command,
+            page: this.pages.get(tabId)?.url,
           })),
         ),
       })),
@@ -463,12 +464,13 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       this.workspaces.push(workspace);
 
       for (const tab of savedWorkspace.tabs) {
-        this.createTab(workspace.id, {
+        const tabId = this.createTab(workspace.id, {
           cwd: tab.cwd,
           resumeClaudeSession: tab.claudeSessionId,
           keep: tab.keep,
           historyId: tab.historyId,
         });
+        if (tabId && tab.page) this.openPage(tabId, tab.page);
       }
       workspace.activeTabId = workspace.tabIds[savedWorkspace.activeTab] ?? workspace.tabIds[0] ?? null;
     }
@@ -674,6 +676,15 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   openPage(tabId: string, url: string) {
     if (!this.panes.has(tabId)) return;
     this.pages.set(tabId, { id: randomUUID().slice(0, 8), url });
+    this.emit("change");
+  }
+
+  /** Where the page has gone since (links, back), so a restore reopens it there. */
+  pageNavigated(tabId: string, url: string) {
+    const page = this.pages.get(tabId);
+    if (!page || page.url === url || !/^https?:\/\//i.test(url)) return;
+    // The same page (same id), so the panel doesn't load it again.
+    this.pages.set(tabId, { ...page, url });
     this.emit("change");
   }
 

@@ -288,6 +288,8 @@ export async function serve({
           return workspaces.closeFile(message.tabId);
         case "closePage":
           return workspaces.closePage(message.tabId);
+        case "pageNavigated":
+          return workspaces.pageNavigated(message.tabId, message.url);
         case "input":
           return workspaces.getPane(message.tabId)?.write(message.data);
         case "clear":
