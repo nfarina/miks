@@ -1,6 +1,6 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
-import { Maximize2, Minimize2, PanelLeft, PanelRight, Plus, RotateCw, X } from "lucide-react";
+import { Maximize2, Minimize2, PanelRight, Plus, RotateCw, X } from "lucide-react";
 import type { Tab, Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes } from "react";
 import { styled } from "styled-components";
@@ -9,8 +9,8 @@ import { closeTab } from "./closing";
 import { daemon } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { tooltip } from "crosswing/modals/popup";
-import { updateSettings, useSettings } from "./settings";
-import { dropIndex } from "./Sidebar";
+import { useSettings } from "./settings";
+import { dropIndex, SidebarToggle, StyledSidebarToggle } from "./Sidebar";
 import { tabTitle } from "./status";
 import { StatusDot } from "./StatusDot";
 
@@ -31,14 +31,8 @@ export function TabBar({ workspace, ...rest }: HTMLAttributes<HTMLDivElement> & 
 
   return (
     <StyledTabBar data-draggable-root {...rest}>
-      <button
-        className="sidebar-toggle"
-        data-on={sidebarVisible}
-        onClick={() => updateSettings({ sidebarVisible: !sidebarVisible })}
-        {...tooltip(sidebarVisible ? "Hide sidebar" : "Show sidebar", { hotkey: "cmd+b", delay: true })}
-      >
-        <PanelLeft />
-      </button>
+      {/* While the sidebar shows, it has this itself. */}
+      {!sidebarVisible && <SidebarToggle />}
       <TabDropTarget data-draggable-target="top" data-draggable-group={DRAG_GROUP} />
       {workspace.tabs.map((tab) => (
         <Fragment key={tab.id}>
@@ -101,7 +95,6 @@ export const StyledTabBar = styled.div`
     -webkit-app-region: no-drag;
   }
 
-  > .sidebar-toggle,
   > .new-tab,
   > .expand-toggle,
   > .chat-toggle {
@@ -136,15 +129,12 @@ export const StyledTabBar = styled.div`
     margin: 0 2px 0 2px;
   }
 
-  > .sidebar-toggle {
+  > ${StyledSidebarToggle} {
     margin: 0 4px 0 0;
   }
 
-  > .sidebar-toggle,
-  > .chat-toggle {
-    &[data-on="true"] {
-      color: ${colors.text()};
-    }
+  > .chat-toggle[data-on="true"] {
+    color: ${colors.text()};
   }
 
   > .spacer {

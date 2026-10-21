@@ -1,12 +1,13 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
-import { Plus } from "lucide-react";
+import { tooltip } from "crosswing/modals/popup";
+import { PanelLeft, Plus } from "lucide-react";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, useState } from "react";
 import { styled } from "styled-components";
 import { daemon } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
-import { displayPath, useSettings } from "./settings";
+import { displayPath, updateSettings, useSettings } from "./settings";
 import { backgroundSummary, STATUS_LABELS, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
 import { StatusDot } from "./StatusDot";
 
@@ -32,7 +33,9 @@ export function Sidebar({
 
   return (
     <StyledSidebar {...rest}>
-      <div className="titlebar" />
+      <div className="titlebar">
+        <SidebarToggle />
+      </div>
       <div className="workspaces" data-draggable-root>
         <WorkspaceDropTarget data-draggable-target="top" data-draggable-group={DRAG_GROUP} />
         {workspaces.map((workspace, index) => (
@@ -71,6 +74,11 @@ export const StyledSidebar = styled.div`
     flex-shrink: 0;
     height: 44px;
     -webkit-app-region: drag;
+    display: flex;
+    justify-content: flex-end;
+    /* In line with the tab bar's buttons beside it. */
+    padding: 6px 6px 0 0;
+    box-sizing: border-box;
   }
 
   > .workspaces {
@@ -104,6 +112,46 @@ export const StyledSidebar = styled.div`
       background: ${colors.buttonBackgroundGlow()};
       color: ${colors.text()};
     }
+  }
+`;
+
+/**
+ * Shows or hides the sidebar (⌘B): in the sidebar while it shows, and at the
+ * start of the tab bar while it doesn't.
+ */
+export function SidebarToggle() {
+  const { sidebarVisible } = useSettings();
+  return (
+    <StyledSidebarToggle
+      data-on={sidebarVisible}
+      onClick={() => updateSettings({ sidebarVisible: !sidebarVisible })}
+      {...tooltip(sidebarVisible ? "Hide sidebar" : "Show sidebar", { hotkey: "cmd+b", delay: true })}
+    >
+      <PanelLeft />
+    </StyledSidebarToggle>
+  );
+}
+
+export const StyledSidebarToggle = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${colors.textSecondary()};
+  -webkit-app-region: no-drag;
+
+  > svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  &:hover {
+    background: ${colors.buttonBackgroundGlow()};
+    color: ${colors.text()};
   }
 `;
 
