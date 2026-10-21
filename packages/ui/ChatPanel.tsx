@@ -804,8 +804,14 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
           <button
             className="quote"
             style={{ top: quote.top, left: quote.left }}
-            // Before the selection goes.
-            onMouseDown={(event) => event.preventDefault()}
+            // Before the selection goes; and not to the conversation, whose
+            // mousedown takes the button away (a click elsewhere) before
+            // this click could land, and whose mouseup brings it back.
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onMouseUp={(event) => event.stopPropagation()}
             onClick={addQuote}
           >
             <TextQuote size={14} /> Quote
