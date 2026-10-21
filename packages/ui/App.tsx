@@ -280,10 +280,13 @@ function runCommand(command: string) {
   const tabIndex = tabs.findIndex((tab) => tab.id === workspace?.activeTabId);
   const workspaceIndex = workspaces.findIndex((w) => w.id === workspace?.id);
 
+  // On past a workspace's first or last tab, into the one before or after
+  // it: every tab in sidebar order, round from the last to the first.
   const selectTab = (offset: number) => {
-    if (!workspace || tabs.length === 0) return;
-    const tab = tabs[(tabIndex + offset + tabs.length) % tabs.length];
-    daemon.send({ type: "select", workspaceId: workspace.id, tabId: tab.id });
+    const all = workspaces.flatMap((w) => w.tabs.map((tab) => ({ workspaceId: w.id, tabId: tab.id })));
+    if (all.length === 0) return;
+    const current = all.findIndex((entry) => entry.tabId === workspace?.activeTabId);
+    daemon.send({ type: "select", ...all[(Math.max(current, 0) + offset + all.length) % all.length] });
   };
 
   const selectWorkspace = (index: number) => {

@@ -8,7 +8,7 @@ Miks is a replacement for `Terminal.app` designed for running a bunch of coding 
 
 I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundled a browser, computer use and an 8 GB repo; Miks is the part of it I actually used.
 
-- Workspaces and tabs, drag to reorder; ⌘1–9, ⌘⌃[ ] (or ⌘⌃← →) and ⌘⇧[ ] to get around
+- Workspaces and tabs, drag to reorder; ⌘1–9, ⌘⌃[ ] (or ⌘⌃← →) and ⌘⇧[ ] (on into the next workspace) to get around
 - Live Claude Code status in the sidebar, plus a notification when an agent
   finishes or needs you (unless you're already looking)
 - Terminals live in a background daemon, so reloading the UI never touches
