@@ -624,6 +624,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   function changeText(next: string) {
     setText(next);
     drafts.set(tab, next);
+    if (justSent.current && next.trim() === justSent.current.text) setTimeout(clearIfJustSent);
   }
 
   function insert(addition: string) {
@@ -639,10 +640,28 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
 
   function send() {
     if (!canSend) return;
-    sendToTerminal(tab.id, text.trim());
-    setPending([...pending, { id: crypto.randomUUID(), text: text.trim(), time: Date.now() }]);
+    const sent = text.trim();
+    sendToTerminal(tab.id, sent);
+    setPending([...pending, { id: crypto.randomUUID(), text: sent, time: Date.now() }]);
     changeText("");
     atBottom.current = true;
+
+    // iOS's keyboard can hold on to what it was typing (or dictating), and
+    // the field comes back with the message just sent, or never empties.
+    justSent.current = { text: sent, until: Date.now() + 1500 };
+    for (const delay of [50, 300]) setTimeout(clearIfJustSent, delay);
+  }
+
+  const justSent = useRef<{ text: string; until: number } | null>(null);
+
+  /** Empties the field again if it's (still) holding the message just sent. */
+  function clearIfJustSent() {
+    const sent = justSent.current;
+    const textarea = composerRef.current?.querySelector("textarea");
+    if (!sent || !textarea || Date.now() > sent.until || textarea.value.trim() !== sent.text) return;
+    // Through the field's own input event, so TextArea and the draft agree.
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(textarea, "");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   // ⌃V (or ⌘V with only an image) puts the clipboard's image in Claude's
