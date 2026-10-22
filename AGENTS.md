@@ -105,6 +105,20 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   window; a remote's restarts itself (`POST /api/restart`, through launchd). Test without another Mac:
   `MIKS_SSH=scripts/fake-ssh.ts FAKE_SSH_HOME=/tmp/fh`, with a second daemon
   at `MIKS_HOME="/tmp/fh/Library/Application Support/Miks"`.
+- Your other devices on Tailscale (Settings → Remotes → Open from your other
+  devices, `tailnetAccess`): the daemon's gateway (`server/Gateway.ts`, started
+  in `server/main.ts`, which follows `settings.json`) serves the built UI
+  (`packages/ui/dist`) and pipes `/ws` to the socket, on port 2741 of this
+  Mac's Tailscale addresses only. It lets in only devices `tailscale whois`
+  says are signed in as this Mac's owner (`UserProfile.ID`, vs `status`'s
+  `Self.UserID`), never this Mac itself (its own address would let any page
+  in a browser here in, as localhost would; `whois` gives `Node.StableID`,
+  `status` gives the same as `Self.ID`), and `/ws` only from its own page's
+  origin. The CLI (`/Applications/Tailscale.app/Contents/MacOS/Tailscale`)
+  works from the daemon. In a browser, `ui/webBridge.ts` is `window.miks`,
+  with the device's own settings in localStorage. Plain http over Tailscale
+  isn't a secure context: no `crypto.randomUUID` (sending threw once), no
+  clipboard API. Verified from an iPad.
 - Miks keeps its Claude Code hooks in `~/.claude/settings.json` itself
   (`packages/app/claudeHooks.ts`, on launch and when the setting changes),
   running a copy of the script in Miks's home so the path is the same for

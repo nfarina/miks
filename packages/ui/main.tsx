@@ -1,3 +1,5 @@
+// First: in a browser, it gives `window.miks` before anything reads it.
+import "./webBridge";
 import { colors, getBuilderVarCSS } from "crosswing/colors";
 import { CrosswingApp } from "crosswing/app";
 import { CrosswingDesktopRootStyle } from "crosswing/containers";

@@ -36,6 +36,8 @@ export type Settings = {
    */
   browser: string;
   remotes: Remote[];
+  /** Whether your other devices on Tailscale can open Miks in a browser (the daemon's gateway). */
+  tailnetAccess: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   optionAsMeta: true,
   browser: "",
   remotes: [],
+  tailnetAccess: false,
 };
 
 /**

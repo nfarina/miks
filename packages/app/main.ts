@@ -6,7 +6,7 @@ import fs from "fs";
 import http from "http";
 import path from "path";
 import { connectDaemon as openDaemonSocket } from "miks/shared/connect";
-import { logPath, miksHome, socketPath } from "miks/shared/paths";
+import { logPath, miksHome, settingsPath as settingsFile, socketPath } from "miks/shared/paths";
 import type { Background } from "miks/shared/protocol";
 import { describeBackground } from "miks/shared/background";
 import { DEFAULT_SETTINGS, displayPath, type Remote, type Settings } from "miks/shared/settings";
@@ -744,7 +744,7 @@ ipcMain.on("miks:focus", (event) => {
 // Settings, in settings.json, shared by every window.
 //
 
-const settingsPath = path.join(miksHome(), "settings.json");
+const settingsPath = settingsFile();
 let settings: Settings = loadSettings();
 
 function loadSettings(): Settings {

@@ -13,6 +13,8 @@ I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundle
   finishes or needs you (unless you're already looking)
 - What each session has going in the background (shells, monitors, agents),
   next to its status
+- Your iPad or phone can use it in a browser, over [Tailscale](https://tailscale.com):
+  only your own devices, and only when you turn it on
 - Terminals live in a background daemon, so reloading the UI never touches
   a session. Quitting ends them like any terminal app (asking first if
   anything's running), or turn on "Keep terminals running"

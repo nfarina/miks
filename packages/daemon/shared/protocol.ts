@@ -115,7 +115,12 @@ export type DaemonState = {
   home: string;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
+  /** Its gateway for your other devices on Tailscale, while it's turned on. */
+  gateway?: GatewayState;
 };
+
+/** Where your other devices open Miks (a browser, on Tailscale), or why they can't. */
+export type GatewayState = { url: string } | { error: string };
 
 /**
  * Something macOS lets programs in the daemon's terminals do, once asked

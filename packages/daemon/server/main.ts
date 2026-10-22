@@ -1,7 +1,9 @@
 import { spawn } from "child_process";
 import fs from "fs";
-import { logPath, socketPath, statePath } from "../shared/paths.ts";
+import path from "path";
+import { logPath, settingsPath, socketPath, statePath } from "../shared/paths.ts";
 import { serve } from "./daemon.ts";
+import { Gateway } from "./Gateway.ts";
 
 const [command] = process.argv.slice(2);
 
@@ -47,6 +49,23 @@ if (command === "serve") {
 
   // Start with something to look at.
   if (!daemon.restored) daemon.workspaces.createWorkspace();
+
+  // Your other devices on Tailscale, while Settings allows them: the built UI
+  // (in the repo, or the app bundle) and a pipe to the socket.
+  const gateway = new Gateway({
+    socketPath: socketPath(),
+    uiDir: path.resolve(import.meta.dirname, "../../ui/dist"),
+  });
+  gateway.on("change", () => daemon.workspaces.setGateway(gateway.state));
+  const followSettings = () => {
+    let enabled = false;
+    try {
+      enabled = JSON.parse(fs.readFileSync(settingsPath(), "utf8")).tailnetAccess === true;
+    } catch {}
+    gateway.setEnabled(enabled);
+  };
+  followSettings();
+  fs.watchFile(settingsPath(), { interval: 1000, persistent: false }, followSettings);
 
   log(`Listening on ${socketPath()} (pid ${process.pid}).`);
 

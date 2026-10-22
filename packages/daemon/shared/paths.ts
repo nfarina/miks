@@ -17,6 +17,11 @@ export function logPath(): string {
   return path.join(miksHome(), "daemon.log");
 }
 
+/** The app's preferences, written by the Electron main process; the daemon reads some. */
+export function settingsPath(): string {
+  return path.join(miksHome(), "settings.json");
+}
+
 /** The layout to restore when the daemon starts. */
 export function statePath(): string {
   return path.join(miksHome(), "state.json");

@@ -282,6 +282,40 @@ const StyledPermissions = styled.div`
 /** Badge colors, picked in turn for each Mac added, and by clicking the swatch. */
 const REMOTE_COLORS = ["#3b82f6", "#e5734a", "#22a06b", "#9b5de5", "#d4a20b", "#e0567a"];
 
+/**
+ * The other way around: this Mac's terminals, from your other devices on
+ * Tailscale (an iPad, a phone), in a browser. This Mac's own daemon only, so
+ * not in a window on another Mac.
+ */
+function TailnetAccess() {
+  const { tailnetAccess } = useSettings();
+  const { state } = useDaemon();
+  if (useTarget()) return null;
+  const gateway = state?.gateway;
+
+  return (
+    <SeparatorLayout bordered>
+      <LabeledToggle
+        label="Open from your other devices"
+        detail="Your iPad or phone can use Miks in a browser, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
+        on={tailnetAccess}
+        onClick={() => updateSettings({ tailnetAccess: !tailnetAccess })}
+      />
+      {tailnetAccess && gateway && (
+        <p className="gateway">
+          {"url" in gateway ? (
+            <>
+              Open <code>{gateway.url}</code> on them.
+            </>
+          ) : (
+            gateway.error
+          )}
+        </p>
+      )}
+    </SeparatorLayout>
+  );
+}
+
 function RemoteSettings() {
   const { remotes } = useSettings();
   const setRemotes = (next: Remote[]) => updateSettings({ remotes: next });
@@ -351,6 +385,7 @@ function RemoteSettings() {
         </SeparatorLayout>
       )}
       <Button newStyle bordered className="add" icon={<Plus />} onClick={add} children="Add a Mac" />
+      <TailnetAccess />
     </StyledRemotes>
   );
 }
@@ -360,14 +395,20 @@ const StyledRemotes = styled.div`
   flex-flow: column;
   gap: 12px;
 
-  > .intro {
+  > .intro,
+  .gateway {
     margin: 0;
     color: ${colors.textSecondary()};
     font: ${fonts.display({ size: 13, line: "18px" })};
 
     > code {
       font-size: 12px;
+      user-select: text;
     }
+  }
+
+  .gateway {
+    padding: 8px 10px;
   }
 
   .remote {

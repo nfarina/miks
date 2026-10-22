@@ -9,6 +9,7 @@ import {
   type Background,
   type ChatEntry,
   type DaemonState,
+  type GatewayState,
   type OpenFile,
   type OpenPage,
   PROTOCOL_VERSION,
@@ -66,6 +67,8 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * after having been seen running (it starts a moment after it registers).
    */
   private readonly keeps = new Map<string, { command: string; seenRunning: boolean }>();
+  /** The gateway for your other devices on Tailscale, as the UI shows it. */
+  private gateway: GatewayState | undefined;
   /** What each tab's Claude session has running in the background. */
   private readonly backgrounds = new Map<string, BackgroundTasks>();
   /** A finished turn waits a moment before it's `done` (see applyHook). */
@@ -121,6 +124,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       protocol: PROTOCOL_VERSION,
       home: os.homedir(),
       activeWorkspaceId: this.activeWorkspaceId,
+      gateway: this.gateway,
       workspaces: this.workspaces.map((workspace) => ({
         id: workspace.id,
         title: workspace.title,
@@ -420,6 +424,11 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * it yourself there's nothing new to see. Only the change from spinning to
    * ✳ counts, never a ✳ on its own, which can trail a prompt just submitted.
    */
+  setGateway(gateway: GatewayState | undefined) {
+    this.gateway = gateway;
+    this.emit("change");
+  }
+
   private followBackground(tabId: string, transcriptPath: string) {
     let background = this.backgrounds.get(tabId);
     if (!background) {
