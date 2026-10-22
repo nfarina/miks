@@ -61,7 +61,8 @@ export type ChatEvent = { session: string | null; entries: ChatEntry[]; reset: b
 
 export type PaneStreamEvent =
   | { type: "snapshot"; data: string; cols: number; rows: number }
-  | { type: "output"; data: string };
+  | { type: "output"; data: string }
+  | { type: "size"; cols: number; rows: number };
 
 class DaemonClient {
   private snapshot: DaemonSnapshot = { state: null, connected: false, error: null, retrying: false };
@@ -198,7 +199,8 @@ class DaemonClient {
       case "state":
         return this.update({ state: message.state });
       case "snapshot":
-      case "output": {
+      case "output":
+      case "size": {
         const { tabId, ...event } = message;
         return this.streams.get(tabId)?.(event);
       }

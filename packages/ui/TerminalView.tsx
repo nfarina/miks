@@ -49,7 +49,7 @@ export function TerminalView({
     });
     const fit = new FitAddon();
     const commands = trackCommands(terminal);
-    const view = { tabId, terminal, fit, commands };
+    const view: View = { tabId, terminal, fit, commands, elsewhere: false };
     viewRef.current = view;
     views.set(tabId, view);
 
@@ -70,6 +70,14 @@ export function TerminalView({
     handleClipboardWrites(terminal, (text) => window.miks?.copy(text));
 
     const unstream = daemon.stream(tabId, (event) => {
+      // Another window (on another Mac, or device) is in use and sized the
+      // pane: draw at its size, from this point in the output, until this
+      // one is used again.
+      if (event.type === "size") {
+        if (event.cols !== terminal.cols || event.rows !== terminal.rows) terminal.resize(event.cols, event.rows);
+        view.elsewhere = true;
+        return;
+      }
       if (event.type === "snapshot") {
         terminal.reset();
         wheel.reset();
@@ -161,14 +169,32 @@ export function TerminalView({
     view.terminal.focus();
     activeView = view;
 
-    // Coming back to this window from another (the same daemon's, on another
-    // Mac) takes the pane back at this window's size.
-    const takeOver = () =>
+    // The last screen used decides the pane's size: coming back to this
+    // window (focusing it, or a phone's page showing again), or the first key,
+    // click or tap in it after another took the pane, takes it back at this
+    // window's size, refitted from the one it was drawing at.
+    const takeOver = () => {
+      view.elsewhere = false;
+      view.fit.fit();
       daemon.send({ type: "resize", tabId: view.tabId, cols: view.terminal.cols, rows: view.terminal.rows });
+    };
+    const takeBack = () => {
+      if (view.elsewhere) takeOver();
+    };
+    const shown = () => {
+      if (document.visibilityState === "visible") takeOver();
+    };
     window.addEventListener("focus", takeOver);
+    document.addEventListener("visibilitychange", shown);
+    // Capturing, so the pane has this size before the key that follows.
+    window.addEventListener("keydown", takeBack, { capture: true });
+    window.addEventListener("pointerdown", takeBack, { capture: true });
 
     return () => {
       window.removeEventListener("focus", takeOver);
+      document.removeEventListener("visibilitychange", shown);
+      window.removeEventListener("keydown", takeBack, { capture: true });
+      window.removeEventListener("pointerdown", takeBack, { capture: true });
       if (activeView === view) activeView = null;
       webglAddons.get(view.terminal)?.dispose();
       webglAddons.delete(view.terminal);
@@ -237,7 +263,14 @@ function shellEscape(path: string): string {
   return path.replace(/[\s!"#$&'()*;<>?[\\\]^`{|}~]/g, "\\$&");
 }
 
-type View = { tabId: string; terminal: Terminal; fit: FitAddon; commands: ReturnType<typeof trackCommands> };
+type View = {
+  tabId: string;
+  terminal: Terminal;
+  fit: FitAddon;
+  commands: ReturnType<typeof trackCommands>;
+  /** Drawn at another screen's size, for the one in use, until this one is used again. */
+  elsewhere: boolean;
+};
 
 let activeView: View | null = null;
 const views = new Map<string, View>();

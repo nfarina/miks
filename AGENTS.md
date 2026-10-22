@@ -96,8 +96,11 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   sends this Mac's image over the same way (`miks:sendClipboardImage`) and
   types its path. Electron 44's `clipboard` is the async web-style API
   (`read()`, items by MIME type): there's no `readImage` any more.
-  Focusing a window re-sends its size and appearance, so the Mac you're at
-  wins. Open remote windows reopen at launch (`UI/remote-windows.json`).
+  The last screen used sizes a pane: focusing a window (or a device's page
+  showing again) re-sends its size and appearance, and so does its first
+  key or click (captured, before the key) after another took the pane. The
+  daemon sends the others `size` (never the window that sized it, which
+  may have moved on mid-drag), and they draw at that size meanwhile. Open remote windows reopen at launch (`UI/remote-windows.json`).
   `PROTOCOL_VERSION` warns when two Miks disagree. A Mac's Miks quitting
   while another Mac's window is on its daemon sends `stopWhenIdle`, so the
   daemon stops when that window goes (which then asks, if programs run);

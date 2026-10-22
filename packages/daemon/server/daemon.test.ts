@@ -341,6 +341,34 @@ test("a tab's page comes back where it had gone", async () => {
   expect(daemon.workspaces.getState().workspaces[0].tabs[0].page?.url).toBe("http://localhost:2727/dash");
 });
 
+test("a window hears the size another window gave its pane, and the one that gave it doesn't", async () => {
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const tabId = activeTab(daemon.workspaces.getState());
+  const mac = await connect();
+  const ipad = await connect();
+  mac.send({ type: "attach", tabId, cols: 120, rows: 40 });
+  await mac.snapshotMessage(tabId);
+  ipad.send({ type: "attach", tabId });
+  expect(await ipad.snapshotMessage(tabId)).toMatchObject({ cols: 120, rows: 40 });
+
+  // The iPad is used: the Mac draws at its size until it's used again.
+  ipad.send({ type: "resize", tabId, cols: 70, rows: 30 });
+  expect(await mac.next((m) => m.type === "size")).toEqual({ type: "size", tabId, cols: 70, rows: 30 });
+
+  // And back, the first key on the Mac.
+  mac.send({ type: "resize", tabId, cols: 120, rows: 40 });
+  expect(await ipad.next((m) => m.type === "size")).toEqual({ type: "size", tabId, cols: 120, rows: 40 });
+  // A size the pane already has changes nothing.
+  ipad.send({ type: "resize", tabId, cols: 120, rows: 40 });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  // Neither heard its own: one dragging a window edge has already moved on.
+  expect(mac.sizes(tabId).map((m) => m.cols)).toEqual([70]);
+  expect(ipad.sizes(tabId).map((m) => m.cols)).toEqual([120]);
+  mac.close();
+  ipad.close();
+});
+
 test("panes don't inherit Claude Code's own variables", async () => {
   process.env.CLAUDE_CODE_CHILD_SESSION = "1";
   process.env.CLAUDECODE = "1";
@@ -1049,6 +1077,8 @@ async function connect() {
       messages.filter((m) => m.type === "file" && m.tabId === tabId) as Extract<DaemonMessage, { type: "file" }>[],
     saves: async (tabId: string) =>
       messages.filter((m) => m.type === "fileSaved" && m.tabId === tabId) as Extract<DaemonMessage, { type: "fileSaved" }>[],
+    sizes: (tabId: string) =>
+      messages.filter((m) => m.type === "size" && m.tabId === tabId) as Extract<DaemonMessage, { type: "size" }>[],
     chats: async (tabId: string) =>
       messages.filter((m) => m.type === "chat" && m.tabId === tabId) as Extract<DaemonMessage, { type: "chat" }>[],
     snapshotMessage: (tabId: string) =>

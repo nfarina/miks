@@ -241,6 +241,7 @@ export async function serve({
           const viewer: PaneViewer = {
             snapshot: (data, cols, rows) => send({ type: "snapshot", tabId, data, cols, rows }),
             output: (data) => send({ type: "output", tabId, data }),
+            size: (cols, rows) => send({ type: "size", tabId, cols, rows }),
           };
           viewers.set(tabId, viewer);
           const { cols, rows } = message;
@@ -295,7 +296,7 @@ export async function serve({
         case "clear":
           return workspaces.getPane(message.tabId)?.clear();
         case "resize":
-          return workspaces.getPane(message.tabId)?.resize(message.cols, message.rows);
+          return workspaces.getPane(message.tabId)?.resize(message.cols, message.rows, viewers.get(message.tabId));
         case "permissions":
           return void sendPermissions();
         case "requestPermission":

@@ -222,6 +222,11 @@ export type DaemonMessage =
   | { type: "snapshot"; tabId: string; data: string; cols: number; rows: number }
   | { type: "output"; tabId: string; data: string }
   /**
+   * The pane took another window's size (on another Mac or device, the one
+   * in use), from this point in its output. Never to the window that sized it.
+   */
+  | { type: "size"; tabId: string; cols: number; rows: number }
+  /**
    * Entries in the tab's conversation. With `reset`, the whole of it (on
    * watching, or when the tab's session changes); otherwise more to append.
    * `session` is the Claude Code session's ID, or null when the tab has none.

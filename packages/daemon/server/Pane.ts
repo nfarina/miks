@@ -17,6 +17,8 @@ export type PaneViewer = {
   /** The screen as VT sequences, at the pane's size. */
   snapshot(data: string, cols: number, rows: number): void;
   output(data: string): void;
+  /** The pane took another viewer's size (another screen is in use), from here on in the output. */
+  size?(cols: number, rows: number): void;
 };
 
 /**
@@ -181,7 +183,7 @@ export class Pane extends EventEmitter<{
   /** Without a size, the pane keeps its own and the viewer adopts it. */
   attach(viewer: PaneViewer, size?: { cols: number; rows: number }) {
     this.detach(viewer);
-    if (size) this.resize(size.cols, size.rows);
+    if (size) this.resize(size.cols, size.rows, viewer);
 
     // The emulator parses writes asynchronously, so the snapshot has to wait
     // until it has caught up with everything written so far. An empty write's
@@ -210,13 +212,19 @@ export class Pane extends EventEmitter<{
     this.pty.write(data);
   }
 
-  resize(cols: number, rows: number) {
+  /**
+   * The size of the screen in use (`by`'s): every other viewer hears it, so
+   * it can draw at that size until its own screen is used again. Not `by`,
+   * which may already have moved on (a window edge being dragged).
+   */
+  resize(cols: number, rows: number, by?: PaneViewer) {
     cols = Math.max(2, Math.floor(cols));
     rows = Math.max(1, Math.floor(rows));
     if (cols === this.terminal.cols && rows === this.terminal.rows) return;
 
     this.terminal.resize(cols, rows);
     this.pty.resize(cols, rows);
+    for (const viewer of this.viewers) if (viewer !== by) viewer.size?.(cols, rows);
   }
 
   /**
