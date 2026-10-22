@@ -624,7 +624,6 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   function changeText(next: string) {
     setText(next);
     drafts.set(tab, next);
-    if (justSent.current && next.trim() === justSent.current.text) setTimeout(clearIfJustSent);
   }
 
   function insert(addition: string) {
@@ -642,27 +641,14 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     if (!canSend) return;
     const sent = text.trim();
     sendToTerminal(tab.id, sent);
-    setPending([...pending, { id: crypto.randomUUID(), text: sent, time: Date.now() }]);
+    // Not crypto.randomUUID(), which a page that isn't a secure context
+    // (plain http, as an iPad on Tailscale had) doesn't have: sending threw.
+    setPending([...pending, { id: String(++pendingCount.current), text: sent, time: Date.now() }]);
     changeText("");
     atBottom.current = true;
-
-    // iOS's keyboard can hold on to what it was typing (or dictating), and
-    // the field comes back with the message just sent, or never empties.
-    justSent.current = { text: sent, until: Date.now() + 1500 };
-    for (const delay of [50, 300]) setTimeout(clearIfJustSent, delay);
   }
 
-  const justSent = useRef<{ text: string; until: number } | null>(null);
-
-  /** Empties the field again if it's (still) holding the message just sent. */
-  function clearIfJustSent() {
-    const sent = justSent.current;
-    const textarea = composerRef.current?.querySelector("textarea");
-    if (!sent || !textarea || Date.now() > sent.until || textarea.value.trim() !== sent.text) return;
-    // Through the field's own input event, so TextArea and the draft agree.
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(textarea, "");
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
-  }
+  const pendingCount = useRef(0);
 
   // ⌃V (or ⌘V with only an image) puts the clipboard's image in Claude's
   // prompt, in the terminal, ahead of what you send from here.
@@ -905,7 +891,19 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
             <Square size={12} fill="currentColor" />
           </button>
         ) : (
-          <button type="submit" className="send" {...tooltip("Send", { hotkey: "cmd+Enter", delay: true })} disabled={!canSend}>
+          <button
+            type="submit"
+            className="send"
+            {...tooltip("Send", { hotkey: "cmd+Enter", delay: true })}
+            disabled={!canSend}
+            // The field keeps focus, so on a touch screen the keyboard stays
+            // up for the next message: a tap would take focus from it first.
+            onMouseDown={(event) => event.preventDefault()}
+            onTouchEnd={(event) => {
+              event.preventDefault();
+              composerRef.current?.requestSubmit();
+            }}
+          >
             <ArrowUp size={16} />
           </button>
         )}
