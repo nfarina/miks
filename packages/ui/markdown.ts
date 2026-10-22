@@ -26,8 +26,17 @@ hljs.registerAliases(["ts", "tsx"], { languageName: "typescript" });
 hljs.registerAliases(["js", "jsx", "mjs"], { languageName: "javascript" });
 hljs.registerAliases(["html"], { languageName: "xml" });
 
+// HTML in a message is text, as the terminal shows it: "<Select>" written
+// about the component is that word, not a select box.
+const escapeHtml = (html: string) => html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 const marked = new Marked(
-  { gfm: true },
+  {
+    gfm: true,
+    renderer: {
+      html: ({ text, block }) => (block ? `<p>${escapeHtml(text.trimEnd()).replace(/\n/g, "<br>")}</p>\n` : escapeHtml(text)),
+    },
+  },
   markedHighlight({
     langPrefix: "hljs language-",
     highlight(code, lang) {
