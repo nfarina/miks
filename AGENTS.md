@@ -311,7 +311,10 @@ resizes); keep it passing.
   asking for a random password that `app.on("login")` gives only its
   sessions (any user of the Mac can reach 127.0.0.1). `will-attach-webview`
   strips the preload (`window.miks` types into shells) and Node, and allows
-  only the window's own partition; a page's new windows load in its place.
+  only the window's own partition. A page's new windows (`target="_blank"`)
+  open in the browser chosen in Settings (`openLink` in main, as terminal and
+  chat links do), and reach it only with the webview's `allowpopups`, which
+  React drops as `true`, so it's `""`: without it, such links did nothing.
   A hidden page is `visibility: hidden`, not `display: none`, so its
   webview keeps its size. The page is saved with its tab, at wherever it has
   navigated to (`pageNavigated`), so a restore reopens it there. Verified with the fake-ssh remote: a page and a
