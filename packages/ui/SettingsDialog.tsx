@@ -1,7 +1,7 @@
 import { colors } from "crosswing/colors";
 import { Button } from "crosswing/components/Button";
 import { LabeledToggle } from "crosswing/components/forms/LabeledToggle";
-import { Select, SelectOption } from "crosswing/components/forms/Select";
+import { Dropdown } from "crosswing/components/forms/Dropdown";
 import { TextInput } from "crosswing/components/forms/TextInput";
 import { useInputValue } from "crosswing/components/forms/useInputValue";
 import { SeparatorLayout, StyledSeparatorLayout } from "crosswing/components/SeparatorLayout";
@@ -99,8 +99,9 @@ function GeneralSettings() {
 }
 
 const BROWSERS = [
-  { title: "Safari", value: "com.apple.Safari" },
-  { title: "Chrome", value: "com.google.Chrome" },
+  { value: "", children: "Default browser" },
+  { value: "com.apple.Safari", children: "Safari" },
+  { value: "com.google.Chrome", children: "Chrome" },
 ];
 
 /** The default browser, a common one, or any app (kept by its path). */
@@ -110,20 +111,22 @@ function BrowserSelect() {
 
   async function onValueChange(value: string) {
     if (value !== "choose") return updateSettings({ browser: value });
-    // Cancelled, the select goes back to what's set.
     const path = await window.miks?.chooseBrowser();
     if (path) updateSettings({ browser: path });
   }
 
   return (
-    <Select className="browser" value={browser} onValueChange={onValueChange}>
-      <SelectOption title="Default browser" value="" />
-      {BROWSERS.map((option) => (
-        <SelectOption key={option.value} {...option} />
-      ))}
-      {chosen && <SelectOption title={chosen.split("/").pop()!.replace(/\.app$/, "")} value={chosen} />}
-      <SelectOption title="Choose app…" value="choose" />
-    </Select>
+    <Dropdown
+      bordered
+      className="browser"
+      value={browser}
+      onValueChange={onValueChange}
+      items={[
+        ...BROWSERS,
+        ...(chosen ? [{ value: chosen, children: chosen.split("/").pop()!.replace(/\.app$/, "") }] : []),
+        { value: "choose", children: "Choose app…" },
+      ]}
+    />
   );
 }
 
@@ -457,9 +460,9 @@ const StyledSettings = styled(TabbedButtonLayout)`
       width: 130px;
     }
 
-    > .browser > select {
-      flex-shrink: 1;
-      min-width: 0;
+    > .browser {
+      width: auto;
+      min-width: 130px;
     }
   }
 `;
