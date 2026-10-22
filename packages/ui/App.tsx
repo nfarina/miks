@@ -27,6 +27,9 @@ import {
 /** A reply at least this long opens the chat panel, if that's on. */
 const LONG_REPLY_LINES = 20;
 
+/** In Miks's own window, whose traffic lights sit over the page; not in a browser. */
+const HAS_WINDOW_BUTTONS = navigator.userAgent.includes("Electron");
+
 export function App() {
   const { state, connected, error, retrying } = useDaemon();
   const { sidebarVisible } = useSettings();
@@ -94,7 +97,12 @@ export function App() {
         hideDragHandle
         restorationKey={Sidebar}
       >
-        <div className="main" data-sidebar-visible={sidebarVisible} data-remote={!!target}>
+        <div
+          className="main"
+          data-sidebar-visible={sidebarVisible}
+          data-window-buttons={HAS_WINDOW_BUTTONS}
+          data-remote={!!target}
+        >
           {target && <MachineBadge target={target} />}
           {(state.protocol ?? 1) !== PROTOCOL_VERSION && (
             <div className="version-warning">
@@ -169,7 +177,8 @@ export const StyledApp = styled.div`
     }
 
     /* With the sidebar hidden, the traffic lights sit over the tab bar. */
-    &[data-sidebar-visible="false"] > ${StyledTabBar}, &[data-sidebar-visible="false"] > .empty-bar {
+    &[data-sidebar-visible="false"][data-window-buttons="true"] > ${StyledTabBar},
+    &[data-sidebar-visible="false"][data-window-buttons="true"] > .empty-bar {
       padding-left: 80px;
     }
 
