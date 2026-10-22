@@ -209,7 +209,11 @@ function tailscaleJson(args: string[]): Promise<any> {
   const cli = CLI_PATHS.find((file) => fs.existsSync(file));
   if (!cli) return Promise.reject(new Error("Tailscale isn't installed."));
   return new Promise((resolve, reject) => {
-    execFile(cli, args, { timeout: 5000 }, (error, stdout) => {
+    // The same executable is the Mac app: without a terminal's TERM (or
+    // TERM_PROGRAM, or SHLVL), it tries to start as the app ("The Tailscale
+    // GUI failed to start"). The daemon, a launchd job, has none of them.
+    const env = { ...process.env, TERM: process.env.TERM || "dumb" };
+    execFile(cli, args, { env, timeout: 5000 }, (error, stdout) => {
       if (error) return reject(error);
       try {
         resolve(JSON.parse(stdout));

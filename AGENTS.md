@@ -115,7 +115,10 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   in a browser here in, as localhost would; `whois` gives `Node.StableID`,
   `status` gives the same as `Self.ID`), and `/ws` only from its own page's
   origin. The CLI (`/Applications/Tailscale.app/Contents/MacOS/Tailscale`)
-  works from the daemon. In a browser, `ui/webBridge.ts` is `window.miks`,
+  is the Mac app's own executable, and acts as the CLI only with `TERM`,
+  `TERM_PROGRAM` or `SHLVL` set; the daemon (a launchd job) has none, so it
+  passes `TERM=dumb` (without: "The Tailscale GUI failed to start"). Test a
+  scratch daemon started under `env -i`, not from a terminal. In a browser, `ui/webBridge.ts` is `window.miks`,
   with the device's own settings in localStorage. Plain http over Tailscale
   isn't a secure context: no `crypto.randomUUID` (sending threw once), no
   clipboard API. Verified from an iPad.
