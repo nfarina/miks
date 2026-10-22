@@ -406,9 +406,9 @@ function createWindow(remoteId: string | null = null) {
     if (new URL(url).origin !== new URL(contents.getURL()).origin) event.preventDefault();
   });
 
-  // Links clicked in a terminal open in the real browser.
+  // Links clicked in a terminal or the chat panel open in the real browser.
   contents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    openLink(url);
     return { action: "deny" };
   });
 
@@ -422,11 +422,13 @@ function createWindow(remoteId: string | null = null) {
     webPreferences.sandbox = true;
     if (!isBrowsePartition(key, params.partition)) event.preventDefault();
   });
-  // A page's new windows open in its place: a window of their own would be
-  // outside the panel, and its proxy.
+  // A page's new windows (target="_blank" links) open in the real browser,
+  // like a terminal's links: a window of Miks's own would be outside the
+  // panel, and its proxy. The webview has `allowpopups`, without which
+  // they never get here and the click does nothing.
   contents.on("did-attach-webview", (_event, guest) => {
     guest.setWindowOpenHandler(({ url }) => {
-      if (/^https?:/i.test(url)) void guest.loadURL(url);
+      if (/^(https?|mailto):/i.test(url)) openLink(url);
       return { action: "deny" };
     });
   });
@@ -604,6 +606,32 @@ function windowBackground(): string {
 
 nativeTheme.on("updated", () => {
   for (const window of BrowserWindow.getAllWindows()) window.setBackgroundColor(windowBackground());
+});
+
+/**
+ * Opens a link in the browser chosen in Settings, or the default one (also
+ * for anything not on the web, and if that browser won't open).
+ */
+function openLink(url: string) {
+  const { browser } = settings;
+  if (!browser || !/^https?:/i.test(url)) return void shell.openExternal(url);
+  const child = spawn("open", [browser.startsWith("/") ? "-a" : "-b", browser, url], { stdio: "ignore" });
+  child.on("error", () => shell.openExternal(url));
+  child.on("exit", (code) => code !== 0 && shell.openExternal(url));
+}
+
+// Settings' "Choose app…" for links: resolves with its path, or null.
+ipcMain.handle("miks:chooseBrowser", async (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const options = {
+    title: "Open links in",
+    buttonLabel: "Choose",
+    defaultPath: "/Applications",
+    filters: [{ name: "Applications", extensions: ["app"] }],
+    properties: ["openFile" as const],
+  };
+  const { canceled, filePaths } = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+  return canceled ? null : (filePaths[0] ?? null);
 });
 
 // The page asks before doing something it can't undo (closing a tab with a

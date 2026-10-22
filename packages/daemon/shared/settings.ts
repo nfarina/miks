@@ -29,6 +29,12 @@ export type Settings = {
   claudeHooks: boolean;
   /** Whether Option sends Meta (⌥A as Escape-A, for zsh bindings) instead of typing å. */
   optionAsMeta: boolean;
+  /**
+   * What opens links (from terminals, chat, and pages that open a new
+   * window): "" for the default browser, else an app's bundle ID, or its
+   * path (starting with "/") for one chosen in Settings.
+   */
+  browser: string;
   remotes: Remote[];
 };
 
@@ -41,6 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keepDaemonRunning: false,
   claudeHooks: true,
   optionAsMeta: true,
+  browser: "",
   remotes: [],
 };
 

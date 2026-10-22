@@ -31,6 +31,8 @@ contextBridge.exposeInMainWorld("miks", {
   sendClipboardImage: (tabId) => ipcRenderer.invoke("miks:sendClipboardImage", tabId),
   /** The session for this window's `miks browse` pages, set up to go through its daemon. */
   browsePartition: () => ipcRenderer.invoke("miks:browsePartition"),
+  /** Asks for an app to open links in; resolves with its path, or null. */
+  chooseBrowser: () => ipcRenderer.invoke("miks:chooseBrowser"),
 });
 
 function subscribe(channel, listener) {

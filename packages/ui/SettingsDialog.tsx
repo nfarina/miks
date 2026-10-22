@@ -1,6 +1,7 @@
 import { colors } from "crosswing/colors";
 import { Button } from "crosswing/components/Button";
 import { LabeledToggle } from "crosswing/components/forms/LabeledToggle";
+import { Select, SelectOption } from "crosswing/components/forms/Select";
 import { TextInput } from "crosswing/components/forms/TextInput";
 import { useInputValue } from "crosswing/components/forms/useInputValue";
 import { SeparatorLayout, StyledSeparatorLayout } from "crosswing/components/SeparatorLayout";
@@ -86,7 +87,43 @@ function GeneralSettings() {
         on={settings.keepDaemonRunning}
         onClick={() => updateSettings({ keepDaemonRunning: !settings.keepDaemonRunning })}
       />
+      <div className="field">
+        <div className="content">
+          <div className="label">Open links in</div>
+          <div className="detail">Links clicked in terminals and chat, and pages' links that open a new window.</div>
+        </div>
+        <BrowserSelect />
+      </div>
     </SeparatorLayout>
+  );
+}
+
+const BROWSERS = [
+  { title: "Safari", value: "com.apple.Safari" },
+  { title: "Chrome", value: "com.google.Chrome" },
+];
+
+/** The default browser, a common one, or any app (kept by its path). */
+function BrowserSelect() {
+  const { browser } = useSettings();
+  const chosen = browser.startsWith("/") ? browser : null;
+
+  async function onValueChange(value: string) {
+    if (value !== "choose") return updateSettings({ browser: value });
+    // Cancelled, the select goes back to what's set.
+    const path = await window.miks?.chooseBrowser();
+    if (path) updateSettings({ browser: path });
+  }
+
+  return (
+    <Select className="browser" value={browser} onValueChange={onValueChange}>
+      <SelectOption title="Default browser" value="" />
+      {BROWSERS.map((option) => (
+        <SelectOption key={option.value} {...option} />
+      ))}
+      {chosen && <SelectOption title={chosen.split("/").pop()!.replace(/\.app$/, "")} value={chosen} />}
+      <SelectOption title="Choose app…" value="choose" />
+    </Select>
   );
 }
 
@@ -418,6 +455,11 @@ const StyledSettings = styled(TabbedButtonLayout)`
     > *:last-child {
       flex-shrink: 0;
       width: 130px;
+    }
+
+    > .browser > select {
+      flex-shrink: 1;
+      min-width: 0;
     }
   }
 `;

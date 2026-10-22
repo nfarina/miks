@@ -20,6 +20,7 @@ export type MiksBridge = {
   sendClipboardImage(tabId: string): Promise<{ image: boolean; path?: string }>;
   /** The session for this window's `miks browse` pages, through its daemon. */
   browsePartition(): Promise<string>;
+  chooseBrowser(): Promise<string | null>;
   getSettings(): Settings;
   setSettings(changes: Partial<Settings>): void;
   onSettings(listener: (settings: Settings) => void): Unsubscribe;

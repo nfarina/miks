@@ -144,7 +144,8 @@ export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; o
         </button>
       </div>
       <div className="page">
-        {partition && <webview ref={ref} src={first} partition={partition} />}
+        {/* A string: React leaves out `true` for an element it doesn't know, and without it a link that opens a new window does nothing. */}
+        {partition && <webview ref={ref} src={first} partition={partition} allowpopups={"" as unknown as boolean} />}
         {failed && <div className="note">{failed}</div>}
       </div>
     </StyledBrowseView>
