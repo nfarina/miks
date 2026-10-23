@@ -8,8 +8,9 @@ import { type AgentStatus, type DaemonState, PROTOCOL_VERSION } from "miks/share
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import { TextInput } from "crosswing/components/forms/TextInput";
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
+import { HostContext } from "crosswing/host/context";
 import { coarsePointer } from "crosswing/host/pointer";
 import { provideSafeArea, safeArea } from "crosswing/safearea";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
@@ -40,6 +41,10 @@ export function App() {
   const { sidebarVisible } = useSettings();
   const target = useTarget();
 
+  // Above the on-screen keyboard, in the iOS app, which says where its top is.
+  const { viewport } = use(HostContext);
+  const keyboardStyle = viewport.keyboardVisible && viewport.height ? { bottom: "auto", height: viewport.height } : undefined;
+
   const settingsTab = useRef<SettingsTab>("general");
   const settingsDialog = useDialog(() => (
     <SettingsDialog initialTab={settingsTab.current} onClose={settingsDialog.hide} />
@@ -67,7 +72,7 @@ export function App() {
 
   if (!connected || !state) {
     return (
-      <StyledApp>
+      <StyledApp style={keyboardStyle}>
         <div className="message">
           <div className="titlebar" />
           {target && <MachineBadge target={target} />}
@@ -89,7 +94,7 @@ export function App() {
   const activeWorkspace = state.workspaces.find((w) => w.id === state.activeWorkspaceId) ?? null;
 
   return (
-    <StyledApp>
+    <StyledApp style={keyboardStyle}>
       <PanelLayout
         className="layout"
         edge="left"

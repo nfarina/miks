@@ -16,7 +16,7 @@ import { styled } from "styled-components";
 import { daemon, type FileEvent } from "./daemon";
 import { codemirrorDark } from "./highlighting/codemirrorDark";
 import { codemirrorLight } from "./highlighting/codemirrorLight";
-import { getSettings } from "./settings";
+import { autoFocus, getSettings } from "./settings";
 
 /**
  * The file `miks open` or `miks edit` put in a tab's panel: read-only until
@@ -142,7 +142,7 @@ export function FileView({
       if (viewRef.current === view) view.dispatch({ effects: compartments.language.reconfigure(support) });
     });
 
-    if (focusOnOpen) view.focus();
+    if (focusOnOpen && autoFocus()) view.focus();
     return () => {
       view.destroy();
       viewRef.current = null;

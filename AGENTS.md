@@ -151,7 +151,12 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   crosswing's `HostProvider` (in `main.tsx`) gives the screen's insets as
   `--safe-area-*` (the iPhone Duo's strip and fold included, as in sage);
   each region pads the edges it touches (`crosswing/safearea`), and
-  `PanelLayout` clears the ones a panel beside it already has. The
+  `PanelLayout` clears the ones a panel beside it already has. The shell
+  reports the on-screen keyboard's top (`viewport` in `HostContext`), and the
+  app's root takes the height above it. On a touch screen nothing takes the
+  keyboard on its own (`autoFocus()` in `ui/settings.ts`: focusing brings the
+  on-screen keyboard up) unless a hardware one is connected, which the app
+  knows from `GCKeyboard.coalesced` and tells the page. The
   shell's web view takes its view from `LaunchScreen.storyboard` (a scene
   `controller`, a progress bar tagged 1), and crashed at launch without it. The gateway marks its own page (`<meta name="miks-gateway">`) so a
   browser's connects back to it, and lets the app's origins in

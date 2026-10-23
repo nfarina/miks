@@ -57,21 +57,37 @@ export function macName(host: string): string {
 async function fullHost(host: string): Promise<string | null> {
   const [name, port] = host.split(":");
   if (name.includes(".") || /^[\d.]+$|:/.test(name)) return host;
+  const result = await askApp<{ name?: string }>("fullName", { host: name });
+  return result?.name ? `${result.name}:${port}` : null;
+}
+
+/**
+ * Asks the iOS app's plugin (MiksPlugin.swift), which answers by calling the
+ * function named. Null outside the app, or from an app too old to answer.
+ */
+async function askApp<T>(name: string, args: object = {}): Promise<T | null> {
   const app = (window as any).webkit?.messageHandlers?.default;
   if (!app) return null;
-  // The shell answers by calling the function named, with the result.
-  const callback = `miksFullName${++callbacks}`;
-  // An app from before the plugin never answers.
-  const result = await new Promise<{ name?: string }>((resolve) => {
+  const callback = `miksAnswer${++callbacks}`;
+  const result = await new Promise<T | null>((resolve) => {
     (window as any)[callback] = resolve;
-    setTimeout(() => resolve({}), 5000);
-    app.postMessage({ plugin: "miks", name: "fullName", host: name, callback: `window.${callback}` });
+    setTimeout(() => resolve(null), 5000);
+    app.postMessage({ plugin: "miks", name, ...args, callback: `window.${callback}` });
   });
   delete (window as any)[callback];
-  return result.name ? `${result.name}:${port}` : null;
+  return result;
 }
 
 let callbacks = 0;
+
+/** Whether the iOS app says a hardware keyboard is connected, so focusing brings up no on-screen one. */
+export const hardwareKeyboard = () => keyboardConnected;
+
+let keyboardConnected = false;
+(window as any).miks_hardwareKeyboard = (connected: boolean) => (keyboardConnected = connected);
+void askApp<{ connected?: boolean }>("hardwareKeyboard").then((result) => {
+  if (result) keyboardConnected = !!result.connected;
+});
 
 function readStorage<T>(key: string, fallback: T): T {
   try {

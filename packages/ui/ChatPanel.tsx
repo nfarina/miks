@@ -30,7 +30,7 @@ import { daemon } from "./daemon";
 import { FileView } from "./FileView";
 import { renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
-import { useSettings } from "./settings";
+import { autoFocus, useSettings } from "./settings";
 import {
   droppedText,
   focusActiveTerminal,
@@ -334,7 +334,7 @@ function focusPanel(root: HTMLElement, where: PanelPlace) {
         : where === "conversation"
           ? (conversation ?? editor ?? page)
           : (usable ?? editor ?? page ?? conversation);
-  target?.focus({ preventScroll: true });
+  if (autoFocus()) target?.focus({ preventScroll: true });
 }
 
 /**

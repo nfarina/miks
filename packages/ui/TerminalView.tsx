@@ -11,7 +11,7 @@ import { DragEvent, HTMLAttributes, use, useEffect, useRef } from "react";
 import { styled } from "styled-components";
 import { safeArea } from "crosswing/safearea";
 import { daemon, isRemote } from "./daemon";
-import { getSettings, useSettings } from "./settings";
+import { autoFocus, getSettings, useSettings } from "./settings";
 import { trackCommands } from "./commandMarks";
 import { handleClipboardWrites } from "./osc52";
 import { handleWheel } from "./wheel";
@@ -167,7 +167,7 @@ export function TerminalView({
     if (!active || !view) return;
 
     prepareActive(view.terminal, view.fit);
-    view.terminal.focus();
+    if (autoFocus()) view.terminal.focus();
     activeView = view;
 
     // The last screen used decides the pane's size: coming back to this
@@ -364,7 +364,7 @@ export function sendEscape(tabId: string) {
 
 /** Gives the keyboard back to the terminal on screen (after a dialog, say). */
 export function focusActiveTerminal() {
-  activeView?.terminal.focus();
+  if (autoFocus()) activeView?.terminal.focus();
 }
 
 /** Edit → Select last command (⌘⇧A): its prompt through its output. */
