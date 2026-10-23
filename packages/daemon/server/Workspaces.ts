@@ -661,6 +661,11 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     return !!this.files.get(tabId)?.includes(open);
   }
 
+  /** Where the tab's shell is, as last checked. */
+  async tabCwd(tabId: string): Promise<string | null> {
+    return this.cwds.get(tabId) ?? (await this.panes.get(tabId)?.cwd()) ?? null;
+  }
+
   /** Follows an open file: as it is now, then each change on disk, until the returned function is called. */
   watchFile(tabId: string, fileId: string | undefined, listener: FileListener): () => void {
     const open = this.openEntry(tabId, fileId);

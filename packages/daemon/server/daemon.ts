@@ -6,7 +6,7 @@ import os from "os";
 import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientMessage, DaemonMessage } from "../shared/protocol.ts";
-import { readImageForPanel } from "./Files.ts";
+import { findPaths, readImageForPanel } from "./Files.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
@@ -300,6 +300,29 @@ export async function serve({
           const { requestId } = message;
           if (!path.isAbsolute(message.path)) return send({ type: "image", requestId, error: "The path must be absolute." });
           void readImageForPanel(message.path).then((image) => send({ type: "image", requestId, ...image }));
+          return;
+        }
+        case "findPaths": {
+          const { requestId, tabId } = message;
+          void workspaces
+            .tabCwd(tabId)
+            .then((cwd) => findPaths(message.paths.slice(0, 100), cwd))
+            .then((found) => send({ type: "paths", requestId, found }));
+          return;
+        }
+        case "showFolder": {
+          const folder = message.path;
+          if (!path.isAbsolute(folder)) return;
+          void fs.promises.stat(folder).then(
+            (stat) => {
+              if (!stat.isDirectory()) return;
+              // A bundle (Miks.app) is a folder too, but opening it would
+              // start it: one with an extension is shown in its folder instead.
+              const args = path.extname(folder) ? ["-R", folder] : [folder];
+              spawn("open", args, { stdio: "ignore" }).on("error", () => {});
+            },
+            () => {},
+          );
           return;
         }
         case "closePage":

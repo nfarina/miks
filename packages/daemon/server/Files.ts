@@ -1,4 +1,6 @@
 import fs from "fs";
+import os from "os";
+import path from "path";
 import type { FileProblem } from "../shared/protocol.ts";
 
 /** The most the panel opens: past this it's a log or a dump, not a file to edit. */
@@ -90,4 +92,31 @@ export async function readImageForPanel(file: string): Promise<{ data?: string; 
   } catch (error: any) {
     return { error: error?.code === "ENOENT" ? "No such file." : "Can't be read." };
   }
+}
+
+/**
+ * Paths as a terminal shows them, found on disk: relative to `cwd`, `~` the
+ * home folder, and with any `:line` or `:line:column` after a file's name
+ * (compilers', and Claude Code's, way of pointing into it) left off.
+ */
+export async function findPaths(paths: string[], cwd: string | null): Promise<({ path: string; folder: boolean } | null)[]> {
+  const find = async (written: string) => {
+    const expanded = written === "~" || written.startsWith("~/") ? os.homedir() + written.slice(1) : written;
+    if (!path.isAbsolute(expanded) && !cwd) return null;
+    const absolute = path.resolve(cwd ?? "/", expanded);
+    try {
+      const stat = await fs.promises.stat(absolute);
+      return stat.isDirectory() || stat.isFile() ? { path: absolute, folder: stat.isDirectory() } : null;
+    } catch {
+      return null;
+    }
+  };
+  return Promise.all(
+    paths.map(async (written) => {
+      const found = await find(written);
+      if (found) return found;
+      const bare = written.replace(/(:\d+){1,2}$/, "");
+      return bare !== written ? find(bare) : null;
+    }),
+  );
 }

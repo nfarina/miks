@@ -227,7 +227,15 @@ export type ClientMessage =
    * daemon's Mac, and an image by its extension); answered by `image` with
    * the same `requestId`. Since protocol 10.
    */
-  | { type: "readImage"; requestId: string; path: string };
+  | { type: "readImage"; requestId: string; path: string }
+  /**
+   * Which of these, as written in the tab's terminal, are there on the
+   * daemon's Mac: relative to the tab's folder, `~` its home, and any
+   * `:line:column` left off. Answered by `paths`. Since protocol 10.
+   */
+  | { type: "findPaths"; requestId: string; tabId: string; paths: string[] }
+  /** Shows a folder (absolute) in Finder, on the daemon's Mac. Since protocol 10. */
+  | { type: "showFolder"; path: string };
 
 //
 // Daemon → client.
@@ -260,6 +268,8 @@ export type DaemonMessage =
   /** How a `saveFile` went: saved (its new `mtime`), or changed on disk since, or an error. */
   | { type: "fileSaved"; tabId: string; fileId?: string; mtime?: number; changed?: boolean; error?: string }
   /** A `readImage`'s image, base64, or why there's none. */
-  | { type: "image"; requestId: string; data?: string; mime?: string; error?: string };
+  | { type: "image"; requestId: string; data?: string; mime?: string; error?: string }
+  /** A `findPaths`'s answer, in its order: each one's absolute path, or null if it isn't there. */
+  | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] };
 
 // A pane whose program exits simply disappears from the next `state`.

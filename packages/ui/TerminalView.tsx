@@ -14,6 +14,7 @@ import { daemon, isRemote } from "./daemon";
 import { autoFocus, getSettings, useSettings } from "./settings";
 import { trackCommands } from "./commandMarks";
 import { handleClipboardWrites } from "./osc52";
+import { handlePathLinks } from "./pathLinks";
 import { handleWheel } from "./wheel";
 
 /**
@@ -66,6 +67,7 @@ export function TerminalView({
     terminal.unicode.activeVersion = "11";
     // window.open is routed to the real browser by the app.
     terminal.loadAddon(new WebLinksAddon((_event, uri) => window.open(uri)));
+    const pathLinks = handlePathLinks(terminal, tabId);
     terminal.open(containerRef.current!);
     const wheel = handleWheel(terminal, (data) => daemon.send({ type: "input", tabId, data }));
     handleClipboardWrites(terminal, (text) => window.miks?.copy(text));
@@ -130,6 +132,7 @@ export function TerminalView({
       input.dispose();
       binary.dispose();
       resize.dispose();
+      pathLinks.dispose();
       if (resizeTimer) clearTimeout(resizeTimer);
       unconnect();
       unstream();
