@@ -82,6 +82,8 @@ export type FileEvent = Omit<Extract<DaemonMessage, { type: "file" }>, "type" | 
 export type SaveResult = Omit<Extract<DaemonMessage, { type: "fileSaved" }>, "type" | "tabId" | "fileId">;
 /** An image for a markdown file, as `readImage` gets it. */
 export type ImageResult = Omit<Extract<DaemonMessage, { type: "image" }>, "type" | "requestId">;
+/** Paths in a terminal as found on the daemon's Mac, as `findPaths` gets them. */
+export type FoundPath = Extract<DaemonMessage, { type: "paths" }>["found"][number];
 
 /** A tab's conversation, as `watchChat` hears it. */
 export type ChatEvent = { session: string | null; entries: ChatEntry[]; reset: boolean };
@@ -99,6 +101,7 @@ class DaemonClient {
   private readonly files = new Map<string, { tabId: string; fileId: string; handler: (event: FileEvent) => void }>();
   private readonly saves = new Map<string, { tabId: string; resolve: (result: SaveResult) => void }>();
   private readonly images = new Map<string, (result: ImageResult) => void>();
+  private readonly foundPaths = new Map<string, (found: FoundPath[]) => void>();
   private readonly connectListeners = new Set<() => void>();
   private readonly commandListeners = new Set<(command: string) => void>();
   private readonly permissionListeners = new Set<(event: PermissionsEvent) => void>();
@@ -198,6 +201,25 @@ class DaemonClient {
   }
 
   /**
+   * Which paths, as a tab's terminal shows them, are there on the daemon's
+   * Mac; nothing from an older daemon, which never answers.
+   */
+  findPaths(tabId: string, paths: string[]): Promise<FoundPath[]> {
+    if (!this.snapshot.connected || (this.snapshot.state?.protocol ?? 0) < 10) return Promise.resolve(paths.map(() => null));
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => answer(paths.map(() => null)), 5_000);
+      const answer = (found: FoundPath[]) => {
+        clearTimeout(timeout);
+        this.foundPaths.delete(requestId);
+        resolve(found);
+      };
+      this.foundPaths.set(requestId, answer);
+      this.send({ type: "findPaths", requestId, tabId, paths });
+    });
+  }
+
+  /**
    * Reads an image on the daemon's Mac, for a markdown file in a panel. An
    * older daemon never answers, so it gives up after a while.
    */
@@ -280,6 +302,8 @@ class DaemonClient {
         this.saves.delete(id);
         return;
       }
+      case "paths":
+        return this.foundPaths.get(message.requestId)?.(message.found);
       case "image": {
         const { requestId, ...result } = message;
         return this.images.get(requestId)?.(result);
