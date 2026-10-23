@@ -63,8 +63,10 @@ export type Tab = {
   running?: string | null;
   /** Whether a restore brings back what's running (`miks keep`, or a Claude session). Since protocol 3. */
   kept?: boolean;
-  /** A file shown in the tab's panel (`miks open`, `miks edit`). Since protocol 8. */
+  /** A file shown in the tab's panel (`miks open`, `miks edit`): the latest of `files`. Since protocol 8. */
   file?: OpenFile;
+  /** Every file open in the tab's panel, in the order they opened. Since protocol 10. */
+  files?: OpenFile[];
   /** A page `miks browse` put in the tab's panel. */
   page?: OpenPage;
   /** What its Claude session has running in the background, while anything is. */
@@ -84,6 +86,8 @@ export type OpenFile = {
   edit: boolean;
   /** Something's waiting for it to close (`miks edit --wait`, as $EDITOR). */
   wait: boolean;
+  /** Goes up each time it's opened again while open, which brings it to the front. Since protocol 10. */
+  opened?: number;
 };
 
 /** Why a file's contents aren't there to show. */
@@ -198,19 +202,20 @@ export type ClientMessage =
    */
   | { type: "requestPermission"; id: string }
   /**
-   * Starts sending the tab's open file: a `file` now, and another whenever
-   * it changes on disk. Since protocol 8.
+   * Starts sending one of the tab's open files (`fileId`, or else `Tab.file`):
+   * a `file` now, and another whenever it changes on disk. Since protocol 8;
+   * `fileId` since 10.
    */
-  | { type: "watchFile"; tabId: string }
-  | { type: "unwatchFile"; tabId: string }
+  | { type: "watchFile"; tabId: string; fileId?: string }
+  | { type: "unwatchFile"; tabId: string; fileId?: string }
   /**
-   * Writes the tab's open file; answered by `fileSaved`. Refused if it changed
-   * on disk since `mtime` (what the editor last read or saved; null for a new
-   * file), unless `force`.
+   * Writes one of the tab's open files; answered by `fileSaved`. Refused if it
+   * changed on disk since `mtime` (what the editor last read or saved; null
+   * for a new file), unless `force`.
    */
-  | { type: "saveFile"; tabId: string; content: string; mtime: number | null; force?: boolean }
-  /** Closes the tab's file, letting a `miks edit --wait` go. */
-  | { type: "closeFile"; tabId: string }
+  | { type: "saveFile"; tabId: string; fileId?: string; content: string; mtime: number | null; force?: boolean }
+  /** Closes one of the tab's files, letting a `miks edit --wait` on it go. */
+  | { type: "closeFile"; tabId: string; fileId?: string }
   /**
    * Shows another file in the tab's panel, read-only, as `miks open` does: a
    * link in a markdown file. `path` is absolute, on the daemon's Mac. Since
@@ -253,7 +258,7 @@ export type DaemonMessage =
    */
   | { type: "file"; tabId: string; id: string; content: string | null; mtime: number | null; problem?: FileProblem }
   /** How a `saveFile` went: saved (its new `mtime`), or changed on disk since, or an error. */
-  | { type: "fileSaved"; tabId: string; mtime?: number; changed?: boolean; error?: string }
+  | { type: "fileSaved"; tabId: string; fileId?: string; mtime?: number; changed?: boolean; error?: string }
   /** A `readImage`'s image, base64, or why there's none. */
   | { type: "image"; requestId: string; data?: string; mime?: string; error?: string };
 

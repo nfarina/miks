@@ -6,7 +6,7 @@ import { ModalContext } from "crosswing/modals/context";
 import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView";
 import { tooltip } from "crosswing/modals/popup";
 import { ArrowUp, ChevronRight, Square, TextQuote } from "lucide-react";
-import type { ChatEntry, Tab } from "miks/shared/protocol";
+import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
   type DragEvent,
@@ -146,6 +146,9 @@ export const useExpanded = expandedTabs.useFlag;
 /** Whether a tab has anything for its panel to show. */
 export const hasPanel = (tab: Tab | null | undefined) => !!(tab?.agent || tab?.file || tab?.page);
 
+/** The files in a tab's panel; an older daemon has one at most. */
+const openFiles = (tab: Tab): OpenFile[] => tab.files ?? (tab.file ? [tab.file] : []);
+
 /** Set when you open the panel yourself: the composer takes the keyboard. */
 let focusOnShow = false;
 
@@ -186,11 +189,12 @@ export function ChatLayout({
   // Escape) leaves an open file as it was, unsaved changes and all.
   const panelOpen = useChatOpen(tab);
   const expanded = useExpanded(tab);
-  const { file, page } = tab;
+  const { page } = tab;
+  const files = openFiles(tab);
   const visible = panelOpen && hasPanel(tab);
   // Which of what it has the panel shows: what you picked, or else the
   // latest to open (a page, then a file, then the conversation).
-  const [view, setView] = useState<PanelView>("file");
+  const [view, setView] = useState<PanelView>("page");
   const views = panelViews(tab);
   const showing: PanelView = views.includes(view) ? view : (views.at(-1) ?? "chat");
   const ref = useRef<HTMLDivElement>(null);
@@ -198,23 +202,24 @@ export function ChatLayout({
   // A file or page opening (or opened again) comes to the front, opening
   // the panel if it was closed; and a panel opened for them closes once
   // they're gone.
-  const opened = useRef({ file: file?.id, page: page?.id });
+  const opened = useRef({ files: new Map(files.map((file) => [file.id, file.opened ?? 0])), page: page?.id });
   const openedForContent = useRef(false);
   useEffect(() => {
     const before = opened.current;
-    opened.current = { file: file?.id, page: page?.id };
-    const arrived = page && page.id !== before.page ? "page" : file && file.id !== before.file ? "file" : null;
+    opened.current = { files: new Map(files.map((file) => [file.id, file.opened ?? 0])), page: page?.id };
+    const file = files.find((file) => (before.files.get(file.id) ?? -1) < (file.opened ?? 0));
+    const arrived: PanelView | null = page && page.id !== before.page ? "page" : file ? `file:${file.id}` : null;
     if (arrived) {
       setView(arrived);
       if (!isChatOpen(tab)) {
         openedForContent.current = true;
         setChatOpen(tab, true);
       }
-    } else if (!file && !page && openedForContent.current && (before.file || before.page)) {
+    } else if (files.length === 0 && !page && openedForContent.current && (before.files.size > 0 || before.page)) {
       openedForContent.current = false;
       setChatOpen(tab, false);
     }
-  }, [file?.id, page?.id]);
+  }, [files.map((file) => `${file.id}.${file.opened ?? 0}`).join(), page?.id]);
 
   // Coming back to the tab, the keyboard goes back where it was: into the
   // panel, if it was there. And always into the panel when it covers the
@@ -230,7 +235,7 @@ export function ChatLayout({
   useEffect(() => {
     if (!visible || !focusOnShow || showing === "chat" || !ref.current) return;
     focusOnShow = false;
-    focusPanel(ref.current, showing);
+    focusPanel(ref.current, showing === "page" ? "page" : "file");
   }, [visible]);
 
   useEffect(() => {
@@ -299,14 +304,15 @@ export function ChatLayout({
   );
 }
 
-/** What a tab's panel can show. */
-type PanelView = "chat" | "file" | "page";
+/** What a tab's panel can show: its conversation, one of its files, or its page. */
+type PanelView = "chat" | `file:${string}` | "page";
 
 /** What a tab's panel has to show, in the order they're offered. */
-const panelViews = (tab: Tab): PanelView[] =>
-  [tab.agent && ("chat" as const), tab.file && ("file" as const), tab.page && ("page" as const)].filter(
-    (view): view is PanelView => !!view,
-  );
+const panelViews = (tab: Tab): PanelView[] => [
+  ...(tab.agent ? (["chat"] as const) : []),
+  ...openFiles(tab).map((file) => `file:${file.id}` as const),
+  ...(tab.page ? (["page"] as const) : []),
+];
 
 /** Where in a tab's panel the keyboard can be. */
 type PanelPlace = "composer" | "conversation" | "file" | "page";
@@ -320,12 +326,13 @@ const panelFocus = new Map<string, PanelPlace>();
  * no session yet: then the conversation).
  */
 function focusPanel(root: HTMLElement, where: PanelPlace) {
-  const shown = <T extends HTMLElement>(element: T | null) => (element?.offsetParent ? element : null);
-  const editor =
-    shown(root.querySelector<HTMLElement>(".file-view .cm-content")) ?? shown(root.querySelector<HTMLElement>(".file-view .markdown-view"));
-  const page = shown(root.querySelector<HTMLElement>(".page-view webview"));
-  const composer = shown(root.querySelector<HTMLTextAreaElement>(".composer textarea"));
-  const conversation = shown(root.querySelector<HTMLElement>(".scroller"));
+  // The one on show, of those there are (each file has its own, hidden or not).
+  const shown = <T extends HTMLElement>(selector: string) =>
+    [...root.querySelectorAll<T>(selector)].find((element) => element.offsetParent) ?? null;
+  const editor = shown(".file-view .cm-content") ?? shown(".file-view .markdown-view");
+  const page = shown(".page-view webview");
+  const composer = shown<HTMLTextAreaElement>(".composer textarea");
+  const conversation = shown(".scroller");
   const usable = composer && !composer.disabled ? composer : null;
   const target =
     where === "page"
@@ -452,17 +459,22 @@ export function ChatPanel({
   const { fontSize } = useSettings();
   const [pageTitle, setPageTitle] = useState("");
   const views = panelViews(tab);
+  const files = openFiles(tab);
+  const fileOf = (view: PanelView) => files.find((file) => view === `file:${file.id}`);
   const label = (view: PanelView) =>
-    view === "chat" ? "Chat" : view === "file" ? tab.file?.path.split("/").pop() : pageTitle || hostOf(tab.page?.url);
+    view === "chat" ? "Chat" : view === "page" ? pageTitle || hostOf(tab.page?.url) : fileOf(view)?.path.split("/").pop();
 
   return (
     // Its text grows and shrinks with the terminal's (⌘= and ⌘-), through
     // the font scale crosswing's fonts all follow.
-    <StyledChatPanel data-showing={showing} style={{ "--font-scale": fontSize / DEFAULT_SETTINGS.fontSize } as CSSProperties}>
+    <StyledChatPanel
+      data-showing={showing.startsWith("file:") ? "file" : showing}
+      style={{ "--font-scale": fontSize / DEFAULT_SETTINGS.fontSize } as CSSProperties}
+    >
       {views.length > 1 && (
         <div className="switcher">
           {views.map((view) => (
-            <button key={view} data-on={showing === view} onClick={() => onShow(view)}>
+            <button key={view} data-on={showing === view} title={fileOf(view)?.path} onClick={() => onShow(view)}>
               {label(view)}
             </button>
           ))}
@@ -472,11 +484,11 @@ export function ChatPanel({
       {tab.agent && !supported && (
         <div className="note">This tab's Mac has an older Miks. Update it there to see conversations here.</div>
       )}
-      {tab.file && (
-        <div className="file-view">
-          <FileView key={tab.file.id} tab={tab} file={tab.file} focusOnOpen={focusFile && tab.file.edit} onHide={onHide} />
+      {files.map((file) => (
+        <div key={file.id} className="file-view" hidden={showing !== `file:${file.id}`}>
+          <FileView tab={tab} file={file} focusOnOpen={focusFile && file.edit} onHide={onHide} />
         </div>
-      )}
+      ))}
       {tab.page && (
         <div className="page-view">
           <BrowseView tab={tab} page={tab.page} onTitle={setPageTitle} />
@@ -1000,7 +1012,7 @@ const StyledChatPanel = styled.div`
   &:not([data-showing="chat"]) > .scroller,
   &:not([data-showing="chat"]) > .composer,
   &:not([data-showing="chat"]) > .note,
-  &:not([data-showing="file"]) > .file-view {
+  > .file-view[hidden] {
     display: none;
   }
 
@@ -1026,9 +1038,12 @@ const StyledChatPanel = styled.div`
     display: flex;
     gap: 4px;
     padding: 8px 12px 0;
+    /* Files enough to run past its end: it scrolls, sideways. */
+    overflow-x: auto;
+    scrollbar-width: none;
 
     > button {
-      min-width: 0;
+      flex-shrink: 0;
       max-width: 60%;
       overflow: hidden;
       text-overflow: ellipsis;

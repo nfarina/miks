@@ -89,8 +89,7 @@ export function FileView({
 
   // The file as the daemon has it, now and whenever it changes on disk.
   useEffect(() => {
-    return daemon.watchFile(tab.id, (event) => {
-      if (event.id !== file.id) return;
+    return daemon.watchFile(tab.id, file.id, (event) => {
       const before = diskRef.current;
       // What we've seen already (our own save, coming back).
       if (before && event.mtime === before.mtime) return;
@@ -186,7 +185,7 @@ export function FileView({
 
     setSaving(true);
     const content = view.state.doc.toString();
-    const result = await daemon.saveFile(tab.id, content, diskRef.current?.mtime ?? null, force);
+    const result = await daemon.saveFile(tab.id, file.id, content, diskRef.current?.mtime ?? null, force);
     setSaving(false);
 
     if (result.changed) {
@@ -220,35 +219,22 @@ export function FileView({
       });
       if (!discard) return;
     }
-    daemon.send({ type: "closeFile", tabId: tab.id });
+    daemon.send({ type: "closeFile", tabId: tab.id, fileId: file.id });
   }
 
-  /** A link in the preview to another file, shown here in this one's place. */
-  async function openLinked(path: string) {
-    const linked = path.split("/").pop() ?? path;
+  /** A link in the preview to another file: it opens beside this one. */
+  function openLinked(path: string) {
     if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) {
+      const linked = path.split("/").pop() ?? path;
       showToast({ title: `Couldn't open ${linked}`, message: "This tab's Mac has an older Miks. Update it there to follow links to files." });
       return;
-    }
-    // Opening another file ends a `--wait` as Done would, so that's yours to do.
-    if (file.wait) {
-      showToast({ title: `Couldn't open ${linked}`, message: `Something's waiting on ${name}: press Done first.` });
-      return;
-    }
-    if (dirtyRef.current) {
-      const discard = await window.miks?.confirm({
-        message: `Open ${linked} without saving ${name}?`,
-        detail: "Your changes will be lost.",
-        button: "Don't save",
-      });
-      if (!discard) return;
     }
     daemon.send({ type: "openFile", tabId: tab.id, path });
   }
 
   // `--wait` (as $EDITOR): saved, closed, and whatever waited goes on.
   async function done() {
-    if (await save()) daemon.send({ type: "closeFile", tabId: tab.id });
+    if (await save()) daemon.send({ type: "closeFile", tabId: tab.id, fileId: file.id });
   }
 
   function resolveConflict(take: "disk" | "mine") {
@@ -333,7 +319,7 @@ export function FileView({
               tab={tab}
               file={file}
               text={previewText ?? disk?.content ?? ""}
-              onOpenFile={(path) => void openLinked(path)}
+              onOpenFile={openLinked}
               onHide={onHide}
             />
           )}

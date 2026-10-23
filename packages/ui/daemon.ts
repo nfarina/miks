@@ -79,7 +79,7 @@ export type PermissionsEvent = { app: string | null; permissions: Permission[] }
 
 /** A tab's open file, as `watchFile` hears it. */
 export type FileEvent = Omit<Extract<DaemonMessage, { type: "file" }>, "type" | "tabId">;
-export type SaveResult = Omit<Extract<DaemonMessage, { type: "fileSaved" }>, "type" | "tabId">;
+export type SaveResult = Omit<Extract<DaemonMessage, { type: "fileSaved" }>, "type" | "tabId" | "fileId">;
 /** An image for a markdown file, as `readImage` gets it. */
 export type ImageResult = Omit<Extract<DaemonMessage, { type: "image" }>, "type" | "requestId">;
 
@@ -96,8 +96,8 @@ class DaemonClient {
   private readonly listeners = new Set<() => void>();
   private readonly streams = new Map<string, (event: PaneStreamEvent) => void>();
   private readonly chats = new Map<string, (event: ChatEvent) => void>();
-  private readonly files = new Map<string, (event: FileEvent) => void>();
-  private readonly saves = new Map<string, (result: SaveResult) => void>();
+  private readonly files = new Map<string, { tabId: string; fileId: string; handler: (event: FileEvent) => void }>();
+  private readonly saves = new Map<string, { tabId: string; resolve: (result: SaveResult) => void }>();
   private readonly images = new Map<string, (result: ImageResult) => void>();
   private readonly connectListeners = new Set<() => void>();
   private readonly commandListeners = new Set<(command: string) => void>();
@@ -125,7 +125,7 @@ class DaemonClient {
 
       this.send({ type: "hello" });
       for (const tabId of this.chats.keys()) this.send({ type: "watchChat", tabId });
-      for (const tabId of this.files.keys()) this.send({ type: "watchFile", tabId });
+      for (const { tabId, fileId } of this.files.values()) this.send({ type: "watchFile", tabId, fileId });
       for (const listener of this.connectListeners) listener();
     });
 
@@ -175,23 +175,25 @@ class DaemonClient {
     return () => this.permissionListeners.delete(listener);
   }
 
-  /** Follows a tab's open file: as it is now, then again whenever it changes on disk. */
-  watchFile(tabId: string, handler: (event: FileEvent) => void): Unsubscribe {
-    this.files.set(tabId, handler);
-    this.send({ type: "watchFile", tabId });
+  /** Follows one of a tab's open files: as it is now, then again whenever it changes on disk. */
+  watchFile(tabId: string, fileId: string, handler: (event: FileEvent) => void): Unsubscribe {
+    const key = `${tabId}:${fileId}`;
+    const watch = { tabId, fileId, handler };
+    this.files.set(key, watch);
+    this.send({ type: "watchFile", tabId, fileId });
     return () => {
-      if (this.files.get(tabId) !== handler) return;
-      this.files.delete(tabId);
-      this.send({ type: "unwatchFile", tabId });
+      if (this.files.get(key) !== watch) return;
+      this.files.delete(key);
+      this.send({ type: "unwatchFile", tabId, fileId });
     };
   }
 
-  /** Saves a tab's open file; see `saveFile` in the protocol. One at a time per tab. */
-  saveFile(tabId: string, content: string, mtime: number | null, force = false): Promise<SaveResult> {
+  /** Saves one of a tab's open files; see `saveFile` in the protocol. One at a time per file. */
+  saveFile(tabId: string, fileId: string, content: string, mtime: number | null, force = false): Promise<SaveResult> {
     if (!this.snapshot.connected) return Promise.resolve({ error: "Not connected to the daemon." });
     return new Promise((resolve) => {
-      this.saves.set(tabId, resolve);
-      this.send({ type: "saveFile", tabId, content, mtime, force });
+      this.saves.set(fileId, { tabId, resolve });
+      this.send({ type: "saveFile", tabId, fileId, content, mtime, force });
     });
   }
 
@@ -267,12 +269,15 @@ class DaemonClient {
       }
       case "file": {
         const { tabId, ...event } = message;
-        return this.files.get(tabId)?.(event);
+        return this.files.get(`${tabId}:${event.id}`)?.handler(event);
       }
       case "fileSaved": {
-        const { tabId, ...result } = message;
-        this.saves.get(tabId)?.(result);
-        this.saves.delete(tabId);
+        // An older daemon's has no fileId, but then the tab has the one file.
+        const { tabId, fileId, ...result } = message;
+        const id = fileId ?? [...this.saves].find(([, save]) => save.tabId === tabId)?.[0];
+        if (!id) return;
+        this.saves.get(id)?.resolve(result);
+        this.saves.delete(id);
         return;
       }
       case "image": {
