@@ -57,7 +57,7 @@ export class BackgroundTasks extends EventEmitter<{ change: [] }> {
       this.offset = 0;
     }
     this.partial = "";
-    fs.watchFile(file, { interval: POLL_INTERVAL, persistent: false }, () => void this.read());
+    fs.watchFile(file, { interval: POLL_INTERVAL, persistent: false }, this.changedOnDisk);
   }
 
   /** How many of each are running, or nothing when none are. */
@@ -74,8 +74,11 @@ export class BackgroundTasks extends EventEmitter<{ change: [] }> {
     this.tasks.clear();
   }
 
+  // Its own, to remove only it: the chat panel (Transcript) watches the same file.
+  private readonly changedOnDisk = () => void this.read();
+
   private unwatch() {
-    if (this.file) fs.unwatchFile(this.file);
+    if (this.file) fs.unwatchFile(this.file, this.changedOnDisk);
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
   }

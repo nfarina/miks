@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 // Several waits in a row, each on a 250ms poll: more than 5s, on a loaded machine.
 vi.setConfig({ testTimeout: 20_000 });
 import { BackgroundTasks } from "./BackgroundTasks.ts";
+import { Transcript } from "./Transcript.ts";
 
 let dir: string;
 let transcript: string;
@@ -49,6 +50,15 @@ async function waitFor(check: () => boolean) {
   for (let i = 0; i < 100 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 50));
   expect(check()).toBe(true);
 }
+
+test("keeps following after the chat panel on the same transcript closes", async () => {
+  const chat = new Transcript(transcript);
+  await chat.ready;
+  chat.close();
+
+  fs.appendFileSync(transcript, started("a2", { isAsync: true, status: "async_launched", agentId: "a2" }));
+  await waitFor(() => tasks.counts()?.agents === 1);
+});
 
 test("counts what's started, until its notification", async () => {
   fs.appendFileSync(transcript, started("m1", { taskId: "m1", timeoutMs: 600000, persistent: false }));

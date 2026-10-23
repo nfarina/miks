@@ -49,13 +49,18 @@ export class Transcript extends EventEmitter<{ entries: [entries: ChatEntry[]]; 
     this.file = file;
     // watchFile, unlike watch, works on a file that doesn't exist yet: a
     // session has a transcript path before it has a message.
-    fs.watchFile(file, { interval: POLL_INTERVAL, persistent: false }, () => void this.read());
+    fs.watchFile(file, { interval: POLL_INTERVAL, persistent: false }, this.changed);
     this.ready = this.read();
   }
 
+  // Its own listener to remove: Node has one watcher per path, and
+  // unwatchFile without one ends every listener on it, the background
+  // follower's (BackgroundTasks) on the same transcript included.
+  private readonly changed = () => void this.read();
+
   close() {
     this.closed = true;
-    fs.unwatchFile(this.file);
+    fs.unwatchFile(this.file, this.changed);
     this.removeAllListeners();
   }
 
