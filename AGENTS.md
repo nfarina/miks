@@ -121,7 +121,12 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   is the Mac app's own executable, and acts as the CLI only with `TERM`,
   `TERM_PROGRAM` or `SHLVL` set; the daemon (a launchd job) has none, so it
   passes `TERM=dumb` (without: "The Tailscale GUI failed to start"). Test a
-  scratch daemon started under `env -i`, not from a terminal. In a browser, `ui/webBridge.ts` is `window.miks`,
+  scratch daemon started under `env -i`, not from a terminal. With HTTPS
+  certificates on for the tailnet (`CertDomains` in `status`), it serves
+  HTTPS at the full name (`https://air.<tailnet>.ts.net:2741/`) with the
+  certificate `tailscale cert` prints (to stdout: the CLI is the sandboxed
+  app, and writing files elsewhere is "operation not permitted"), held in
+  memory, asked for again daily. The first takes about 35s. In a browser, `ui/webBridge.ts` is `window.miks`,
   with the device's own settings in localStorage. Plain http over Tailscale
   isn't a secure context: no `crypto.randomUUID` (sending threw once), no
   clipboard API. Verified from an iPad.

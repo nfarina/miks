@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { EventEmitter } from "events";
 import fs from "fs";
 import http from "http";
+import https from "https";
 import type { Duplex } from "stream";
 import path from "path";
 import { WebSocketServer } from "ws";
@@ -14,18 +15,26 @@ export const GATEWAY_PORT = 2741;
 /** How often a listening gateway checks its addresses (and one that failed tries again). */
 const CHECK_INTERVAL = 30_000;
 
+/** How often the certificate is asked for again (Tailscale renews it, well before it expires). */
+const CERT_INTERVAL = 24 * 60 * 60_000;
+
 /** How long who's at an address is remembered. */
 const OWNER_TTL = 60_000;
 
 /** A device on the tailnet: which one (its stable ID), and the user it's signed in as. */
 type Device = { node: string; owner: string };
 
-/** What the gateway asks Tailscale: this Mac on the tailnet, and who's at an address. */
+/** This Mac on the tailnet: its addresses, its short name, and its full one when it can have a certificate. */
+type Self = Device & { addresses: string[]; name: string; domain?: string };
+
+/** What the gateway asks Tailscale: this Mac on the tailnet, who's at an address, and a certificate. */
 export type Tailscale = {
   /** This Mac, or null when Tailscale isn't running (or isn't installed). */
-  self(): Promise<(Device & { addresses: string[]; name: string }) | null>;
+  self(): Promise<Self | null>;
   /** The device at an address, or null for one that isn't on the tailnet. */
   whois(address: string): Promise<Device | null>;
+  /** A certificate for this Mac's full name (Let's Encrypt's, through Tailscale), with its key. */
+  cert(domain: string): Promise<{ cert: string; key: string }>;
 };
 
 /**
@@ -40,7 +49,9 @@ export type Tailscale = {
 export class Gateway extends EventEmitter<{ change: [] }> {
   state: GatewayState | undefined;
   private servers: http.Server[] = [];
-  private self: (Device & { addresses: string[]; name: string }) | null = null;
+  private self: Self | null = null;
+  /** The certificate it serves HTTPS with, in memory only, and when it was asked for. */
+  private tls: { domain: string; cert: string; key: string; at: number } | null = null;
   private readonly devices = new Map<string, { device: Device | null; until: number }>();
   private timer: NodeJS.Timeout | null = null;
   private enabled = false;
@@ -73,8 +84,21 @@ export class Gateway extends EventEmitter<{ change: [] }> {
     this.wss.close();
   }
 
+  private checking = false;
+
   /** Listens on this Mac's current Tailscale addresses, again if they changed. */
   private async check() {
+    // The first certificate takes longer than the interval.
+    if (this.checking) return;
+    this.checking = true;
+    try {
+      await this.checkNow();
+    } finally {
+      this.checking = false;
+    }
+  }
+
+  private async checkNow() {
     const tailscale = this.options.tailscale ?? cliTailscale;
     const self = await tailscale.self().catch(() => null);
     if (!this.enabled) return;
@@ -83,22 +107,52 @@ export class Gateway extends EventEmitter<{ change: [] }> {
       this.update({ error: "Tailscale isn't running on this Mac." });
       return;
     }
-    if (this.servers.length > 0 && String(self.addresses) === String(this.self?.addresses)) return;
+
+    // HTTPS once the tailnet has certificates on (DNS → HTTPS Certificates
+    // in Tailscale's admin console): a secure page (the clipboard,
+    // crypto.randomUUID), and one an https page (the iOS app's) can connect to.
+    const renewed = await this.renewCert(self, tailscale);
+    if (!this.enabled) return;
+    const listening = this.servers.length > 0 && String(self.addresses) === String(this.self?.addresses);
+    if (listening && (this.tls?.domain ?? null) === (self.domain ?? null)) {
+      if (renewed && this.tls) for (const server of this.servers) (server as https.Server).setSecureContext?.(this.tls);
+      return;
+    }
 
     this.stop();
     this.self = self;
     const port = this.options.port ?? GATEWAY_PORT;
     try {
       this.servers = await Promise.all(self.addresses.map((address) => this.listen(address, port)));
-      this.update({ url: `http://${self.name}:${port}/` });
+      this.update({ url: this.tls ? `https://${this.tls.domain}:${port}/` : `http://${self.name}:${port}/` });
     } catch (error) {
       this.stop();
       this.update({ error: `Couldn't listen on port ${port}: ${error instanceof Error ? error.message : error}` });
     }
   }
 
+  /** Asks for this Mac's certificate when it's due; whether a new one came. */
+  private async renewCert(self: Self, tailscale: Tailscale): Promise<boolean> {
+    if (!self.domain) {
+      this.tls = null;
+      return false;
+    }
+    if (this.tls?.domain === self.domain && Date.now() - this.tls.at < CERT_INTERVAL) return false;
+    try {
+      const { cert, key } = await tailscale.cert(self.domain);
+      const changed = cert !== this.tls?.cert;
+      this.tls = { domain: self.domain, cert, key, at: Date.now() };
+      return changed;
+    } catch {
+      // Keep any we had; without one, plain http on the short name.
+      if (this.tls?.domain !== self.domain) this.tls = null;
+      return false;
+    }
+  }
+
   private listen(address: string, port: number): Promise<http.Server> {
-    const server = http.createServer((req, res) => void this.request(req, res));
+    const handler = (req: http.IncomingMessage, res: http.ServerResponse) => void this.request(req, res);
+    const server = this.tls ? https.createServer({ cert: this.tls.cert, key: this.tls.key }, handler) : http.createServer(handler);
     server.on("upgrade", (req, socket, head) => void this.upgrade(req, socket, head));
     return new Promise((resolve, reject) => {
       server.once("error", reject);
@@ -205,7 +259,7 @@ const TYPES: Record<string, string> = {
 /** Where the Tailscale CLI may be: inside the Mac app, or on its own (Homebrew, the standalone install). */
 const CLI_PATHS = ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale"];
 
-function tailscaleJson(args: string[]): Promise<any> {
+function tailscaleText(args: string[], timeout = 90_000): Promise<string> {
   const cli = CLI_PATHS.find((file) => fs.existsSync(file));
   if (!cli) return Promise.reject(new Error("Tailscale isn't installed."));
   return new Promise((resolve, reject) => {
@@ -213,15 +267,12 @@ function tailscaleJson(args: string[]): Promise<any> {
     // TERM_PROGRAM, or SHLVL), it tries to start as the app ("The Tailscale
     // GUI failed to start"). The daemon, a launchd job, has none of them.
     const env = { ...process.env, TERM: process.env.TERM || "dumb" };
-    execFile(cli, args, { env, timeout: 5000 }, (error, stdout) => {
-      if (error) return reject(error);
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (parseError) {
-        reject(parseError);
-      }
-    });
+    execFile(cli, args, { env, timeout }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
   });
+}
+
+async function tailscaleJson(args: string[]): Promise<any> {
+  return JSON.parse(await tailscaleText(args, 5000));
 }
 
 /** Tailscale, by its CLI, which talks to the Tailscale app running on this Mac. */
@@ -235,11 +286,23 @@ const cliTailscale: Tailscale = {
       name: String(status.Self.DNSName ?? "").split(".")[0] || status.Self.TailscaleIPs?.[0],
       node: String(status.Self.ID),
       owner: String(status.Self.UserID),
+      // With HTTPS certificates on for the tailnet, the name one is for.
+      domain: (status.CertDomains ?? []).find((domain: string) => domain === String(status.Self.DNSName).replace(/\.$/, "")),
     };
   },
   async whois(address) {
     const whois = await tailscaleJson(["whois", "--json", address]);
     if (!whois?.Node?.StableID || whois.UserProfile?.ID == null) return null;
     return { node: String(whois.Node.StableID), owner: String(whois.UserProfile.ID) };
+  },
+  // To stdout: the CLI is the sandboxed Mac app, which may not write files
+  // elsewhere ("operation not permitted"). The first takes half a minute.
+  async cert(domain) {
+    const [cert, key] = await Promise.all([
+      tailscaleText(["cert", "--cert-file", "-", "--key-file", "/dev/null", domain]),
+      tailscaleText(["cert", "--cert-file", "/dev/null", "--key-file", "-", domain]),
+    ]);
+    if (!cert.includes("BEGIN CERTIFICATE") || !key.includes("PRIVATE KEY")) throw new Error("No certificate from Tailscale.");
+    return { cert, key };
   },
 };

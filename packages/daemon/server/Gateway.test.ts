@@ -1,4 +1,6 @@
+import { execFileSync } from "child_process";
 import fs from "fs";
+import https from "https";
 import net from "net";
 import os from "os";
 import path from "path";
@@ -14,10 +16,16 @@ let port: number;
 // Who Tailscale says is connecting; every test connection comes from 127.0.0.1.
 let caller: { node: string; owner: string } | null;
 let running: boolean;
+// Whether the tailnet has HTTPS certificates on, and the one it gives.
+let certified: { cert: string; key: string } | null;
 
 const tailscale: Tailscale = {
-  self: async () => (running ? { addresses: ["127.0.0.1"], name: "air", node: "air-node", owner: "me" } : null),
+  self: async () =>
+    running
+      ? { addresses: ["127.0.0.1"], name: "air", node: "air-node", owner: "me", domain: certified ? "localhost" : undefined }
+      : null,
   whois: async () => caller,
+  cert: async () => certified!,
 };
 
 beforeEach(async () => {
@@ -36,6 +44,7 @@ beforeEach(async () => {
   port = await freePort();
   caller = { node: "ipad-node", owner: "me" };
   running = true;
+  certified = null;
   gateway = new Gateway({ socketPath, uiDir, tailscale, port });
 });
 
@@ -120,6 +129,25 @@ test("its WebSocket is the daemon's, for its own page only", async () => {
     socket.on("open", () => resolve("opened"));
   });
   expect(refused).toContain("403");
+});
+
+test("with a certificate from the tailnet, it's HTTPS at the full name", async () => {
+  const key = path.join(home, "key.pem");
+  const cert = path.join(home, "cert.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-days", "1", "-subj", "/CN=localhost", "-keyout", key, "-out", cert], { stdio: "ignore" });
+  certified = { cert: fs.readFileSync(cert, "utf8"), key: fs.readFileSync(key, "utf8") };
+
+  gateway.setEnabled(true);
+  await waitFor(() => !!gateway.state && "url" in gateway.state);
+  expect(gateway.state).toEqual({ url: `https://localhost:${port}/` });
+
+  const status = await new Promise<number | undefined>((resolve, reject) => {
+    https.get({ host: "127.0.0.1", port, path: "/", ca: certified!.cert, servername: "localhost" }, (res) => {
+      res.resume();
+      resolve(res.statusCode);
+    }).on("error", reject);
+  });
+  expect(status).toBe(200);
 });
 
 test("turning it off closes it", async () => {
