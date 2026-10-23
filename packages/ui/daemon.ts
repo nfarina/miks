@@ -30,6 +30,11 @@ export type MiksBridge = {
   openRemote(id: string): void;
   confirm(options: { message: string; detail: string; button: string }): Promise<boolean>;
   copy(text: string): void;
+  /**
+   * Which Mac this device connects to (its gateway's host and port), where
+   * the page isn't one a Mac served: the iOS app's. Setting it reconnects.
+   */
+  mac?: { get(): string | null; set(host: string | null): void };
 };
 
 /** Another Mac a window's daemon is on. */

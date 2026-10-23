@@ -28,7 +28,8 @@
     "start": "yarn workspace app start",
     "build:linters": "tsc -p .eslint/tsconfig.json",
     "install:app": "node scripts/install-app.ts",
-    "release": "node scripts/release.ts"
+    "release": "node scripts/release.ts",
+    "deploy:web": "node scripts/deploy-web.ts"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

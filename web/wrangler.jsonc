@@ -1,0 +1,9 @@
+// The iOS app's web bundle, at https://miks-app.nfarina.com: static files
+// only, built into public/ by `yarn deploy:web` (scripts/deploy-web.ts).
+{
+  "name": "miks-app",
+  "account_id": "0a607a0daae512c38bb66f68e5ed5f0b",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public" },
+  "routes": [{ "pattern": "miks-app.nfarina.com", "custom_domain": true }]
+}

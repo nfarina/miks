@@ -130,6 +130,19 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   with the device's own settings in localStorage. Plain http over Tailscale
   isn't a secure context: no `crypto.randomUUID` (sending threw once), no
   clipboard API. Verified from an iPad.
+- The iOS app (`ios/`, see its README): chatwing's shared shell, synced as
+  `{"name": "chatwing", "paths": ["ios/"]}` in `.wings` (wings syncs only
+  those paths), plus Miks's own `ios/Miks/` and `Miks.xcodeproj`, without
+  Firebase (the shell guards it with `canImport`). It loads the UI from
+  the bundle `yarn deploy:web` puts at https://miks-app.nfarina.com (a
+  Cloudflare Worker's static assets, `web/wrangler.jsonc`), cached and
+  served from `crosswing://app/`. There the bridge (`ui/webBridge.ts`)
+  connects to the Mac you name (`miks-mac` in localStorage) at
+  `wss://<its full name>:2741/ws`, since an https page can't open plain
+  ws; the gateway marks its own page (`<meta name="miks-gateway">`) so a
+  browser's connects back to it, and lets the app's origins in
+  (`APP_ORIGINS`). `ios/build.sh device "iPad mini"` installs onto a
+  paired device; there's an iPhone Duo simulator.
 - Miks keeps its Claude Code hooks in `~/.claude/settings.json` itself
   (`packages/app/claudeHooks.ts`, on launch and when the setting changes),
   running a copy of the script in Miks's home so the path is the same for

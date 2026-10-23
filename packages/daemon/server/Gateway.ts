@@ -15,6 +15,14 @@ export const GATEWAY_PORT = 2741;
 /** How often a listening gateway checks its addresses (and one that failed tries again). */
 const CHECK_INTERVAL = 30_000;
 
+/**
+ * Pages besides its own that may open its WebSocket: the iOS app's, from its
+ * cached bundle (`crosswing://app`, a scheme no website can have) or live
+ * from where the bundle is hosted. Any other page, even on your own devices,
+ * is refused: a site in the iPad's browser passes the device check too.
+ */
+export const APP_ORIGINS = ["crosswing://app", "https://miks-app.nfarina.com"];
+
 /** How often the certificate is asked for again (Tailscale renews it, well before it expires). */
 const CERT_INTERVAL = 24 * 60 * 60_000;
 
@@ -213,6 +221,8 @@ export class Gateway extends EventEmitter<{ change: [] }> {
       const host = /^[\w.:[\]-]+$/.test(req.headers.host ?? "") ? req.headers.host : null;
       let html = fs.readFileSync(file, "utf8");
       if (host) html = html.replace("connect-src 'self'", `connect-src 'self' ws://${host} wss://${host}`);
+      // So the page connects back here (ui/webBridge.ts), not to a Mac you named.
+      html = html.replace("<head>", `<head>\n    <meta name="miks-gateway" />`);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
       return void res.end(html);
     }
@@ -220,11 +230,12 @@ export class Gateway extends EventEmitter<{ change: [] }> {
     fs.createReadStream(file).pipe(res);
   }
 
-  /** `/ws`, from the gateway's own page only, piped to the daemon's socket. */
+  /** `/ws`, from the gateway's own page or the app's only, piped to the daemon's socket. */
   private async upgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     const origin = req.headers.origin;
     const ownPage = origin === `http://${req.headers.host}` || origin === `https://${req.headers.host}`;
-    if (req.url !== "/ws" || !ownPage || !(await this.allowed(req))) {
+    const appPage = !!origin && APP_ORIGINS.includes(origin);
+    if (req.url !== "/ws" || !(ownPage || appPage) || !(await this.allowed(req))) {
       socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
       return;
     }

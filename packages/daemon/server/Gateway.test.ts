@@ -34,7 +34,7 @@ beforeEach(async () => {
   fs.mkdirSync(path.join(uiDir, "assets"), { recursive: true });
   fs.writeFileSync(
     path.join(uiDir, "index.html"),
-    `<meta http-equiv="Content-Security-Policy" content="connect-src 'self' ws://localhost:*">`,
+    `<head><meta http-equiv="Content-Security-Policy" content="connect-src 'self' ws://localhost:*"></head>`,
   );
   fs.writeFileSync(path.join(uiDir, "assets", "app.js"), "console.log('miks')");
   fs.writeFileSync(path.join(home, "secret.txt"), "not for you");
@@ -87,7 +87,9 @@ test("serves the UI to your own other devices, and nothing to anyone else", asyn
   const page = await get("/");
   expect(page.status).toBe(200);
   // It may open its WebSocket back to where it came from.
-  expect(await page.text()).toContain(`connect-src 'self' ws://127.0.0.1:${port} wss://127.0.0.1:${port}`);
+  const html = await page.text();
+  expect(html).toContain(`connect-src 'self' ws://127.0.0.1:${port} wss://127.0.0.1:${port}`);
+  expect(html).toContain(`<meta name="miks-gateway" />`);
   expect(await (await get("/assets/app.js")).text()).toBe("console.log('miks')");
   expect((await get("/../secret.txt")).status).toBe(404);
   expect((await get("/%2e%2e/secret.txt")).status).toBe(404);
@@ -121,6 +123,14 @@ test("its WebSocket is the daemon's, for its own page only", async () => {
     socket.on("error", reject);
   });
   expect(first.type).toBe("state");
+
+  // The iOS app's page, from its cached bundle.
+  const app = await new Promise<string>((resolve) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { origin: "crosswing://app" } });
+    socket.on("open", () => (socket.close(), resolve("opened")));
+    socket.on("error", (error) => resolve(error.message));
+  });
+  expect(app).toBe("opened");
 
   // A page from anywhere else (one rebinding its name to this address, say).
   const refused = await new Promise<string>((resolve) => {

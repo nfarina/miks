@@ -1,0 +1,113 @@
+{
+  "default-configuration": "Release",
+  "configurations": [
+    "Debug",
+    "Release",
+  ],
+  "localizations": {
+    "development": "en",
+    "supported": [
+      "Base",
+    ],
+  },
+  "packages": [
+    {
+      "kind": "remote",
+      "repository": "https://github.com/ZipArchive/ZipArchive",
+      "version": {
+        "up-to-next-major-version": "2.0.0",
+      },
+    },
+  ],
+  "files": [
+    {
+      "kind": "folder",
+      "path": "Miks",
+      "target-membership": [
+        "Miks",
+      ],
+      "membership-exceptions": [
+        {
+          "target": "Miks",
+          "exclusions": [
+            "Info.plist",
+          ],
+        },
+      ],
+    }, {
+      "kind": "folder",
+      "path": "Shared",
+      "target-membership": [
+        "Miks",
+      ],
+    },
+    {
+      "kind": "group",
+      "name": "Products",
+      "children": [
+        { "path": "<PRODUCTS>/Miks.app", "id": "3A1F6C0E9B2D4E5F60718293", "type": "wrapper.application", "index": false },
+      ],
+    },
+  ],
+  "targets": [
+    {
+      "name": "Miks",
+      "id": "5B2E7D1F0C3A4B6E8F907A1B",
+      "product": "id:3A1F6C0E9B2D4E5F60718293",
+      "product-type": "application",
+      "build-phases": [
+        "compile-sources",
+        "resources",
+        "frameworks",
+      ],
+      "package-product-members": [
+        {
+          "package": "ZipArchive",
+          "product-name": "ZipArchive",
+          "build-phase": { "build-phase": "frameworks" },
+        },
+      ],
+      "build-settings": {
+        "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+        "INFOPLIST_FILE": "Miks/Info.plist",
+        "IPHONEOS_DEPLOYMENT_TARGET": "17.0",
+        "LD_RUNPATH_SEARCH_PATHS": [
+          "$(inherited)",
+          "@executable_path/Frameworks",
+        ],
+        "MIKS_HOST": "miks-app.nfarina.com",
+        "PRODUCT_NAME": "Miks",
+        "SDKROOT": "iphoneos",
+        "TARGETED_DEVICE_FAMILY": "1,2",
+      },
+    },
+  ],
+  "build-settings": {
+    "ALWAYS_SEARCH_USER_PATHS": "NO",
+    "CLANG_ENABLE_MODULES": "YES",
+    "CLANG_ENABLE_OBJC_ARC": "YES",
+    "CODE_SIGN_STYLE": "Automatic",
+    "DEBUG_INFORMATION_FORMAT[config=Debug]": "dwarf",
+    "DEBUG_INFORMATION_FORMAT[config=Release]": "dwarf-with-dsym",
+    "DEVELOPMENT_TEAM": "RCRD96UZHN",
+    "ENABLE_TESTABILITY[config=Debug]": "YES",
+    "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
+    "GCC_OPTIMIZATION_LEVEL[config=Debug]": "0",
+    "GCC_PREPROCESSOR_DEFINITIONS[config=Debug]": [
+      "$(inherited)",
+      "DEBUG=1",
+    ],
+    "GENERATE_INFOPLIST_FILE": "NO",
+    "ONLY_ACTIVE_ARCH[config=Debug]": "YES",
+    "PRODUCT_BUNDLE_IDENTIFIER": "com.nfarina.miks.ios",
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug]": "DEBUG",
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug][sdk=iphoneos27.0*]": "DEBUG SDK_BEFORE_27_1",
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug][sdk=iphonesimulator27.0*]": "DEBUG SDK_BEFORE_27_1",
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Release][sdk=iphoneos27.0*]": "SDK_BEFORE_27_1",
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Release][sdk=iphonesimulator27.0*]": "SDK_BEFORE_27_1",
+    "SWIFT_COMPILATION_MODE[config=Release]": "wholemodule",
+    "SWIFT_OPTIMIZATION_LEVEL[config=Debug]": "-Onone",
+    "SWIFT_OPTIMIZATION_LEVEL[config=Release]": "-O",
+    "SWIFT_VERSION": "5.0",
+  },
+}

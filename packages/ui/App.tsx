@@ -6,7 +6,8 @@ import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
 import { useDialog } from "crosswing/modals/dialog";
 import { type AgentStatus, type DaemonState, PROTOCOL_VERSION } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
-import { useEffect, useRef } from "react";
+import { TextInput } from "crosswing/components/forms/TextInput";
+import { useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
@@ -16,6 +17,7 @@ import { getSettings, setFontSize, updateSettings, useSettings } from "./setting
 import { Sidebar } from "./Sidebar";
 import { workspaceTitle } from "./status";
 import { StyledTabBar, TabBar } from "./TabBar";
+import { gatewayHost } from "./webBridge";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
 import {
   clearActiveTerminal,
@@ -66,9 +68,15 @@ export function App() {
         <div className="message">
           <div className="titlebar" />
           {target && <MachineBadge target={target} />}
-          <p>{error ?? (target ? `Connecting to ${target.name}…` : "Connecting to the daemon…")}</p>
-          {error && !retrying && (
-            <button onClick={() => daemon.reconnect()}>{target ? "Try again" : "Start the daemon"}</button>
+          {window.miks?.mac ? (
+            <MacChooser connecting={error ?? "Connecting…"} />
+          ) : (
+            <>
+              <p>{error ?? (target ? `Connecting to ${target.name}…` : "Connecting to the daemon…")}</p>
+              {error && !retrying && (
+                <button onClick={() => daemon.reconnect()}>{target ? "Try again" : "Start the daemon"}</button>
+              )}
+            </>
           )}
         </div>
       </StyledApp>
@@ -223,12 +231,64 @@ export const StyledApp = styled.div`
       height: 44px;
       -webkit-app-region: drag;
     }
+
+    > .mac {
+      display: flex;
+      flex-flow: column;
+      gap: 12px;
+      width: min(360px, calc(100% - 32px));
+      text-align: center;
+
+      > p {
+        margin: 0;
+        font: ${fonts.display({ size: 14, line: "20px" })};
+      }
+    }
   }
 
   button {
     font: inherit;
   }
 `;
+
+/**
+ * In the iOS app: which Mac's terminals to open, by the address its Settings
+ * shows (Remotes → Open from your other devices), kept on this device.
+ */
+function MacChooser({ connecting }: { connecting: string }) {
+  const mac = window.miks!.mac!;
+  const current = mac.get();
+  const [text, setText] = useState(current?.replace(/:2741$/, "") ?? "");
+  const host = gatewayHost(text);
+
+  return (
+    <form
+      className="mac"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (host) mac.set(host);
+      }}
+    >
+      {current ? (
+        <p>{connecting}</p>
+      ) : (
+        <p>
+          On your Mac, turn on Miks → Settings → Remotes → Open from your other devices, then enter the address it shows.
+        </p>
+      )}
+      <TextInput
+        newStyle
+        value={text}
+        onValueChange={setText}
+        placeholder="air.example.ts.net"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      <Button newStyle primary type="submit" disabled={!host || host === current} children="Connect" />
+    </form>
+  );
+}
 
 /**
  * Which Mac this window's terminals are on, top right, in the color you gave

@@ -1,0 +1,16 @@
+# The project is Xcode's JSON format (project.xcproj), which is source: its
+# folders sync with the disk, so it only changes when targets or settings do.
+# Xcode writes per-user state and generated schemes alongside it, which aren't.
+*.xcodeproj/xcuserdata/
+*.xcodeproj/xcshareddata/*
+!*.xcodeproj/xcshareddata/xcodecloud/
+
+# Package.resolved, the exact SPM versions a build was tested against:
+# project.xcproj pins only a major version.
+*.xcodeproj/project.xcworkspace/*
+!*.xcodeproj/project.xcworkspace/xcshareddata/
+*.xcodeproj/project.xcworkspace/xcshareddata/*
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+build/
+DerivedData/
