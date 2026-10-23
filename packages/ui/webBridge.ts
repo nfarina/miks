@@ -165,6 +165,8 @@ function webBridge(): MiksBridge {
   const messageListeners = new Set<(message: string) => void>();
   const statusListeners = new Set<(status: BridgeStatus) => void>();
   const settingsListeners = new Set<(settings: Settings) => void>();
+  const commandListeners = new Set<(command: string) => void>();
+  (window as any).miks_command = (command: string) => commandListeners.forEach((listener) => listener(command));
   const subscribe = <T>(set: Set<T>, listener: T) => (set.add(listener), () => void set.delete(listener));
 
   let socket: WebSocket | null = null;
@@ -310,7 +312,8 @@ function webBridge(): MiksBridge {
     },
     onMessage: (listener) => subscribe(messageListeners, listener),
     onStatus: (listener) => subscribe(statusListeners, listener),
-    onCommand: () => () => {},
+    // The iOS app's keyboard shortcuts (AppDelegate.swift), as the Mac app's menu sends them.
+    onCommand: (listener) => subscribe(commandListeners, listener),
     pathForFile: () => "",
     sendFiles: async () => [],
     sendClipboardImage: async () => ({ image: false }),

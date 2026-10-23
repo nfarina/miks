@@ -130,6 +130,65 @@ class AppDelegate: UIResponder, UIApplicationDelegate, WebAppViewControllerDeleg
     }
 
     //
+    // Keyboard shortcuts: the Mac app's menu (packages/app/main.ts), for a
+    // hardware keyboard. Listed in the menu bar (iPadOS 26) and the list
+    // holding ⌘ shows; each goes to the page as the command its menu sends.
+    //
+
+    private static let commands: [(menu: UIMenu.Identifier, items: [(String, String, UIKeyModifierFlags, String)])] = [
+        (.file, [
+            ("New tab", "t", .command, "newTab"),
+            ("New workspace", "n", .command, "newWorkspace"),
+            ("Close tab", "w", .command, "closeTab"),
+            ("Close workspace", "w", [.command, .alternate], "closeWorkspace"),
+        ]),
+        (.edit, [
+            ("Select last command", "a", [.command, .shift], "selectLastCommand"),
+            ("Clear to start", "k", .command, "clearToStart"),
+        ]),
+        (.view, [
+            ("Toggle sidebar", "b", .command, "toggleSidebar"),
+            ("Toggle panel", "c", [.command, .shift], "toggleChat"),
+            ("Panel fills the tab", "f", [.command, .shift], "toggleExpanded"),
+            ("Bigger text", "=", .command, "fontBigger"),
+            ("Smaller text", "-", .command, "fontSmaller"),
+            ("Actual size", "0", .command, "fontReset"),
+        ]),
+        (.window, [
+            ("Next tab", "]", [.command, .shift], "nextTab"),
+            ("Previous tab", "[", [.command, .shift], "previousTab"),
+            ("Next workspace", "]", [.command, .control], "nextWorkspace"),
+            ("Previous workspace", "[", [.command, .control], "previousWorkspace"),
+        ] + (1...9).map { ("Workspace \($0)", "\($0)", UIKeyModifierFlags.command, "workspace\($0)") }),
+    ]
+
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard builder.system == .main else { return }
+
+        // The system's own, on keys these need: Bold (⌘B), text size (⌘+, ⌘−),
+        // New Window (⌘N), Close (⌘W), and Find, which drives a bar there isn't.
+        for menu: UIMenu.Identifier in [.format, .newScene, .close, .find] {
+            builder.remove(menu: menu)
+        }
+
+        let settings = UIKeyCommand(title: "Settings…", action: #selector(runMiksCommand(_:)), input: ",", modifierFlags: .command, propertyList: "settings")
+        builder.insertSibling(UIMenu(options: .displayInline, children: [settings]), afterMenu: .about)
+
+        for (menu, items) in AppDelegate.commands {
+            let children = items.map { title, input, modifiers, command in
+                UIKeyCommand(title: title, action: #selector(runMiksCommand(_:)), input: input, modifierFlags: modifiers, propertyList: command)
+            }
+            builder.insertChild(UIMenu(identifier: UIMenu.Identifier("com.nfarina.miks.\(menu.rawValue)"), options: .displayInline, children: children), atStartOfMenu: menu)
+        }
+    }
+
+    @objc func runMiksCommand(_ sender: UICommand) {
+        guard let command = sender.propertyList as? String else { return }
+        webAppController?.sendToWindowListener("miks_command", args: "\"\(command)\"")
+    }
+
+    //
     // Scene lifecycle
     //
 
