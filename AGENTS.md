@@ -125,7 +125,8 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   certificates on for the tailnet (`CertDomains` in `status`), it serves
   HTTPS at the full name (`https://air.<tailnet>.ts.net:2741/`) with the
   certificate `tailscale cert` prints (to stdout: the CLI is the sandboxed
-  app, and writing files elsewhere is "operation not permitted"), held in
+  app, and writing files elsewhere is "operation not permitted"; both halves, since
+  it fails on `/dev/null`, "not a regular file"), held in
   memory, asked for again daily. The first takes about 35s. In a browser, `ui/webBridge.ts` is `window.miks`,
   with the device's own settings in localStorage. Plain http over Tailscale
   isn't a secure context: no `crypto.randomUUID` (sending threw once), no
