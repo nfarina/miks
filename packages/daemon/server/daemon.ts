@@ -6,7 +6,7 @@ import os from "os";
 import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientMessage, DaemonMessage } from "../shared/protocol.ts";
-import { findPaths, readImageForPanel } from "./Files.ts";
+import { fetchImageForPanel, findPaths, readImageForPanel } from "./Files.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
@@ -300,6 +300,11 @@ export async function serve({
           const { requestId } = message;
           if (!path.isAbsolute(message.path)) return send({ type: "image", requestId, error: "The path must be absolute." });
           void readImageForPanel(message.path).then((image) => send({ type: "image", requestId, ...image }));
+          return;
+        }
+        case "fetchImage": {
+          const { requestId } = message;
+          void fetchImageForPanel(message.url).then((image) => send({ type: "image", requestId, ...image }));
           return;
         }
         case "findPaths": {

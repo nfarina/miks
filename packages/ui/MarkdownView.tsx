@@ -3,7 +3,7 @@ import { fonts } from "crosswing/fonts";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
-import { daemon } from "./daemon";
+import { daemon, type ImageResult } from "./daemon";
 import { highlightCSS, renderMarkdownDocument, resolveLocalPath, taskListCSS } from "./markdown";
 
 /**
@@ -35,6 +35,11 @@ export function MarkdownView({
   const pinRef = useRef<ScrollPin | null>(null);
   // Images as last read, shown at once while they're read again.
   const [images] = useState(() => new Map<string, string>());
+  // Images from the web: how many, and whether you've said to show them
+  // (loading one tells its server you're reading this).
+  const [webImages, setWebImages] = useState(0);
+  const [showWeb, setShowWeb] = useState(false);
+  const showWebRef = useRef(showWeb);
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
@@ -51,10 +56,20 @@ export function MarkdownView({
     template.innerHTML = html;
     // Still inert in the template: no image loads from the window's own origin.
     for (const image of template.content.querySelectorAll("img")) {
-      const local = resolveLocalPath(image.getAttribute("src") ?? "", file.path);
-      if (local) {
-        image.removeAttribute("src");
-        image.dataset.path = local;
+      const src = image.getAttribute("src") ?? "";
+      const local = resolveLocalPath(src, file.path);
+      image.removeAttribute("src");
+      image.removeAttribute("srcset");
+      if (local) image.dataset.path = local;
+      else if (/^https?:\/\//i.test(src)) {
+        // Until it's shown, its alt text, as a missing one's.
+        image.dataset.url = src;
+        image.hidden = true;
+        const waiting = document.createElement("span");
+        waiting.className = "missing web";
+        waiting.textContent = image.alt || src.replace(/^https?:\/\//i, "").split("/")[0];
+        waiting.title = src;
+        image.after(waiting);
       }
     }
     for (const pre of template.content.querySelectorAll("pre")) {
@@ -78,7 +93,16 @@ export function MarkdownView({
     // Each image read once per change, however many times it's shown.
     const reads = new Map<string, Promise<string | null>>();
     for (const image of content.querySelectorAll<HTMLImageElement>("img[data-path]")) void showImage(image, reads);
+    setWebImages(content.querySelectorAll("img[data-url]").length);
+    if (showWebRef.current) showWebImages(reads);
   }, [text]);
+
+  function showWebImages(reads?: Map<string, Promise<string | null>>) {
+    showWebRef.current = true;
+    setShowWeb(true);
+    const shared = reads ?? new Map<string, Promise<string | null>>();
+    for (const image of contentRef.current?.querySelectorAll<HTMLImageElement>("img[data-url]") ?? []) void showImage(image, shared);
+  }
 
   // Open already, and brought to the front by a link to one of its headings:
   // there once it's on show (it may be hidden yet, behind another file).
@@ -114,28 +138,40 @@ export function MarkdownView({
     return () => observer.disconnect();
   }, []);
 
-  /** Reads the image from the file's Mac, showing what it had meanwhile. */
+  /**
+   * Reads the image from the file's Mac (or the web, from there), showing
+   * what it had meanwhile. A file's change reads its own images again, but
+   * not the web's.
+   */
   async function showImage(image: HTMLImageElement, reads: Map<string, Promise<string | null>>) {
-    const path = image.dataset.path!;
-    const before = images.get(path);
+    const { path, url } = image.dataset;
+    const source = path ?? url!;
+    // A web image's stand-in goes, for it or (failing) a missing one.
+    const shown = () => {
+      if (image.nextElementSibling?.matches(".missing.web")) image.nextElementSibling.remove();
+      image.hidden = false;
+    };
+    const before = images.get(source);
     if (before) image.src = before;
+    if (before && url) return shown();
 
-    let read = reads.get(path);
+    let read = reads.get(source);
     if (!read) {
-      read = readImage(path);
-      reads.set(path, read);
+      read = path ? readImage(path) : fetchImage(source);
+      reads.set(source, read);
     }
     const src = await read;
+    shown();
     if (!src) {
-      images.delete(path);
+      images.delete(source);
       // Its alt text, rather than the browser's broken image.
       const missing = document.createElement("span");
       missing.className = "missing";
-      missing.textContent = image.alt || path.split("/").pop()!;
-      missing.title = `Couldn't show ${path}`;
+      missing.textContent = image.alt || source.split("/").pop()!;
+      missing.title = `Couldn't show ${source}`;
       return image.replaceWith(missing);
     }
-    images.set(path, src);
+    images.set(source, src);
     if (src === before) return;
     image.src = src;
     await image.decode().catch(() => {});
@@ -175,6 +211,15 @@ export function MarkdownView({
   }
 
   return (
+    <>
+      {webImages > 0 && !showWeb && (daemon.getSnapshot().state?.protocol ?? 0) >= 10 && (
+        <StyledWebImages>
+          <span>
+            {webImages === 1 ? "An image" : `${webImages} images`} from the web {webImages === 1 ? "isn't" : "aren't"} shown.
+          </span>
+          <button onClick={() => showWebImages()}>Show images</button>
+        </StyledWebImages>
+      )}
     <StyledMarkdownView
       className="markdown-view"
       ref={scrollerRef}
@@ -197,6 +242,7 @@ export function MarkdownView({
         }}
       />
     </StyledMarkdownView>
+    </>
   );
 }
 
@@ -204,9 +250,16 @@ export function MarkdownView({
 async function readImage(path: string): Promise<string | null> {
   // Older daemons don't answer, so there's no waiting on them.
   if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) return null;
-  const result = await daemon.readImage(path);
-  return result.data ? `data:${result.mime};base64,${result.data}` : null;
+  return dataURL(await daemon.readImage(path));
 }
+
+/** An image from the web, fetched from the daemon's Mac, as a data URL. */
+async function fetchImage(url: string): Promise<string | null> {
+  if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) return null;
+  return dataURL(await daemon.fetchImage(url));
+}
+
+const dataURL = (result: ImageResult) => (result.data ? `data:${result.mime};base64,${result.data}` : null);
 
 /**
  * Where a link's `#…` goes. Ids get DOMPurify's `user-content-` (as on
@@ -262,6 +315,31 @@ function restorePin(scroller: HTMLElement, content: HTMLElement, pin: ScrollPin)
 /** How far down the scroller's content an element is. */
 const offsetIn = (scroller: HTMLElement, element: HTMLElement) =>
   element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+
+/** Like FileView's bar for a change on disk. */
+const StyledWebImages = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: ${colors.textBackgroundAlt()};
+  border-bottom: 1px solid ${colors.separator()};
+  font: ${fonts.display({ size: 12, line: "16px" })};
+  color: ${colors.textSecondary()};
+
+  > span {
+    flex-grow: 1;
+  }
+
+  > button {
+    border: none;
+    background: none;
+    color: ${colors.text()};
+    font: ${fonts.displayBold({ size: 12, line: "16px" })};
+    cursor: pointer;
+  }
+`;
 
 const StyledMarkdownView = styled.div`
   flex-grow: 1;
