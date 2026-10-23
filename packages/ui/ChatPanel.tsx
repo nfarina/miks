@@ -580,7 +580,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     // Not with the file showing instead (ChatLayout gives it the editor).
     if (!visible || !chat?.session || !focusOnShow || !composerRef.current?.offsetParent) return;
     focusOnShow = false;
-    focusComposer();
+    if (autoFocus()) focusComposer();
   }, [visible, chat?.session]);
 
   // New messages keep it at the bottom, unless you've scrolled up to read.
