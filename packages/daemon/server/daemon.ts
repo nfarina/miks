@@ -269,25 +269,30 @@ export async function serve({
           chats.delete(message.tabId);
           return;
         case "watchFile": {
-          const { tabId } = message;
-          files.get(tabId)?.();
+          const { tabId, fileId } = message;
+          const key = `${tabId}:${fileId ?? ""}`;
+          files.get(key)?.();
           files.set(
-            tabId,
-            workspaces.watchFile(tabId, (file) => send({ type: "file", tabId, ...file })),
+            key,
+            workspaces.watchFile(tabId, fileId, (file) => send({ type: "file", tabId, ...file })),
           );
           return;
         }
-        case "unwatchFile":
-          files.get(message.tabId)?.();
-          files.delete(message.tabId);
+        case "unwatchFile": {
+          const key = `${message.tabId}:${message.fileId ?? ""}`;
+          files.get(key)?.();
+          files.delete(key);
           return;
+        }
         case "saveFile": {
-          const { tabId, content, mtime, force } = message;
-          void workspaces.saveFile(tabId, content, mtime, force).then((result) => send({ type: "fileSaved", tabId, ...result }));
+          const { tabId, fileId, content, mtime, force } = message;
+          void workspaces
+            .saveFile(tabId, fileId, content, mtime, force)
+            .then((result) => send({ type: "fileSaved", tabId, fileId, ...result }));
           return;
         }
         case "closeFile":
-          return workspaces.closeFile(message.tabId);
+          return workspaces.closeFile(message.tabId, message.fileId);
         case "openFile":
           if (!path.isAbsolute(message.path)) return;
           return void workspaces.openFile(message.tabId, message.path, { edit: false, wait: false });

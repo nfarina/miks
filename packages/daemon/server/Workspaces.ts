@@ -38,6 +38,9 @@ export type SavedState = {
 /** Hears a tab's open file: as it is now, and again whenever it changes on disk. */
 export type FileListener = (file: FileContents & { id: string }) => void;
 
+/** A file open in a tab's panel, who's watching it, and what's waiting for it to close. */
+type OpenEntry = { file: OpenFile; listeners: Set<FileListener>; waiters: Set<() => void>; onDisk?: () => void };
+
 /** Hears a tab's conversation: all of it with `reset`, then what's added. */
 export type ChatListener = (chat: { session: string | null; entries: ChatEntry[]; reset: boolean }) => void;
 
@@ -82,13 +85,11 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     { transcript: Transcript | null; ready: boolean; listeners: Set<ChatListener> }
   >();
   /**
-   * The file in each tab's panel (`miks open`, `miks edit`), who's watching
-   * it, and what's waiting for it to close (`miks edit --wait`).
+   * The files in each tab's panel (`miks open`, `miks edit`), in the order
+   * they opened, who's watching each, and what's waiting for it to close
+   * (`miks edit --wait`).
    */
-  private readonly files = new Map<
-    string,
-    { file: OpenFile; listeners: Set<FileListener>; waiters: Set<() => void>; onDisk?: () => void }
-  >();
+  private readonly files = new Map<string, OpenEntry[]>();
   /** The page in each tab's panel (`miks browse`). */
   private readonly pages = new Map<string, OpenPage>();
   /** Each tab's own shell history file's name, kept across restores. */
@@ -615,92 +616,117 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   }
 
   /**
-   * Shows a file in the tab's panel, in place of any it had. With `wait`,
-   * resolves once it's closed (the panel's Done or close, another file
-   * opened over it, or the tab closing); otherwise at once.
+   * Shows a file in the tab's panel, beside any it had. Open already, it
+   * comes to the front as it is (unsaved changes and all), unless it's to
+   * edit or wait on: then it opens again in its place. With `wait`, resolves
+   * once it's closed (the panel's Done or close, it opening again, or the
+   * tab closing); otherwise at once.
    */
   openFile(tabId: string, file: string, { edit, wait }: { edit: boolean; wait: boolean }): Promise<void> {
     if (!this.panes.has(tabId)) return Promise.resolve();
 
-    // Whoever watched the tab's file before watches this one.
-    const listeners = this.files.get(tabId)?.listeners ?? new Set<FileListener>();
-    this.closeFile(tabId, { quietly: true });
-    const open = {
+    const list = this.files.get(tabId) ?? [];
+    this.files.set(tabId, list);
+    const index = list.findIndex((open) => open.file.path === file);
+    const already = list[index];
+    if (already && !edit && !wait) {
+      already.file = { ...already.file, opened: (already.file.opened ?? 0) + 1 };
+      this.emit("change");
+      return Promise.resolve();
+    }
+
+    const open: OpenEntry = {
       file: { id: randomUUID().slice(0, 8), path: file, edit, wait },
-      listeners,
-      waiters: new Set<() => void>(),
+      listeners: new Set(),
+      waiters: new Set(),
     };
-    this.files.set(tabId, open);
-    this.followFile(tabId, { readNow: true });
+    if (already) {
+      this.letGo(already);
+      list[index] = open;
+    } else {
+      list.push(open);
+    }
     this.emit("change");
 
     return wait ? new Promise((resolve) => open.waiters.add(resolve)) : Promise.resolve();
   }
 
-  /** Follows the tab's open file: as it is now, then each change on disk, until the returned function is called. */
-  watchFile(tabId: string, listener: FileListener): () => void {
-    const open = this.files.get(tabId);
+  /** One of the tab's open files: `fileId`, or else the latest to open (all an older UI knows of). */
+  private openEntry(tabId: string, fileId?: string): OpenEntry | undefined {
+    const list = this.files.get(tabId);
+    return fileId ? list?.find((open) => open.file.id === fileId) : list?.at(-1);
+  }
+
+  private isOpen(tabId: string, open: OpenEntry) {
+    return !!this.files.get(tabId)?.includes(open);
+  }
+
+  /** Follows an open file: as it is now, then each change on disk, until the returned function is called. */
+  watchFile(tabId: string, fileId: string | undefined, listener: FileListener): () => void {
+    const open = this.openEntry(tabId, fileId);
     if (!open) return () => {};
 
     open.listeners.add(listener);
-    this.followFile(tabId);
+    this.followFile(tabId, open);
     void readForPanel(open.file.path).then((contents) => {
-      if (this.files.get(tabId) === open && open.listeners.has(listener)) listener({ id: open.file.id, ...contents });
+      if (this.isOpen(tabId, open) && open.listeners.has(listener)) listener({ id: open.file.id, ...contents });
     });
 
     return () => {
-      // Whichever file the tab has by then: watching goes with the tab.
-      const current = this.files.get(tabId);
-      current?.listeners.delete(listener);
-      if (current) this.followFile(tabId);
+      open.listeners.delete(listener);
+      this.followFile(tabId, open);
     };
   }
 
-  async saveFile(tabId: string, content: string, mtime: number | null, force?: boolean) {
-    const open = this.files.get(tabId);
+  async saveFile(tabId: string, fileId: string | undefined, content: string, mtime: number | null, force?: boolean) {
+    const open = this.openEntry(tabId, fileId);
     if (!open) return { error: "The file was closed." };
     return writeFromPanel(open.file.path, content, mtime, force);
   }
 
-  /** Closes the tab's file, and lets whatever waited on it go. */
-  closeFile(tabId: string, { quietly = false } = {}) {
-    const open = this.files.get(tabId);
-    if (!open) return;
+  /** Closes one of the tab's files, and lets whatever waited on it go. */
+  closeFile(tabId: string, fileId?: string) {
+    const open = this.openEntry(tabId, fileId);
+    const list = this.files.get(tabId);
+    if (!open || !list) return;
 
-    if (open.onDisk) fs.unwatchFile(open.file.path, open.onDisk);
-    this.files.delete(tabId);
-    for (const resolve of open.waiters) resolve();
-    if (!quietly) this.emit("change");
+    list.splice(list.indexOf(open), 1);
+    if (list.length === 0) this.files.delete(tabId);
+    this.letGo(open);
+    this.emit("change");
   }
 
-  /**
-   * Watches the open file on disk only while someone here watches it, and
-   * tells them each change. `readNow` for a file just opened over another,
-   * whose watchers have yet to hear it.
-   */
-  private followFile(tabId: string, { readNow = false } = {}) {
-    const open = this.files.get(tabId);
-    if (!open) return;
+  /** Closes every file in the tab's panel. */
+  private closeFiles(tabId: string) {
+    for (const open of this.files.get(tabId) ?? []) this.letGo(open);
+    this.files.delete(tabId);
+  }
 
-    const tell = () => {
-      void readForPanel(open.file.path).then((contents) => {
-        if (this.files.get(tabId) !== open) return;
-        for (const listener of open.listeners) listener({ id: open.file.id, ...contents });
-      });
-    };
+  /** Stops watching a file that's closing, and lets whatever waited on it go. */
+  private letGo(open: OpenEntry) {
+    if (open.onDisk) fs.unwatchFile(open.file.path, open.onDisk);
+    open.onDisk = undefined;
+    for (const resolve of open.waiters) resolve();
+  }
 
-    if (open.listeners.size === 0) {
+  /** Watches an open file on disk only while someone here watches it, and tells them each change. */
+  private followFile(tabId: string, open: OpenEntry) {
+    if (open.listeners.size === 0 || !this.isOpen(tabId, open)) {
       if (open.onDisk) fs.unwatchFile(open.file.path, open.onDisk);
       open.onDisk = undefined;
       return;
     }
-    if (!open.onDisk) {
-      // watchFile, not watch: editors and git replace files rather than
-      // writing them, which a watch on the old one would miss.
-      open.onDisk = tell;
-      fs.watchFile(open.file.path, { interval: 500, persistent: false }, tell);
-    }
-    if (readNow) tell();
+    if (open.onDisk) return;
+
+    // watchFile, not watch: editors and git replace files rather than
+    // writing them, which a watch on the old one would miss.
+    open.onDisk = () => {
+      void readForPanel(open.file.path).then((contents) => {
+        if (!this.isOpen(tabId, open)) return;
+        for (const listener of open.listeners) listener({ id: open.file.id, ...contents });
+      });
+    };
+    fs.watchFile(open.file.path, { interval: 500, persistent: false }, open.onDisk);
   }
 
   /** Shows a web page in the tab's panel, in place of any it had. */
@@ -728,7 +754,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     this.stopping = true;
     for (const chat of this.chats.values()) chat.transcript?.close();
     for (const background of this.backgrounds.values()) background.close();
-    for (const tabId of [...this.files.keys()]) this.closeFile(tabId, { quietly: true });
+    for (const tabId of [...this.files.keys()]) this.closeFiles(tabId);
     for (const timer of this.pendingDone.values()) clearTimeout(timer);
     for (const pane of this.panes.values()) pane.kill();
   }
@@ -743,7 +769,8 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       agent: this.agents.get(id) ?? null,
       running: this.panes.get(id)?.running() ?? null,
       kept: this.keeps.has(id) || !!this.resumableSession(id),
-      file: this.files.get(id)?.file,
+      file: this.files.get(id)?.at(-1)?.file,
+      files: this.files.get(id)?.map((open) => open.file),
       page: this.pages.get(id),
       background: this.backgrounds.get(id)?.counts(),
     };
@@ -762,7 +789,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     this.claudeSessions.delete(tabId);
     this.chats.get(tabId)?.transcript?.close();
     this.chats.delete(tabId);
-    this.closeFile(tabId);
+    this.closeFiles(tabId);
     this.pages.delete(tabId);
     this.backgrounds.get(tabId)?.close();
     this.backgrounds.delete(tabId);

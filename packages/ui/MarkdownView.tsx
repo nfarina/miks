@@ -1,7 +1,7 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import type { OpenFile, Tab } from "miks/shared/protocol";
-import { type MouseEvent, useLayoutEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon } from "./daemon";
 import { highlightCSS, renderMarkdownDocument, resolveLocalPath, taskListCSS } from "./markdown";
@@ -79,6 +79,20 @@ export function MarkdownView({
     const reads = new Map<string, Promise<string | null>>();
     for (const image of content.querySelectorAll<HTMLImageElement>("img[data-path]")) void showImage(image, reads);
   }, [text]);
+
+  // Open already, and brought to the front by a link to one of its headings:
+  // there once it's on show (it may be hidden yet, behind another file).
+  const opened = useRef(file.opened);
+  useEffect(() => {
+    if (opened.current === file.opened) return;
+    opened.current = file.opened;
+    if (pendingHeading?.tabId !== tab.id || pendingHeading.path !== file.path || !contentRef.current) return;
+    const heading = findHeading(contentRef.current, pendingHeading.id);
+    pendingHeading = null;
+    if (!heading) return;
+    pinRef.current = { heading: heading.id, offset: 12 };
+    requestAnimationFrame(keepPlace);
+  }, [file.opened]);
 
   /** Back to where you were, if the content's moved under you since. */
   function keepPlace() {
