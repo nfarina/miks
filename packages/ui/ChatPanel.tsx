@@ -321,7 +321,8 @@ const panelFocus = new Map<string, PanelPlace>();
  */
 function focusPanel(root: HTMLElement, where: PanelPlace) {
   const shown = <T extends HTMLElement>(element: T | null) => (element?.offsetParent ? element : null);
-  const editor = shown(root.querySelector<HTMLElement>(".file-view .cm-content"));
+  const editor =
+    shown(root.querySelector<HTMLElement>(".file-view .cm-content")) ?? shown(root.querySelector<HTMLElement>(".file-view .markdown-view"));
   const page = shown(root.querySelector<HTMLElement>(".page-view webview"));
   const composer = shown(root.querySelector<HTMLTextAreaElement>(".composer textarea"));
   const conversation = shown(root.querySelector<HTMLElement>(".scroller"));
