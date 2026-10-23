@@ -7,6 +7,7 @@ import { ChevronDown, PanelLeft, Plus } from "lucide-react";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, useState } from "react";
 import { styled } from "styled-components";
+import { padSafeArea } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { displayPath, updateSettings, useSettings } from "./settings";
@@ -71,6 +72,7 @@ export const StyledSidebar = styled.div`
   background: ${colors.textBackgroundPanel()};
   height: 100%;
   user-select: none;
+  ${padSafeArea("top", "left", "bottom")}
 
   > .titlebar {
     /* Room for the traffic lights, and something to drag the window by. */

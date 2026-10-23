@@ -5,6 +5,7 @@ import { CrosswingApp } from "crosswing/app";
 import { CrosswingDesktopRootStyle } from "crosswing/containers";
 import { fonts, GlobalFontFace } from "crosswing/fonts";
 import { attachConsole } from "crosswing/host/console";
+import { HostProvider } from "crosswing/host/context";
 import { ModalRootProvider } from "crosswing/modals/context";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -48,9 +49,13 @@ root.render(
     <CrosswingDesktopRootStyle />
     <RootStyle />
     <CrosswingApp faces={[systemUI]} fonts={miksFonts}>
-      <ModalRootProvider allowDesktopPresentation>
-        <App />
-      </ModalRootProvider>
+      {/* The screen's safe area (the status bar, the iPhone Duo's strip and
+          fold) as --safe-area-* properties, in the iOS app and a browser. */}
+      <HostProvider>
+        <ModalRootProvider allowDesktopPresentation>
+          <App />
+        </ModalRootProvider>
+      </HostProvider>
     </CrosswingApp>
   </StrictMode>,
 );

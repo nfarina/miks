@@ -9,6 +9,7 @@ import { ModalContext, type ModalContextValue } from "crosswing/modals/context";
 import { displayPath } from "miks/shared/settings";
 import { DragEvent, HTMLAttributes, use, useEffect, useRef } from "react";
 import { styled } from "styled-components";
+import { safeArea } from "crosswing/safearea";
 import { daemon, isRemote } from "./daemon";
 import { getSettings, useSettings } from "./settings";
 import { trackCommands } from "./commandMarks";
@@ -406,7 +407,7 @@ function prepareActive(terminal: Terminal, fit: FitAddon) {
 
 export const StyledTerminalView = styled.div`
   position: absolute;
-  inset: 8px 0 0 10px;
+  inset: 8px ${safeArea.right()} ${safeArea.bottom()} ${safeArea.left("10px")};
   visibility: hidden;
 
   &[data-active="true"] {

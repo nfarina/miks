@@ -147,7 +147,11 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   their agents are doing. WebKit throws from `new WebSocket` for an address
   the page's CSP refuses (a short name), where Chrome only fails the
   socket; uncaught, that left the app white. The page's console and errors
-  go to the app's log (`devicectl device process launch --console`). The
+  go to the app's log (`devicectl device process launch --console`).
+  crosswing's `HostProvider` (in `main.tsx`) gives the screen's insets as
+  `--safe-area-*` (the iPhone Duo's strip and fold included, as in sage);
+  each region pads the edges it touches (`crosswing/safearea`), and
+  `PanelLayout` clears the ones a panel beside it already has. The
   shell's web view takes its view from `LaunchScreen.storyboard` (a scene
   `controller`, a progress bar tagged 1), and crashed at launch without it. The gateway marks its own page (`<meta name="miks-gateway">`) so a
   browser's connects back to it, and lets the app's origins in

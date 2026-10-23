@@ -2,6 +2,7 @@ import { Children, createContext, HTMLAttributes, use, useEffect, useRef, useSta
 import { createPortal } from "react-dom";
 import styled from "styled-components";
 import { colors, shadows } from "../colors/colors.js";
+import { provideSafeArea } from "../safearea/safeArea.js";
 import { ElementSize, useElementSize } from "../hooks/useElementSize.js";
 import { HotKey, useHotKey } from "../hooks/useHotKey.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
@@ -724,6 +725,48 @@ export const StyledPanelLayout = styled.div`
       &[data-panel-edge="left"] {
         transform: translateX(calc(0px - var(--panel-size) - var(--shadow-padding)));
       }
+    }
+  }
+
+  /*
+   * Safe area. The panel runs along one edge of the screen, so its inner edge
+   * needs no inset, and while it takes room beside the content (not over it),
+   * neither does the content's edge beside it.
+   */
+
+  > .panel {
+    &[data-panel-edge="top"] {
+      ${provideSafeArea({ bottom: "0px" })}
+    }
+
+    &[data-panel-edge="right"] {
+      ${provideSafeArea({ left: "0px" })}
+    }
+
+    &[data-panel-edge="bottom"] {
+      ${provideSafeArea({ top: "0px" })}
+    }
+
+    &[data-panel-edge="left"] {
+      ${provideSafeArea({ right: "0px" })}
+    }
+  }
+
+  &:not([data-mode="overlay"])[data-panel-visible="true"] > .content {
+    &[data-panel-edge="top"] {
+      ${provideSafeArea({ top: "0px" })}
+    }
+
+    &[data-panel-edge="right"] {
+      ${provideSafeArea({ right: "0px" })}
+    }
+
+    &[data-panel-edge="bottom"] {
+      ${provideSafeArea({ bottom: "0px" })}
+    }
+
+    &[data-panel-edge="left"] {
+      ${provideSafeArea({ left: "0px" })}
     }
   }
 

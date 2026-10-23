@@ -10,6 +10,7 @@ import { TextInput } from "crosswing/components/forms/TextInput";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
+import { provideSafeArea, safeArea } from "crosswing/safearea";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
 import { daemon, type Target, useDaemon, useMacs, useTarget } from "./daemon";
@@ -193,6 +194,7 @@ export const StyledApp = styled.div`
 
     > .empty-bar {
       height: 38px;
+      padding-top: ${safeArea.top()};
       -webkit-app-region: drag;
     }
 
@@ -200,6 +202,8 @@ export const StyledApp = styled.div`
       flex-grow: 1;
       position: relative;
       overflow: hidden;
+      /* The tab bar is above. */
+      ${provideSafeArea({ top: "0px" })}
       /* Matches the terminal themes, so the padding around them blends in. */
       background: ${TERMINAL_BACKGROUND.light};
 

@@ -23,6 +23,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { styled } from "styled-components";
+import { padSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { daemon } from "./daemon";
 import { FileView } from "./FileView";
@@ -991,6 +992,7 @@ const StyledChatPanel = styled.div`
   background: ${colors.textBackgroundPanel()};
   color: ${colors.text()};
   font: ${fonts.display({ size: 14, line: "23px" })};
+  ${padSafeArea("right", "bottom")}
 
   /* Whichever isn't showing stays, hidden, so it's as you left it. */
   &:not([data-showing="chat"]) > .scroller,
