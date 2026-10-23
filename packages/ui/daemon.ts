@@ -2,7 +2,7 @@
 // exposes as `window.miks` (packages/app/preload.cjs). There's one
 // connection per page; components read state with `useDaemon` and terminals
 // subscribe to their pane's stream with `daemon.stream`.
-import { ChatEntry, ClientMessage, DaemonMessage, DaemonState, Permission } from "miks/shared/protocol";
+import { AgentStatus, ChatEntry, ClientMessage, DaemonMessage, DaemonState, Permission } from "miks/shared/protocol";
 import type { Settings } from "miks/shared/settings";
 import { useSyncExternalStore } from "react";
 
@@ -12,7 +12,7 @@ export type MiksBridge = {
   connect(): void;
   send(message: string): void;
   onMessage(listener: (message: string) => void): Unsubscribe;
-  onStatus(listener: (status: { connected: boolean; error?: string; retrying?: boolean }) => void): Unsubscribe;
+  onStatus(listener: (status: BridgeStatus) => void): Unsubscribe;
   onCommand(listener: (command: string) => void): Unsubscribe;
   pathForFile(file: File): string;
   sendFiles(tabId: string, paths: string[], into: "tmp" | "cwd"): Promise<string[]>;
@@ -31,11 +31,31 @@ export type MiksBridge = {
   confirm(options: { message: string; detail: string; button: string }): Promise<boolean>;
   copy(text: string): void;
   /**
-   * Which Mac this device connects to (its gateway's host and port), where
-   * the page isn't one a Mac served: the iOS app's. Setting it reconnects.
+   * The Macs this device connects to (by their gateways' hosts and ports),
+   * where the page isn't one a Mac served: the iOS app's. One is on screen.
    */
-  mac?: { get(): string | null; set(host: string | null): void };
+  macs?: {
+    list(): Mac[];
+    active(): string | null;
+    /** Shows another (null: none, for adding one). */
+    select(host: string | null): void;
+    /** Adds one by what you typed ("air" works in the app) and shows it; why not, if it can't. */
+    add(input: string): Promise<string | null>;
+    remove(host: string): void;
+    onChange(listener: () => void): Unsubscribe;
+  };
 };
+
+export type BridgeStatus = {
+  connected: boolean;
+  error?: string;
+  retrying?: boolean;
+  /** What's on screen was another Mac's. */
+  reset?: boolean;
+};
+
+/** One of the Macs a device connects to, and what its agents are doing, if it isn't the one shown. */
+export type Mac = { host: string; name: string; active: boolean; connected: boolean; status: AgentStatus | null };
 
 /** Another Mac a window's daemon is on. */
 export type Target = { name: string; color: string; host: string };
@@ -87,9 +107,14 @@ class DaemonClient {
       return;
     }
 
-    this.bridge.onStatus(({ connected, error, retrying = false }) => {
+    this.bridge.onStatus(({ connected, error, retrying = false, reset }) => {
       if (!connected) {
-        this.update({ connected, retrying, error: error ?? "The daemon stopped, taking its terminals with it." });
+        this.update({
+          connected,
+          retrying,
+          error: error ?? "The daemon stopped, taking its terminals with it.",
+          ...(reset && { state: null }),
+        });
         return;
       }
 
@@ -251,6 +276,16 @@ const subscribeTarget = (listener: () => void) => {
   return () => targetListeners.delete(listener);
 };
 export const isRemote = () => target !== null;
+
+/** The Macs this device connects to, in the iOS app; empty elsewhere. */
+export function useMacs(): Mac[] {
+  return useSyncExternalStore(subscribeMacs, getMacs);
+}
+
+let macs: Mac[] = window.miks?.macs?.list() ?? [];
+window.miks?.macs?.onChange(() => (macs = window.miks!.macs!.list()));
+const getMacs = () => macs;
+const subscribeMacs = (listener: () => void) => window.miks?.macs?.onChange(listener) ?? (() => {});
 
 export function useDaemon(): DaemonSnapshot {
   return useSyncExternalStore(daemon.subscribe, daemon.getSnapshot);

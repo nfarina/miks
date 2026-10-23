@@ -7,17 +7,18 @@ import { useDialog } from "crosswing/modals/dialog";
 import { type AgentStatus, type DaemonState, PROTOCOL_VERSION } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import { TextInput } from "crosswing/components/forms/TextInput";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
-import { daemon, type Target, useDaemon, useTarget } from "./daemon";
+import { daemon, type Target, useDaemon, useMacs, useTarget } from "./daemon";
 import { renderMarkdown } from "./markdown";
 import { getSettings, setFontSize, updateSettings, useSettings } from "./settings";
 import { Sidebar } from "./Sidebar";
 import { workspaceTitle } from "./status";
 import { StyledTabBar, TabBar } from "./TabBar";
-import { gatewayHost } from "./webBridge";
+import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
 import {
   clearActiveTerminal,
@@ -68,7 +69,7 @@ export function App() {
         <div className="message">
           <div className="titlebar" />
           {target && <MachineBadge target={target} />}
-          {window.miks?.mac ? (
+          {window.miks?.macs ? (
             <MacChooser connecting={error ?? "Connecting…"} />
           ) : (
             <>
@@ -248,6 +249,49 @@ export const StyledApp = styled.div`
         color: ${colors.textSecondary()};
         font: ${fonts.display({ size: 13, line: "18px" })};
       }
+
+      > .macs {
+        display: flex;
+        flex-flow: column;
+        gap: 6px;
+
+        > .saved {
+          display: flex;
+          border-radius: 10px;
+          background: ${colors.buttonBackgroundGlow()};
+
+          &[data-active="true"] {
+            box-shadow: inset 0 0 0 1.5px ${colors.primary()};
+          }
+
+          > button {
+            border: none;
+            background: transparent;
+            color: ${colors.text()};
+          }
+
+          > .pick {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            font: ${fonts.display({ size: 15 })};
+          }
+
+          > .remove {
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            color: ${colors.textSecondary()};
+
+            > svg {
+              width: 16px;
+              height: 16px;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -257,44 +301,69 @@ export const StyledApp = styled.div`
 `;
 
 /**
- * In the iOS app: which Mac's terminals to open, by the address its Settings
- * shows (Remotes → Open from your other devices), kept on this device.
+ * In the iOS app, until one connects: the Macs you've added, to pick from or
+ * remove, and one to add, by its name ("air", which the app looks up) or the
+ * address its Settings shows (Remotes → Open from your other devices).
  */
 function MacChooser({ connecting }: { connecting: string }) {
-  const mac = window.miks!.mac!;
-  const current = mac.get();
-  const [text, setText] = useState(current?.replace(/:2741$/, "") ?? "");
-  const host = gatewayHost(text);
-  // Its certificate is for the full name only, so "air" alone can't connect.
-  const short = !!host && !host.split(":")[0].includes(".");
+  const bridge = window.miks!.macs!;
+  const macs = useMacs();
+  const active = macs.find((mac) => mac.active);
+  const [text, setText] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   return (
     <form
       className="mac"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
-        if (host && !short) mac.set(host);
+        setAdding(true);
+        setProblem(await bridge.add(text));
+        setAdding(false);
       }}
     >
-      {current ? (
+      {active ? (
         <p>{connecting}</p>
+      ) : macs.length > 0 ? (
+        <p>Pick a Mac, or add another.</p>
       ) : (
         <p>
-          On your Mac, turn on Miks → Settings → Remotes → Open from your other devices, then enter the address it shows.
+          On your Mac, turn on Miks → Settings → Remotes → Open from your other devices, then enter its name here.
         </p>
+      )}
+      {macs.length > 0 && (
+        <div className="macs">
+          {macs.map((mac) => (
+            <div className="saved" key={mac.host} data-active={mac.active}>
+              {/* Again with the one already chosen is a retry. */}
+              <button type="button" className="pick" onClick={() => bridge.select(mac.host)}>
+                {mac.status && <StatusDot status={mac.status} />}
+                <span>{mac.name}</span>
+              </button>
+              <button
+                type="button"
+                className="remove"
+                onClick={() => bridge.remove(mac.host)}
+                aria-label={`Remove ${mac.name}`}
+              >
+                <X />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
       <TextInput
         newStyle
         value={text}
-        onValueChange={setText}
-        placeholder="air.example.ts.net"
+        onValueChange={(value) => (setText(value), setProblem(null))}
+        placeholder="air"
         autoCapitalize="off"
         autoCorrect="off"
         spellCheck={false}
       />
-      {short && <p className="hint">Use its full name, with your tailnet's: {host!.split(":")[0]}.something.ts.net.</p>}
-      {/* Again with the same Mac is a retry. */}
-      <Button newStyle primary type="submit" disabled={!host || short} children="Connect" />
+      {problem && <p className="hint">{problem}</p>}
+      <Button newStyle primary type="submit" working={adding} disabled={!text.trim()} children="Add Mac" />
     </form>
   );
 }

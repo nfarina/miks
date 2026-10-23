@@ -3,7 +3,7 @@ import { describeBackground, totalBackground } from "miks/shared/background";
 import { AgentStatus, Tab, Workspace } from "miks/shared/protocol";
 
 /** Most urgent first: what a workspace shows when its tabs disagree. */
-const URGENCY: AgentStatus[] = ["waiting", "done", "working", "idle"];
+export const URGENCY: AgentStatus[] = ["waiting", "done", "working", "idle"];
 
 export function workspaceStatus(workspace: Workspace): AgentStatus | null {
   const statuses = workspace.tabs.map((tab) => tab.agent?.status).filter(Boolean) as AgentStatus[];

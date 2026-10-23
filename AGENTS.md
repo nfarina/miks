@@ -138,9 +138,18 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   the bundle `yarn deploy:web` puts at https://miks-app.nfarina.com (a
   Cloudflare Worker's static assets, `web/wrangler.jsonc`), cached and
   served from `crosswing://app/`. There the bridge (`ui/webBridge.ts`)
-  connects to the Mac you name (`miks-mac` in localStorage) at
-  `wss://<its full name>:2741/ws`, since an https page can't open plain
-  ws; the gateway marks its own page (`<meta name="miks-gateway">`) so a
+  connects to the Mac on screen (`miks-mac` in localStorage, of the ones in
+  `miks-macs`; the sidebar's switcher) at `wss://<its full name>:2741/ws`,
+  since an https page can't open plain ws, and the certificate is for the
+  full name only, so the app (`ios/Miks/MiksPlugin.swift`) turns "air" into
+  it: `getaddrinfo` by Tailscale's search domain, then `getnameinfo`. The
+  others it watches over sockets of their own, which only `hello`, for what
+  their agents are doing. WebKit throws from `new WebSocket` for an address
+  the page's CSP refuses (a short name), where Chrome only fails the
+  socket; uncaught, that left the app white. The page's console and errors
+  go to the app's log (`devicectl device process launch --console`). The
+  shell's web view takes its view from `LaunchScreen.storyboard` (a scene
+  `controller`, a progress bar tagged 1), and crashed at launch without it. The gateway marks its own page (`<meta name="miks-gateway">`) so a
   browser's connects back to it, and lets the app's origins in
   (`APP_ORIGINS`). `ios/build.sh device "iPad mini"` installs onto a
   paired device; there's an iPhone Duo simulator.

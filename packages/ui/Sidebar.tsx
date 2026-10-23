@@ -1,14 +1,16 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { tooltip } from "crosswing/modals/popup";
-import { PanelLeft, Plus } from "lucide-react";
+import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
+import { usePopup } from "crosswing/modals/popup/usePopup";
+import { ChevronDown, PanelLeft, Plus } from "lucide-react";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, useState } from "react";
 import { styled } from "styled-components";
-import { daemon } from "./daemon";
+import { daemon, useMacs } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { displayPath, updateSettings, useSettings } from "./settings";
-import { backgroundSummary, STATUS_LABELS, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
+import { backgroundSummary, STATUS_LABELS, URGENCY, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
 import { StatusDot } from "./StatusDot";
 
 const DRAG_GROUP = "workspaces";
@@ -34,6 +36,7 @@ export function Sidebar({
   return (
     <StyledSidebar {...rest}>
       <div className="titlebar">
+        {window.miks?.macs && <MacSwitcher />}
         <SidebarToggle />
       </div>
       <div className="workspaces" data-draggable-root>
@@ -76,8 +79,13 @@ export const StyledSidebar = styled.div`
     -webkit-app-region: drag;
     display: flex;
     justify-content: flex-end;
+    align-items: flex-start;
     /* In line with the tab bar's buttons beside it. */
     padding: 6px 6px 0 0;
+
+    > ${() => StyledMacSwitcher} {
+      margin-right: auto;
+    }
     box-sizing: border-box;
   }
 
@@ -112,6 +120,69 @@ export const StyledSidebar = styled.div`
       background: ${colors.buttonBackgroundGlow()};
       color: ${colors.text()};
     }
+  }
+`;
+
+/**
+ * In the iOS app, which Mac's terminals these are, and the others: what
+ * their agents are doing (most urgent first, as a workspace shows its tabs),
+ * to switch to, and adding one.
+ */
+function MacSwitcher() {
+  const bridge = window.miks!.macs!;
+  const macs = useMacs();
+  const active = macs.find((mac) => mac.active);
+  const others = macs.filter((mac) => !mac.active);
+  const status = URGENCY.find((status) => others.some((mac) => mac.status === status && status !== "idle"));
+
+  const menu = usePopup(() => (
+    <PopupMenu>
+      {macs.map((mac) => (
+        <PopupMenuText
+          key={mac.host}
+          checked={mac.active}
+          right={mac.status && <StatusDot status={mac.status} />}
+          detail={!mac.active && !mac.connected ? "Not connected" : undefined}
+          onClick={() => bridge.select(mac.host)}
+          children={mac.name}
+        />
+      ))}
+      <PopupMenuSeparator />
+      <PopupMenuText onClick={() => bridge.select(null)} children="Add a Mac…" />
+      {active && <PopupMenuText destructive onClick={() => bridge.remove(active.host)} children={`Remove ${active.name}`} />}
+    </PopupMenu>
+  ));
+
+  return (
+    <StyledMacSwitcher onClick={menu.onClick}>
+      <span>{active?.name ?? "Mac"}</span>
+      {status && <StatusDot status={status} />}
+      <ChevronDown />
+    </StyledMacSwitcher>
+  );
+}
+
+const StyledMacSwitcher = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin-left: 8px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${colors.text()};
+  font: ${fonts.displayBold({ size: 14 })};
+
+  > svg {
+    width: 14px;
+    height: 14px;
+    color: ${colors.textSecondary()};
+  }
+
+  &:hover {
+    background: ${colors.buttonBackgroundGlow()};
   }
 `;
 

@@ -162,6 +162,7 @@ class WebAppViewController:
         // file — everything else here is shared, and where projects differ it
         // is because one is behind rather than because it wants to be.
         // @chatwing:plugins:start
+        plugins.append(MiksPlugin(webApp: self))
         // @chatwing:plugins:end
 
         NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
