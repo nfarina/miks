@@ -7,6 +7,7 @@ import { ChevronDown, PanelLeft, Plus } from "lucide-react";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, useState } from "react";
 import { styled } from "styled-components";
+import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
@@ -99,6 +100,12 @@ export const StyledSidebar = styled.div`
     padding: 0 8px;
   }
 
+  ${coarsePointer(`
+    > .titlebar {
+      height: 54px;
+    }
+  `)}
+
   > .new-workspace {
     display: flex;
     align-items: center;
@@ -151,6 +158,7 @@ function MacSwitcher() {
       ))}
       <PopupMenuSeparator />
       <PopupMenuText onClick={() => bridge.select(null)} children="Add a Mac…" />
+      <PopupMenuText onClick={() => daemon.runCommand("settings")} children="Settings…" />
       {active && <PopupMenuText destructive onClick={() => bridge.remove(active.host)} children={`Remove ${active.name}`} />}
     </PopupMenu>
   ));
@@ -186,6 +194,13 @@ const StyledMacSwitcher = styled.button`
   &:hover {
     background: ${colors.buttonBackgroundGlow()};
   }
+
+  ${coarsePointer(`
+    height: 38px;
+    padding: 0 10px;
+    border-radius: 10px;
+    font-size: 16px;
+  `)}
 `;
 
 /**
@@ -226,6 +241,17 @@ export const StyledSidebarToggle = styled.button`
     background: ${colors.buttonBackgroundGlow()};
     color: ${colors.text()};
   }
+
+  ${coarsePointer(`
+    width: 40px;
+    height: 38px;
+    border-radius: 10px;
+
+    > svg {
+      width: 19px;
+      height: 19px;
+    }
+  `)}
 `;
 
 /**

@@ -32,6 +32,12 @@ export function useSettings(): Settings {
   );
 }
 
+/**
+ * Whether settings are this device's own (a browser's, the iOS app's, in
+ * localStorage), not the Mac app's: only how it looks and types apply.
+ */
+export const DEVICE_SETTINGS = !navigator.userAgent.includes("Electron");
+
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 32;
 

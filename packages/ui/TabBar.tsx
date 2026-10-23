@@ -4,6 +4,7 @@ import { Maximize2, Minimize2, PanelRight, Plus, RotateCw, X } from "lucide-reac
 import type { Tab, Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes } from "react";
 import { styled } from "styled-components";
+import { coarsePointer } from "crosswing/host/pointer";
 import { safeArea } from "crosswing/safearea";
 import { hasPanel, toggleChat, toggleExpanded, useChatOpen, useExpanded } from "./ChatPanel";
 import { closeTab } from "./closing";
@@ -142,6 +143,29 @@ export const StyledTabBar = styled.div`
   > .spacer {
     flex-grow: 1;
   }
+
+  /* Finger-sized, on a touch screen. */
+  ${coarsePointer(`
+    height: 48px;
+
+    > .new-tab,
+    > .expand-toggle,
+    > .chat-toggle {
+      width: 40px;
+      height: 38px;
+      border-radius: 10px;
+
+      > svg {
+        width: 19px;
+        height: 19px;
+      }
+    }
+
+    > .expand-toggle > svg {
+      width: 18px;
+      height: 18px;
+    }
+  `)}
 `;
 
 function TabView({ tab, workspaceId, active }: { tab: Tab; workspaceId: string; active: boolean }) {
@@ -265,6 +289,34 @@ const StyledTab = styled.div`
     color: ${colors.text()};
     box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
   }
+
+  ${coarsePointer(`
+    > .box {
+      height: 38px;
+      gap: 8px;
+      padding: 0 4px 0 12px;
+      border-radius: 10px;
+
+      > .title {
+        font-size: 14px;
+      }
+
+      /* No hover to show it: the tab you're on has it. */
+      > .close {
+        padding: 6px;
+        border-radius: 8px;
+
+        > svg {
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+
+    &[data-active="true"] > .box > .close {
+      opacity: 0.7;
+    }
+  `)}
 `;
 
 const TabDropTarget = styled.div`

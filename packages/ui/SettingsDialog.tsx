@@ -8,13 +8,13 @@ import { SeparatorLayout, StyledSeparatorLayout } from "crosswing/components/Sep
 import { TabbedButton, TabbedButtonLayout } from "crosswing/components/TabbedButtonLayout";
 import { fonts } from "crosswing/fonts";
 import { DialogView } from "crosswing/modals/dialog";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Minus, Plus, X } from "lucide-react";
 import type { Permission } from "miks/shared/protocol";
 import type { Remote } from "miks/shared/settings";
 import { styled } from "styled-components";
 import { useEffect, useState } from "react";
 import { daemon, type PermissionsEvent, useDaemon, useTarget } from "./daemon";
-import { updateSettings, useSettings } from "./settings";
+import { DEVICE_SETTINGS, setFontSize, updateSettings, useSettings } from "./settings";
 import { focusActiveTerminal } from "./TerminalView";
 
 export type SettingsTab = "general" | "remotes" | "permissions" | "advanced";
@@ -40,13 +40,17 @@ export function SettingsDialog({ initialTab = "general", onClose }: { initialTab
     <DialogView title="Settings" onClose={onClose} form={false}>
       {/* This window is on another Mac, but its window, keys and notifications are this one's. */}
       {target && tab !== "permissions" && <StyledNote>Settings for this Mac. {target.name}'s are in Miks there.</StyledNote>}
+      {DEVICE_SETTINGS && tab !== "permissions" && <StyledNote>Settings for this device. Your Macs' are in Miks there.</StyledNote>}
       <StyledSettings layout="grow" pad={false} value={tab} onValueChange={setTab}>
         <TabbedButton title="General" value="general">
           <GeneralSettings />
         </TabbedButton>
-        <TabbedButton title="Remotes" value="remotes">
-          <RemoteSettings />
-        </TabbedButton>
+        {/* Windows on other Macs, and this one for your other devices: the Mac app's. */}
+        {!DEVICE_SETTINGS && (
+          <TabbedButton title="Remotes" value="remotes">
+            <RemoteSettings />
+          </TabbedButton>
+        )}
         <TabbedButton title="Permissions" value="permissions">
           <PermissionSettings />
         </TabbedButton>
@@ -63,18 +67,32 @@ function GeneralSettings() {
 
   return (
     <SeparatorLayout bordered>
-      <LabeledToggle
-        label="Notifications"
-        detail="When an agent finishes or needs you, unless you're looking at it."
-        on={settings.notifications}
-        onClick={() => updateSettings({ notifications: !settings.notifications })}
-      />
+      <TextSize />
+      {!DEVICE_SETTINGS && (
+        <LabeledToggle
+          label="Notifications"
+          detail="When an agent finishes or needs you, unless you're looking at it."
+          on={settings.notifications}
+          onClick={() => updateSettings({ notifications: !settings.notifications })}
+        />
+      )}
       <LabeledToggle
         label="Open chat for long replies"
         detail="When Claude finishes a reply of 20 lines or more in the tab you're looking at, the chat panel (⌘⇧C) opens to show it."
         on={settings.chatForLongReplies}
         onClick={() => updateSettings({ chatForLongReplies: !settings.chatForLongReplies })}
       />
+      {/* What the Mac app does on its Mac. */}
+      {!DEVICE_SETTINGS && <MacSettings />}
+    </SeparatorLayout>
+  );
+}
+
+function MacSettings() {
+  const settings = useSettings();
+
+  return (
+    <>
       <LabeledToggle
         label="Claude Code status"
         detail="Adds hooks to ~/.claude/settings.json that tell Miks what Claude is up to. Outside Miks they do nothing."
@@ -94,7 +112,30 @@ function GeneralSettings() {
         </div>
         <BrowserSelect />
       </div>
-    </SeparatorLayout>
+    </>
+  );
+}
+
+/** The terminals' and chat's text size, as ⌘+ and ⌘− set it. */
+function TextSize() {
+  const { fontSize } = useSettings();
+
+  return (
+    <div className="field">
+      <div className="content">
+        <div className="label">Text size</div>
+        <div className="detail">In terminals and chat.{!DEVICE_SETTINGS && " Also ⌘+ and ⌘−, and ⌘0 to reset."}</div>
+      </div>
+      <div className="stepper">
+        <button onClick={() => setFontSize(fontSize - 1)} aria-label="Smaller text">
+          <Minus />
+        </button>
+        <span>{fontSize}</span>
+        <button onClick={() => setFontSize(fontSize + 1)} aria-label="Bigger text">
+          <Plus />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -504,6 +545,37 @@ const StyledSettings = styled(TabbedButtonLayout)`
     > .browser {
       width: auto;
       min-width: 130px;
+    }
+
+    > .stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 32px;
+      border-radius: 8px;
+      background: ${colors.buttonBackgroundGlow()};
+
+      > span {
+        font: ${fonts.displayMedium({ size: 14 })};
+        font-variant-numeric: tabular-nums;
+        color: ${colors.text()};
+      }
+
+      > button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 100%;
+        border: none;
+        background: transparent;
+        color: ${colors.text()};
+
+        > svg {
+          width: 16px;
+          height: 16px;
+        }
+      }
     }
   }
 `;

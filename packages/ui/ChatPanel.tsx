@@ -23,6 +23,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { styled } from "styled-components";
+import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { daemon } from "./daemon";
@@ -1044,6 +1045,13 @@ const StyledChatPanel = styled.div`
         background: ${colors.buttonBackgroundGlow()};
         color: ${colors.text()};
       }
+
+      ${coarsePointer(`
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 17px;
+        font-size: 14px;
+      `)}
     }
   }
 

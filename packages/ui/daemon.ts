@@ -198,6 +198,11 @@ class DaemonClient {
     return () => this.connectListeners.delete(listener);
   }
 
+  /** Runs a menu command, as the Mac app's menu does, from where there's no menu (the iOS app's switcher). */
+  runCommand(command: string) {
+    for (const listener of this.commandListeners) listener(command);
+  }
+
   /** Menu commands from the app (⌘T and friends). */
   onCommand(listener: (command: string) => void): Unsubscribe {
     this.commandListeners.add(listener);

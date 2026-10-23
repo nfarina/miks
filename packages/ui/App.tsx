@@ -10,6 +10,7 @@ import { TextInput } from "crosswing/components/forms/TextInput";
 import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
+import { coarsePointer } from "crosswing/host/pointer";
 import { provideSafeArea, safeArea } from "crosswing/safearea";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
@@ -195,6 +196,7 @@ export const StyledApp = styled.div`
     > .empty-bar {
       height: 38px;
       padding-top: ${safeArea.top()};
+      ${coarsePointer(`height: 48px;`)}
       -webkit-app-region: drag;
     }
 
