@@ -1,5 +1,6 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
+import http from "http";
 import https from "https";
 import net from "net";
 import os from "os";
@@ -139,6 +140,54 @@ test("its WebSocket is the daemon's, for its own page only", async () => {
     socket.on("open", () => resolve("opened"));
   });
   expect(refused).toContain("403");
+});
+
+test("it's a proxy from this Mac for your own devices: plain HTTP and CONNECT tunnels", async () => {
+  // A dev server on this Mac's localhost.
+  const site = http.createServer((req, res) => res.end(`site ${req.url}`));
+  await new Promise<void>((resolve) => site.listen(0, "127.0.0.1", resolve));
+  const sitePort = (site.address() as net.AddressInfo).port;
+  gateway.setEnabled(true);
+  await waitFor(() => !!gateway.state && "url" in gateway.state);
+
+  const plain = await new Promise<string>((resolve, reject) => {
+    http
+      .get({ host: "127.0.0.1", port, path: `http://localhost:${sitePort}/a` }, (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => resolve(body));
+      })
+      .on("error", reject);
+  });
+  expect(plain).toBe("site /a");
+
+  const tunneled = await new Promise<string>((resolve, reject) => {
+    const req = http.request({ host: "127.0.0.1", port, method: "CONNECT", path: `localhost:${sitePort}` });
+    req.on("connect", (res, socket) => {
+      expect(res.statusCode).toBe(200);
+      socket.write(`GET /b HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+      let text = "";
+      socket.on("data", (chunk) => (text += chunk));
+      socket.on("end", () => resolve(text.split("\r\n\r\n")[1]));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+  expect(tunneled).toBe("site /b");
+
+  // Not for anyone else's device.
+  caller = { node: "their-node", owner: "someone else" };
+  gateway = (gateway.close(), new Gateway({ socketPath: path.join(home, "miks.sock"), uiDir: path.join(home, "ui"), tailscale, port }));
+  gateway.setEnabled(true);
+  await waitFor(() => !!gateway.state);
+  const refused = await new Promise<number | undefined>((resolve) => {
+    const req = http.request({ host: "127.0.0.1", port, method: "CONNECT", path: `localhost:${sitePort}` });
+    req.on("connect", (res) => resolve(res.statusCode));
+    req.on("error", () => resolve(undefined));
+    req.end();
+  });
+  expect(refused).toBe(403);
+  site.close();
 });
 
 test("with a certificate from the tailnet, it's HTTPS at the full name", async () => {

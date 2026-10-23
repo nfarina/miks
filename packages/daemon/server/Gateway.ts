@@ -8,6 +8,7 @@ import path from "path";
 import { WebSocketServer } from "ws";
 import { connectDaemon } from "../shared/connect.ts";
 import type { GatewayState } from "../shared/protocol.ts";
+import { isProxyRequest, proxyConnect, proxyRequest } from "./Proxy.ts";
 
 /** The port on each of this Mac's Tailscale addresses. */
 export const GATEWAY_PORT = 2741;
@@ -162,6 +163,7 @@ export class Gateway extends EventEmitter<{ change: [] }> {
     const handler = (req: http.IncomingMessage, res: http.ServerResponse) => void this.request(req, res);
     const server = this.tls ? https.createServer({ cert: this.tls.cert, key: this.tls.key }, handler) : http.createServer(handler);
     server.on("upgrade", (req, socket, head) => void this.upgrade(req, socket, head));
+    server.on("connect", (req, socket, head) => void this.connect(req, socket, head));
     return new Promise((resolve, reject) => {
       server.once("error", reject);
       server.listen(port, address, () => {
@@ -207,6 +209,9 @@ export class Gateway extends EventEmitter<{ change: [] }> {
       res.writeHead(403, { "content-type": "text/plain" }).end("Only your own devices on Tailscale can open Miks here.");
       return;
     }
+    // The panel's browser on a device, going out from this Mac, as `miks
+    // browse` does in a Mac's window (Proxy.ts): plain HTTP for a full URL.
+    if (isProxyRequest(req)) return proxyRequest(req, res);
     if (req.method !== "GET" && req.method !== "HEAD") return void res.writeHead(405).end();
 
     const { uiDir } = this.options;
@@ -228,6 +233,12 @@ export class Gateway extends EventEmitter<{ change: [] }> {
     }
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
     fs.createReadStream(file).pipe(res);
+  }
+
+  /** And HTTPS and WebSockets, as CONNECT tunnels made from this Mac. */
+  private async connect(req: http.IncomingMessage, socket: Duplex, head: Buffer) {
+    if (!(await this.allowed(req))) return void socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+    proxyConnect(req, socket, head);
   }
 
   /** `/ws`, from the gateway's own page or the app's only, piped to the daemon's socket. */

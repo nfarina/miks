@@ -32,6 +32,12 @@ class MiksPlugin: WebAppPlugin {
             guard let callback = body["callback"] as? String else { return false }
             webApp.executeJSCallback(callback, result: ["connected": hasHardwareKeyboard])
             return true
+        case "testBrowser":
+            guard let mac = body["mac"] as? String, let url = body["url"] as? String else { return false }
+            let browser = TestBrowserController(mac: mac, url: url)
+            browser.modalPresentationStyle = .fullScreen
+            webApp.present(browser, animated: true)
+            return true
         case "fullName":
             guard let callback = body["callback"] as? String, let host = body["host"] as? String else { return false }
             DispatchQueue.global(qos: .userInitiated).async {
