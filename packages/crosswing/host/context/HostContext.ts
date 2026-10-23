@@ -44,6 +44,7 @@ export function defaultHostContext(merge?: Partial<HostContextValue>): HostConte
     openSettings: async () => {},
     requestReview: async () => {},
     badgeAppIcon: async () => {},
+    clearReadNotifications: async () => {},
     scrollToTop: () => {},
     scrollToHome: () => false,
     copyToClipboard: (dataString: string) => {

@@ -53,12 +53,23 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 appDelegate?.webAppController?.handleDeepLink(link: url.absoluteString)
             }
         }
+
+        // Launched by a link to our URL scheme, or a quick action.
+        for context in connectionOptions.urlContexts {
+            _ = DevServer.handle(url: context.url, webApp: appDelegate?.webAppController)
+        }
+        if let shortcutItem = connectionOptions.shortcutItem {
+            _ = DevServer.handle(shortcutItem: shortcutItem, webApp: appDelegate?.webAppController)
+        }
     }
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         // Replaces AppDelegate.applicationWillEnterForeground under the scene
         // lifecycle (the app-delegate variant is no longer called).
         appDelegate?.handleEnterForeground()
+
+        // Back from the Settings app, perhaps with a different server.
+        DevServer.applySettingsIfChanged(webApp: appDelegate?.webAppController)
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
@@ -74,5 +85,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             log.info("Continuing universal link: \(url)")
             appDelegate?.webAppController?.handleDeepLink(link: url.absoluteString)
         }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts {
+            if !DevServer.handle(url: context.url, webApp: appDelegate?.webAppController) {
+                log.info("Ignoring URL \(context.url)")
+            }
+        }
+    }
+
+    func windowScene(
+        _ windowScene: UIWindowScene,
+        performActionFor shortcutItem: UIApplicationShortcutItem,
+        completionHandler: @escaping (Bool) -> Void
+    ) {
+        completionHandler(DevServer.handle(shortcutItem: shortcutItem, webApp: appDelegate?.webAppController))
     }
 }

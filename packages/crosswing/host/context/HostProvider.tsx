@@ -3,6 +3,7 @@ import { styled } from "styled-components";
 import { getSafeAreaCSS, SafeArea } from "../../safearea/safeArea.js";
 import {
   badgeAppIcon,
+  clearReadNotifications,
   closePlaid,
   delayUpdates,
   detectContainer,
@@ -130,6 +131,7 @@ export function HostProvider({
           openSettings,
           requestReview,
           badgeAppIcon,
+          clearReadNotifications,
           scrollToTop,
           scrollToHome,
           copyToClipboard: clipboard.copy,

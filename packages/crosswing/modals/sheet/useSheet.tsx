@@ -12,6 +12,7 @@ import { useViewportSize } from "../../viewport/viewport.js";
 import { StyledBarStrip } from "../../components/BarStrip.js";
 import { StyledNavHeader, StyledNavLayout } from "../../router/navs/NavLayout.js";
 import { whenFolded } from "../../host/util/fold.js";
+import { getSwipeFinish, rubberBand, useSwipe } from "../../hooks/useSwipe.js";
 
 export type SheetAnimation = "slide" | "pop";
 
@@ -32,6 +33,12 @@ export type UseSheetOptions = {
   delay?: string;
   /** Listens for the ESC key and closes the dialog. Default is true. */
   pressEscapeToClose?: boolean;
+  /**
+   * Sizes the sheet to its content (what its scrolling area holds) rather
+   * than the whole screen: on a phone, between FIT_MIN_HEIGHT and full height;
+   * floating, up to its usual height. It follows the content as it changes.
+   */
+  fit?: boolean;
 };
 
 export type SheetStretch = { maxWidth?: string; maxHeight?: string };
@@ -45,6 +52,7 @@ export function useSheet<T extends any[]>(
     animation,
     delay,
     pressEscapeToClose,
+    fit,
   }: UseSheetOptions = {},
 ): Modal<T> {
   const modal = useModal((...args: any) => (
@@ -56,6 +64,7 @@ export function useSheet<T extends any[]>(
       pressEscapeToClose={pressEscapeToClose}
       animation={animation}
       delay={delay}
+      fit={fit}
       children={renderSheet(...args)}
     />
   ));
@@ -74,6 +83,7 @@ export const SheetContainer = ({
   in: animatingIn,
   animation,
   delay,
+  fit,
   onExited,
 }: {
   children: ReactNode;
@@ -85,6 +95,7 @@ export const SheetContainer = ({
   in?: boolean;
   animation?: SheetAnimation;
   delay?: string;
+  fit?: boolean;
   onExited?: () => void;
 }) => {
   const { container, viewport } = use(HostContext);
@@ -114,6 +125,10 @@ export const SheetContainer = ({
       return animation;
     } else if (container === "ios") {
       return "slide";
+    } else if (container !== "android" && !floating) {
+      // A phone-sized screen anywhere else (a phone's browser, or a simulated
+      // device) slides up a card too.
+      return "slide";
     } else {
       return "pop";
     }
@@ -124,6 +139,119 @@ export const SheetContainer = ({
       onExited?.();
     }
   }
+
+  // On a phone, a sliding sheet is a card, as on iOS: it stops short of the
+  // top, over a dimmed page, and drags down to dismiss.
+  const card = getAnimation() === "slide" && !floating;
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+
+  // The card's height as a swipe began, to fade the backdrop against.
+  const swipeHeight = useRef(1);
+
+  function setCardOffset(offset: number) {
+    const sheet = sheetRef.current;
+    const backdrop = backdropRef.current;
+    if (!sheet || !backdrop) return;
+    sheet.style.transform = offset !== 0 ? `translateY(${offset}px)` : "";
+    backdrop.style.opacity = offset > 0 ? String(1 - Math.min(offset / swipeHeight.current, 1)) : "";
+  }
+
+  // Swiping a card down to dismiss it, from anywhere in it that isn't
+  // scrolled down. Moves only the card and the backdrop, by their own styles,
+  // to keep up with a finger.
+  useSwipe(sheetRef, {
+    enabled: card && !!animatingIn,
+    direction: "down",
+    overscroll: true,
+    // With a mouse, only the top of the card, and not its buttons.
+    allowMouse: (e) => {
+      const target = e.target as HTMLElement;
+      const top = sheetRef.current?.getBoundingClientRect().top ?? 0;
+      return (
+        !target.closest("button, a, select, [role='button']") &&
+        e.clientY - top <= CARD_MOUSE_DRAG_ZONE
+      );
+    },
+    onStart: () => {
+      swipeHeight.current = Math.max(sheetRef.current?.clientHeight ?? 1, 1);
+      containerRef.current?.setAttribute("data-dragging", "true");
+    },
+    // Pulled up, it stretches like a rubber band (into the extra card below
+    // the screen, see CARD_STRETCH). A sticky card gives a little, but won't go.
+    onMove: (offset) =>
+      setCardOffset(
+        offset < 0 ? -rubberBand(-offset, CARD_PULL_LIMIT) : sticky ? offset / 4 : offset,
+      ),
+    onEnd: ({ offset, velocity }) => {
+      containerRef.current?.removeAttribute("data-dragging");
+
+      const flung = velocity > CARD_DISMISS_VELOCITY && offset > 10;
+      const far = offset > swipeHeight.current * CARD_DISMISS_DISTANCE;
+
+      if (!sticky && (flung || far)) {
+        // Slides (and fades) on down from here (see slideDown), carrying on at
+        // the speed it was let go.
+        const finish = getSwipeFinish(swipeHeight.current + 20 - offset, velocity, {
+          min: CARD_DISMISS_MIN_DURATION,
+          max: CARD_DISMISS_MAX_DURATION,
+        });
+        containerRef.current?.style.setProperty("--dismiss-duration", `${finish.duration}ms`);
+        containerRef.current?.style.setProperty("--dismiss-easing", finish.easing);
+        onClose();
+      } else {
+        setCardOffset(0);
+      }
+    },
+  });
+
+  // Fitting the content: the sheet's height, less the scrolling area's, plus
+  // what that area holds. That holds at whatever height the sheet is now, so
+  // it can follow the content as it changes (and the sheet with it). The
+  // scrolling area can come later (after loading, say), so watch for it.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const sheet = sheetRef.current;
+    if (!fit || !container || !sheet) return;
+
+    let scroller: HTMLElement | null = null;
+
+    function measure() {
+      if (!scroller) return;
+      const style = getComputedStyle(scroller);
+      const children = getInFlowChildren(scroller);
+      // Scrollable stretches its last child to fill, so that one's measured by
+      // where its own contents end.
+      const contents = children.reduce(
+        (sum, child, i) =>
+          sum + (i === children.length - 1 ? getContentHeight(child) : child.offsetHeight),
+        parseFloat(style.paddingTop) + parseFloat(style.paddingBottom),
+      );
+      // The sheet without its extra card below the screen (see CARD_STRETCH).
+      const sheetHeight = sheet!.clientHeight - parseFloat(getComputedStyle(sheet!).paddingBottom);
+      const fitted = sheetHeight - scroller.clientHeight + contents;
+      container!.style.setProperty("--fit-height", `${Math.ceil(fitted)}px`);
+    }
+
+    const resizes = new ResizeObserver(measure);
+
+    function attach() {
+      if (!scroller?.isConnected) scroller = findScroller(sheet!);
+      if (!scroller) return;
+      resizes.observe(scroller);
+      for (const child of scroller.children) resizes.observe(child);
+      measure();
+    }
+
+    const mutations = new MutationObserver(attach);
+    mutations.observe(sheet, { childList: true, subtree: true });
+    attach();
+
+    return () => {
+      mutations.disconnect();
+      resizes.disconnect();
+    };
+  }, [fit]);
 
   // We have to do some special handling for when we are being dismissed via
   // "slide" animation while the keyboard is visible. In this case, the keyboard
@@ -161,6 +289,8 @@ export const SheetContainer = ({
       data-allow-desktop-presentation={!forceFullScreen && !!allowDesktopPresentation}
       style={cssProps}
       data-animating-in={animatingIn}
+      data-card={card}
+      data-fit={!!fit}
       onAnimationEnd={onAnimationEnd}
       // Sheets present in a way that obscures content underneath, so any hotkeys
       // bound to elements underneath the dialog should not fire. This data
@@ -168,11 +298,17 @@ export const SheetContainer = ({
       {...HotKeyContextDataAttributes}
     >
       {/* Backdrop is only used on large web browsers. */}
-      <div className="backdrop" data-animating-in={animatingIn} onClick={resolvedOnClose} />
+      <div
+        className="backdrop"
+        ref={backdropRef}
+        data-animating-in={animatingIn}
+        onClick={resolvedOnClose}
+      />
       {/* This container element helps with CSS targeting and also allows the
           child to return different elements from render() without triggering
           extra unwanted CSS "appear" animations. */}
-      <div className="sheet">
+      <div className="sheet" ref={sheetRef}>
+        {card && <div className="grabber" />}
         {/* Floating clear of the screen edges, so any bars inside run
             horizontally. A full-screen sheet keeps the host's bar edge. */}
         {floating ? <BarEdgeContext value={null}>{children}</BarEdgeContext> : children}
@@ -181,7 +317,66 @@ export const SheetContainer = ({
   );
 };
 
+/** How far down from its top a mouse can drag a card (it's all touch). */
+const CARD_MOUSE_DRAG_ZONE = 60;
+/** How fast (px/ms) a card has to be flung down to dismiss it. */
+const CARD_DISMISS_VELOCITY = 0.5;
+/** Or how much of its height it has to be dragged down. */
+const CARD_DISMISS_DISTANCE = 0.35;
+/** How long (ms) a swiped-away card takes to go, at most and least: quicker
+ * than a page, as sheets get out of the way on iOS. */
+const CARD_DISMISS_MAX_DURATION = 350;
+const CARD_DISMISS_MIN_DURATION = 120;
+
+/** An element's children that take up room (not absolutely positioned). */
+function getInFlowChildren(element: HTMLElement): HTMLElement[] {
+  return ([...element.children] as HTMLElement[]).filter((child) => {
+    const { position } = getComputedStyle(child);
+    return position !== "absolute" && position !== "fixed";
+  });
+}
+
+/**
+ * How tall an element's contents make it, even if it's been stretched taller:
+ * from its top to where its last child ends, plus its padding below.
+ */
+function getContentHeight(element: HTMLElement): number {
+  const children = getInFlowChildren(element);
+  if (children.length === 0) return element.offsetHeight;
+  const style = getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  // Screen rects are scaled along with a simulated device; layout isn't.
+  const scale = element.offsetHeight > 0 ? rect.height / element.offsetHeight : 1;
+  const bottom = Math.max(
+    ...children.map(
+      (child) =>
+        (child.getBoundingClientRect().bottom - rect.top) / scale +
+        parseFloat(getComputedStyle(child).marginBottom),
+    ),
+  );
+  return bottom + parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+}
+
+/** The first element in a sheet that scrolls vertically, for fitting it. */
+function findScroller(sheet: HTMLElement): HTMLElement | null {
+  for (const element of sheet.querySelectorAll<HTMLElement>("*")) {
+    const { overflowY } = getComputedStyle(element);
+    if (overflowY === "auto" || overflowY === "scroll") return element;
+  }
+  return null;
+}
+
 const boxShadow = "0 -4px 20px " + colors.black({ alpha: 0.2 });
+
+const CARD_TOP_GAP = "10px";
+/** The least of the screen a fitted card takes. */
+const FIT_MIN_HEIGHT = "40%";
+/** How far up a card can be pulled. */
+const CARD_PULL_LIMIT = 80;
+/** How much more card there is below the screen, for that pull to reveal. */
+const CARD_STRETCH = "120px";
+/** About the screen's own corners, like the system's sheets. */
+const CARD_RADIUS = "var(--sheet-corner-radius, 36px)";
 
 const slideUp = keyframes`
   from {
@@ -296,7 +491,9 @@ const StyledSheetContainer = styled.div`
     > .sheet {
       /* Make sure to use "forwards" fill mode because there can be a slight
          delay between animation ending and React unmounting us. */
-      animation: ${slideDown} 0.5s ${easing.outQuint} forwards;
+      /* Swiped away, a card goes at the speed it was let go (see onEnd). */
+      animation: ${slideDown} var(--dismiss-duration, 0.5s) var(--dismiss-easing, ${easing.outQuint})
+        forwards;
       box-shadow: ${boxShadow};
     }
   }
@@ -322,6 +519,78 @@ const StyledSheetContainer = styled.div`
        delay between animation ending and React unmounting us. */
     > .sheet {
       animation: ${popOut} 0.2s ${easing.inCubic} forwards;
+    }
+  }
+
+  /* A card stops short of the top, over the dimmed page. It's clear of the
+     status bar, so its contents needn't be. */
+  &[data-card="true"] {
+    /* Out here, where the safe area is still the screen's. */
+    padding-top: calc(${safeArea.top()} + ${CARD_TOP_GAP});
+
+    > .backdrop {
+      display: block;
+      background: rgba(0, 0, 0, 0.25);
+      transition: opacity 0.5s ${easing.outQuint};
+      will-change: opacity;
+    }
+
+    /* With the card, which waits a moment to slide up (see slideUp), rather
+       than dimming the page first. Backwards, so it's clear while it waits. */
+    > .backdrop[data-animating-in="true"] {
+      animation: ${fadeIn} 0.5s ${easing.outQuint} backwards;
+      animation-delay: calc(150ms + var(--animation-delay));
+    }
+
+    /* As long as the card takes to leave, which ends the sheet when either
+       finishes (see onAnimationEnd). */
+    > .backdrop[data-animating-in="false"] {
+      animation: ${fadeOut} var(--dismiss-duration, 0.5s) ${easing.outQuint} forwards;
+    }
+
+    > .sheet {
+      ${provideSafeArea({ top: "0px" })}
+      /* More card below the screen, so pulling it up shows card, not the page
+         behind (its contents still end at the screen's edge). */
+      margin-bottom: -${CARD_STRETCH};
+      padding-bottom: ${CARD_STRETCH};
+      background: ${colors.textBackground()};
+      border-radius: ${CARD_RADIUS} ${CARD_RADIUS} 0 0;
+      overflow: hidden;
+      transition: transform 0.5s ${easing.outQuint};
+      /* Its own layer, so a swipe only moves it. */
+      will-change: transform;
+
+      > .grabber {
+        position: absolute;
+        z-index: 10;
+        top: 5px;
+        left: calc(50% - 18px);
+        width: 36px;
+        height: 5px;
+        border-radius: 3px;
+        background: ${colors.textSecondary({ alpha: 0.4 })};
+        pointer-events: none;
+      }
+    }
+
+    &[data-dragging="true"] > :is(.sheet, .backdrop) {
+      transition: none;
+    }
+
+    /* Fitted, it sits at the bottom, as tall as its content (see fit). */
+    &[data-fit="true"] > .sheet {
+      flex-grow: 0;
+      margin-top: auto;
+      height: clamp(${FIT_MIN_HEIGHT}, var(--fit-height, 100%), 100%);
+      transition:
+        transform 0.5s ${easing.outQuint},
+        height 0.3s ${easing.outCubic};
+    }
+
+    /* (After the above, to win.) */
+    &[data-dragging="true"] > :is(.sheet, .backdrop) {
+      transition: none;
     }
   }
 
@@ -384,6 +653,16 @@ const StyledSheetContainer = styled.div`
         ${StyledNavHeader}::before {
           border-radius: 16px 16px 0 0;
         }
+      }
+    }
+  }
+
+  /* Fitted and floating, as tall as its content, up to its usual height. */
+  &[data-allow-desktop-presentation="true"][data-fit="true"] {
+    @container viewport (min-width: 500px) {
+      > .sheet {
+        flex-grow: 0;
+        height: var(--fit-height, 615px);
       }
     }
   }

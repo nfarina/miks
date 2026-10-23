@@ -107,9 +107,39 @@ export function Navs({
       ? [root.location, location]
       : pushLocation(root.location, previousLocations, location, replace);
 
+  // Pages you've gone back from, the latest last, to go forward to again.
+  const [forwardLocations, setForwardLocations] = useState<RouterLocation[]>([]);
+
+  // A page's key normally comes from where it is, so a new place is a new
+  // page. But a replace that stays on the same route (another day from a
+  // week strip, say) keeps the page it replaced, showing the new place, rather
+  // than animating one page out and another in. These are the pages keeping
+  // an older place's key, by their href.
+  const [keptKeys, setKeptKeys] = useState<Record<string, string>>({});
+
+  function getKeyName(saved: RouterLocation, kept: Record<string, string>): string {
+    return kept[saved.href()] ?? selectRoute(routes, saved).location.claimedHref();
+  }
+
+  const replaced = previousLocations.at(-1);
+  const keepsPage =
+    replace &&
+    !!replaced &&
+    !replaced.equals(location) &&
+    selectRoute(routes, replaced).route.props.path === selected.route.props.path;
+  const currentKeptKeys = keepsPage
+    ? { ...keptKeys, [location.href()]: getKeyName(replaced!, keptKeys) }
+    : keptKeys;
+
   // Store the list of locations we rendered.
   useEffect(() => {
     setPreviousLocations(allLocations);
+    setForwardLocations(getForwardLocations(previousLocations, allLocations, forwardLocations));
+    // Only what's still on the stack.
+    const hrefs = new Set(allLocations.map((saved) => saved.href()));
+    setKeptKeys(
+      Object.fromEntries(Object.entries(currentKeptKeys).filter(([href]) => hrefs.has(href))),
+    );
   }, [location.href()]);
 
   if (selected.redirect) {
@@ -149,7 +179,7 @@ export function Navs({
     const child = route.props.render(childLocation.params);
 
     return {
-      key: index + " - " + childLocation.claimedHref(),
+      key: index + " - " + getKeyName(savedLocation, currentKeptKeys),
       childContext,
       // A full-screen page gets back the fold its pane hides.
       child: itemFullScreen ? <HostContext value={host}>{child}</HostContext> : child,
@@ -161,6 +191,18 @@ export function Navs({
   // Figure out where to go if you swipe right on the nav stack.
   const back = allLocations[allLocations.length - 2];
   const items = allLocations.map(getNavStackItem);
+
+  // And left: the page you last came back from, ready just off-screen, in
+  // the place it'll take on the stack (so it's the same element once there).
+  // (Not if you've just gone there, before the effect below catches up.)
+  const forwardLocation = forwardLocations
+    .at(-1)
+    ?.equals(top, { excludeSearch: true })
+    ? undefined
+    : forwardLocations.at(-1);
+  const forward = forwardLocation
+    ? { location: forwardLocation, item: getNavStackItem(forwardLocation, allLocations.length) }
+    : null;
 
   if (splitView) {
     const [rootItem, ...detailItems] = items;
@@ -190,7 +232,36 @@ export function Navs({
     );
   }
 
-  return <NavStack back={back} items={items} animation={animation} {...rest} />;
+  return (
+    <NavStack back={back} forward={forward} items={items} animation={animation} {...rest} />
+  );
+}
+
+/**
+ * The pages to go forward to, after moving from `previous` to `current`:
+ * going back saves the page you left, going forward spends it, and going
+ * anywhere else forgets them, as in a browser.
+ */
+export function getForwardLocations(
+  previous: RouterLocation[],
+  current: RouterLocation[],
+  forward: RouterLocation[],
+): RouterLocation[] {
+  const same = (a: RouterLocation | undefined, b: RouterLocation | undefined) =>
+    !!a && !!b && a.equals(b, { excludeSearch: true });
+
+  const wentBack =
+    current.length === previous.length - 1 && current.every((location, i) => same(location, previous[i]));
+  if (wentBack) return [...forward, previous[previous.length - 1]];
+
+  const wentForward =
+    current.length === previous.length + 1 && same(current.at(-1), forward.at(-1));
+  if (wentForward) return forward.slice(0, -1);
+
+  // The same page again (a new search string, say).
+  if (current.length === previous.length && same(current.at(-1), previous.at(-1))) return forward;
+
+  return [];
 }
 
 /**

@@ -1,6 +1,8 @@
 import { Meta, StoryObj } from "@storybook/react";
 import { use } from "react";
 import { expect, userEvent, waitFor, within } from "storybook/test";
+import { colors } from "../../colors/colors.js";
+import { MockHostProvider } from "../../host/mocks/MockHostProvider.js";
 import { CrosswingAppDecorator } from "../../storybook.js";
 import { Link } from "../Link.js";
 import { RouterContext } from "../context/RouterContext.js";
@@ -161,3 +163,45 @@ export const Split: StoryObj<typeof Navs> = {
     </BrowserSimulator>
   ),
 };
+
+/**
+ * Swipe right anywhere on the book page to go back home (as on iOS): the page
+ * follows the finger, then slides away or settles back when let go. Then
+ * swipe left to go forward to it again.
+ */
+export const SwipeBack: StoryObj<typeof Navs> = {
+  render: () => (
+    <MockHostProvider inherit container="ios">
+      <BrowserSimulator initialPath="/books/bookA">
+        <Navs>
+          <NavRoute render={() => <SwipePage title="Home" link="/books/bookA" />} />
+          <NavRoute
+            path="books/:bookId"
+            render={({ bookId }) => <SwipePage title={`Book ${bookId}`} />}
+          />
+        </Navs>
+      </BrowserSimulator>
+    </MockHostProvider>
+  ),
+};
+
+function SwipePage({ title, link }: { title: string; link?: string }) {
+  return (
+    <NavLayout title={title} style={{ background: colors.textBackground() }}>
+      <Scrollable>
+        <div>
+          {link && (
+            <div style={{ padding: "12px 16px" }}>
+              <Link to={link}>Open book</Link>
+            </div>
+          )}
+          {Array.from({ length: 30 }, (_, i) => (
+            <div key={i} style={{ padding: "12px 16px" }}>
+              {title}, row {i + 1}
+            </div>
+          ))}
+        </div>
+      </Scrollable>
+    </NavLayout>
+  );
+}

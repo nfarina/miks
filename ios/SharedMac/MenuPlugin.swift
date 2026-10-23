@@ -279,38 +279,42 @@ class MenuPlugin: WebAppPlugin {
     // Developer settings
     //
 
-    /// Where the app loads from, which iOS keeps in the Settings app. Read at
-    /// launch (see the app delegate's setupSettings), so changes wait for the
-    /// next one.
+    /// Where the app loads from, which iOS keeps in the Settings app. Applied
+    /// on saving (see DevServer), and Developer mode lets `<scheme>://dev-server`
+    /// links switch it too.
     @objc private func showDeveloperSettings() {
         guard let window = webApp.view.window else { return }
         let defaults = UserDefaults.standard
 
+        let developerMode = NSButton(checkboxWithTitle: "Developer mode", target: nil, action: nil)
+        developerMode.state = DevServer.isDeveloperMode ? .on : .off
         let useServer = NSButton(checkboxWithTitle: "Use development server", target: nil, action: nil)
         useServer.state = defaults.bool(forKey: "use_development_server") ? .on : .off
         let server = NSTextField(string: defaults.string(forKey: "development_server") ?? "")
-        server.placeholderString = "http://nfarina.local:3102"
+        server.placeholderString = DevServer.presets.first?.url ?? "https://"
         let useBundle = NSButton(checkboxWithTitle: "Use cached web bundle", target: nil, action: nil)
         useBundle.state = defaults.bool(forKey: "use_cached_web_bundle") ? .on : .off
 
-        let stack = NSStackView(views: [useServer, server, useBundle])
+        let stack = NSStackView(views: [developerMode, useServer, server, useBundle])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
-        stack.frame = NSRect(x: 0, y: 0, width: 300, height: 80)
+        stack.frame = NSRect(x: 0, y: 0, width: 300, height: 106)
         server.widthAnchor.constraint(equalToConstant: 300).isActive = true
 
         let alert = NSAlert()
         alert.messageText = "Developer settings"
-        alert.informativeText = "Now loading from \(clientUrl). Changes take effect the next time the app opens."
+        alert.informativeText = "Now loading from \(clientUrl)."
         alert.accessoryView = stack
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
             guard response == .alertFirstButtonReturn else { return }
+            defaults.set(developerMode.state == .on, forKey: "developer_mode")
             defaults.set(useServer.state == .on, forKey: "use_development_server")
             defaults.set(server.stringValue, forKey: "development_server")
             defaults.set(useBundle.state == .on, forKey: "use_cached_web_bundle")
+            DevServer.applySettingsIfChanged(webApp: self.webApp)
         }
     }
 }

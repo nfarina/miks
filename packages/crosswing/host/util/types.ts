@@ -69,6 +69,8 @@ export interface HostContextValue {
   /** Best-effort: asks the OS to present its native "rate this app" star dialog (iOS StoreKit). No-op off native; the OS rate-limits and may show nothing. */
   requestReview(): Promise<void>;
   badgeAppIcon(badge: number): Promise<void>;
+  /** Removes delivered notifications from Notification Center that belong to a thread (their `thread-id`) not listed in `unreadThreads`. Notifications without a thread are left alone. */
+  clearReadNotifications({ unreadThreads }: { unreadThreads: string[] }): Promise<void>;
   /** Attempts to scroll to the top based on what looks scrolled, if on iOS. Otherwise does nothing. */
   scrollToTop(): void;
   /** Like scrollToTop, but a bottom-up scroller (like a chat) goes to its bottom instead, as when tapping the current tab in iOS Photos. Works on any platform. Returns whether there was anything to scroll. */

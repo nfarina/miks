@@ -113,6 +113,10 @@ export async function badgeAppIcon(badge: number) {
   post("badgeAppIcon", { badge });
 }
 
+export async function clearReadNotifications({ unreadThreads }: { unreadThreads: string[] }) {
+  post("clearReadNotifications", { unreadThreads });
+}
+
 export async function copyToClipboard(text: string) {
   post("copyToClipboard", { text });
 }

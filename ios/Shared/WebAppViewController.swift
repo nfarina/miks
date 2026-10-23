@@ -92,6 +92,12 @@ class WebAppViewController:
         // @chatwing:scheme-handlers:start
         // @chatwing:scheme-handlers:end
         
+        // Draw at the screen's full rate (120Hz on ProMotion), so swipes keep
+        // up with a finger. The app opts in with CADisableMinimumFrameDurationOnPhone
+        // in its Info.plist, but WebKit still holds pages to 60fps on its own
+        // (measured: 63fps with only the key, 120 with both).
+        allowFullFrameRate(webConfig.preferences)
+
         // Allow audio recording and playback.
         webConfig.allowsInlineMediaPlayback = true
         webConfig.mediaTypesRequiringUserActionForPlayback = []
@@ -263,6 +269,27 @@ class WebAppViewController:
     
     func isLoaded() -> Bool {
         return currentURL != nil
+    }
+
+    /// Whether showBundle loads the bundle behind its scheme (a real origin)
+    /// rather than straight off disk. See WebBundle.applicationURL.
+    var showsBundleBehindScheme = false
+
+    /// Shows the cached bundle on the page we're on, for when it arrives or
+    /// the app switches servers. If it's already showing, `reload` decides
+    /// whether to load it again (a newer one arrived) or leave it be.
+    func showBundle(_ bundle: WebBundle, reload: Bool) {
+        // Switched to a live server while this one was downloading.
+        guard usingCachedWebBundle else { return }
+
+        if let url = currentURL, url.isFileURL || url.scheme == WebBundleScheme {
+            if reload { self.reload() }
+            return
+        }
+
+        let page = currentURL.map { $0.path + ($0.query.map { "?\($0)" } ?? "") }
+        load(URLString: showsBundleBehindScheme ? bundle.applicationURL : bundle.applicationFileURL)
+        if let page, !page.isEmpty, page != "/" { handleDeepLink(link: page) }
     }
     
     func reload() {
@@ -486,6 +513,10 @@ class WebAppViewController:
             log.debug("Setting application icon badge to \(badge)")
             UNUserNotificationCenter.current().setBadgeCount(badge)
             lastAppIconBadge = badge
+
+        case "clearReadNotifications":
+            let unreadThreads = body["unreadThreads"] as! [String]
+            AppNotifications.clearRead(unreadThreads: Set(unreadThreads))
             
         case "copyToClipboard":
             let text = body["text"] as! String
@@ -1056,6 +1087,26 @@ class WebAppViewController:
             log.info("Performing default handling for authentication challenge.")
             completionHandler(.performDefaultHandling, nil)
         }
+    }
+}
+
+/// Turns off WebKit's "Prefer page rendering updates near 60fps" feature,
+/// which otherwise caps web content at 60fps on 120Hz screens. There's no
+/// public API for it, so this goes through the feature switches Safari's own
+/// settings use, and does nothing if they're ever gone.
+private func allowFullFrameRate(_ preferences: WKPreferences) {
+    let featuresSelector = NSSelectorFromString("_features")
+    let setSelector = NSSelectorFromString("_setEnabled:forFeature:")
+    guard WKPreferences.responds(to: featuresSelector), preferences.responds(to: setSelector),
+          let features = WKPreferences.perform(featuresSelector)?.takeUnretainedValue() as? [NSObject]
+    else { return }
+
+    for feature in features
+    where (feature.value(forKey: "key") as? String) == "PreferPageRenderingUpdatesNear60FPSEnabled" {
+        // A BOOL argument, so through the method itself rather than perform().
+        typealias SetEnabled = @convention(c) (AnyObject, Selector, Bool, AnyObject) -> Void
+        let setEnabled = unsafeBitCast(preferences.method(for: setSelector), to: SetEnabled.self)
+        setEnabled(preferences, setSelector, false, feature)
     }
 }
 

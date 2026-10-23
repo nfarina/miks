@@ -112,6 +112,9 @@ class WebBundle: NSObject, SSZipArchiveDelegate {
     }
 
     @objc func checkForNewBundle() {
+        // Switched to a development server since launch (see DevServer).
+        guard usingCachedWebBundle else { return }
+
         // If a check or download is already in progress, then defer checking this round.
         guard !checkingForNewBundle && !bundleIsDownloading else {
             checkForNewBundleLater()

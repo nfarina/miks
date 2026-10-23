@@ -1,5 +1,6 @@
 import { StoryObj } from "@storybook/react";
 import { colors } from "../../colors/colors.js";
+import { Scrollable } from "../../components/Scrollable.js";
 import { MockHostProvider } from "../../host/mocks/MockHostProvider.js";
 import { NavLayout } from "../../router/navs/NavLayout.js";
 import { RouterDecorator } from "../../router/storybook/RouterDecorator.js";
@@ -22,14 +23,15 @@ export const Normal: StoryObj = {
 export const Sliding: StoryObj = {
   render: () => (
     // Simulate an iOS device which gets the slide-up animation.
-    <MockHostProvider container="ios">
+    <MockHostProvider inherit container="ios">
       {/* Redeclare this to pick up the simulated host. */}
       <ModalContextProvider>
         <SheetPresenter />
       </ModalContextProvider>
     </MockHostProvider>
   ),
-  decorators: [CrosswingAppDecorator({ layout: "mobile" }), ModalDecorator, RouterDecorator],
+  // Modals inside the phone, so the sheet sizes to it and pushes its page back.
+  decorators: [ModalDecorator, CrosswingAppDecorator({ layout: "mobile" }), RouterDecorator],
   parameters: { layout: "centered" },
 };
 
@@ -69,7 +71,18 @@ function SheetPresenter({ wide }: { wide?: boolean }) {
         title="Sheet Nav"
         right={{ title: "Done", onClick: sheet.hide }}
         style={{ background: colors.textBackground() }}
-      />
+      >
+        {/* Long enough to scroll, to try dragging against scrolling. */}
+        <Scrollable>
+          <div>
+            {Array.from({ length: 40 }, (_, i) => (
+              <div key={i} style={{ padding: "12px 16px" }}>
+                Row {i + 1}
+              </div>
+            ))}
+          </div>
+        </Scrollable>
+      </NavLayout>
     ),
     wide ? { stretch: { maxWidth: "700px", maxHeight: "300px" } } : {},
   );

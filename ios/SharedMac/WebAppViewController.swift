@@ -185,6 +185,23 @@ class WebAppViewController:
         return currentURL != nil
     }
 
+    /// Shows the cached bundle on the page we're on, for when it arrives or
+    /// the app switches servers. If it's already showing, `reload` decides
+    /// whether to load it again (a newer one arrived) or leave it be.
+    func showBundle(_ bundle: WebBundle, reload: Bool) {
+        // Switched to a live server while this one was downloading.
+        guard usingCachedWebBundle else { return }
+
+        if let url = currentURL, url.isFileURL || url.scheme == WebBundleScheme {
+            if reload { self.reload() }
+            return
+        }
+
+        let page = currentURL.map { $0.path + ($0.query.map { "?\($0)" } ?? "") }
+        load(URLString: bundle.applicationFileURL)
+        if let page, !page.isEmpty, page != "/" { handleDeepLink(link: page) }
+    }
+
     func reload() {
         // Check if we have paused updates.
         if let pauseReloadUntil = pauseReloadUntil {
@@ -369,6 +386,10 @@ class WebAppViewController:
             log.debug("Setting application icon badge to \(badge)")
             UNUserNotificationCenter.current().setBadgeCount(badge)
             lastAppIconBadge = badge
+
+        case "clearReadNotifications":
+            let unreadThreads = body["unreadThreads"] as! [String]
+            AppNotifications.clearRead(unreadThreads: Set(unreadThreads))
 
         case "copyToClipboard":
             let text = body["text"] as! String
