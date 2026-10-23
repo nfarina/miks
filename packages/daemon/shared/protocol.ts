@@ -229,6 +229,12 @@ export type ClientMessage =
    */
   | { type: "readImage"; requestId: string; path: string }
   /**
+   * Fetches an image from the web (http or https) for a markdown file in a
+   * panel, from the daemon's Mac, once you've said to show them; answered
+   * by `image` with the same `requestId`. Since protocol 10.
+   */
+  | { type: "fetchImage"; requestId: string; url: string }
+  /**
    * Which of these, as written in the tab's terminal, are there on the
    * daemon's Mac: relative to the tab's folder, `~` its home, and any
    * `:line:column` left off. Answered by `paths`. Since protocol 10.

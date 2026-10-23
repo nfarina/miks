@@ -224,17 +224,27 @@ class DaemonClient {
    * older daemon never answers, so it gives up after a while.
    */
   readImage(path: string): Promise<ImageResult> {
+    return this.requestImage((requestId) => ({ type: "readImage", requestId, path }));
+  }
+
+  /** Fetches an image from the web, from the daemon's Mac, for a markdown file in a panel. */
+  fetchImage(url: string): Promise<ImageResult> {
+    return this.requestImage((requestId) => ({ type: "fetchImage", requestId, url }));
+  }
+
+  private requestImage(message: (requestId: string) => ClientMessage): Promise<ImageResult> {
     if (!this.snapshot.connected) return Promise.resolve({ error: "Not connected to the daemon." });
     const requestId = crypto.randomUUID();
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => answer({ error: "The daemon didn't answer." }), 15_000);
+      // Fetching waits on the web for up to 15s, so a little longer than that.
+      const timeout = setTimeout(() => answer({ error: "The daemon didn't answer." }), 20_000);
       const answer = (result: ImageResult) => {
         clearTimeout(timeout);
         this.images.delete(requestId);
         resolve(result);
       };
       this.images.set(requestId, answer);
-      this.send({ type: "readImage", requestId, path });
+      this.send(message(requestId));
     });
   }
 
