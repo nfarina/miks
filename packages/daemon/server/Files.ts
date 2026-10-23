@@ -158,7 +158,14 @@ export function fetchImageForPanel(
       if (status >= 300 && status < 400 && location) {
         response.resume();
         if (redirects === 0) return resolve({ error: "Too many redirects." });
-        return resolve(fetchImageForPanel(new URL(location, parsed).href, redirects - 1, deadline));
+        // A Location that isn't a URL mustn't throw here, which would end the daemon.
+        let next: string;
+        try {
+          next = new URL(location, parsed).href;
+        } catch {
+          return resolve({ error: "Couldn't be loaded." });
+        }
+        return resolve(fetchImageForPanel(next, redirects - 1, deadline));
       }
       if (status < 200 || status >= 300) {
         response.resume();
@@ -216,17 +223,37 @@ function publicLookup(
  * (mapped, compatible, NAT64, 6to4) is checked as itself.
  */
 function isLocalAddress(address: string): boolean {
-  if (net.isIPv4(address)) return localV4.check(address, "ipv4");
+  const networks = macNetworks();
+  const localV4Address = (v4: string) => localV4.check(v4, "ipv4") || networks.check(v4, "ipv4");
+  if (net.isIPv4(address)) return localV4Address(address);
   const bytes = ipv6Bytes(address);
   if (!bytes) return true;
 
   const zero = (from: number, to: number) => bytes.slice(from, to).every((byte) => byte === 0);
   const v4At = (at: number) => bytes.slice(at, at + 4).join(".");
   const mapped = bytes[10] === 0xff && bytes[11] === 0xff;
-  if (zero(0, 10) && (mapped || zero(10, 12))) return localV4.check(v4At(12), "ipv4");
-  if (bytes[0] === 0 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b && zero(4, 12)) return localV4.check(v4At(12), "ipv4");
-  if (bytes[0] === 0x20 && bytes[1] === 0x02) return localV4.check(v4At(2), "ipv4");
-  return localV6.check(address, "ipv6");
+  if (zero(0, 10) && (mapped || zero(10, 12))) return localV4Address(v4At(12));
+  if (bytes[0] === 0 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b && zero(4, 12)) return localV4Address(v4At(12));
+  if (bytes[0] === 0x20 && bytes[1] === 0x02) return localV4Address(v4At(2));
+  return localV6.check(address, "ipv6") || networks.check(address, "ipv6");
+}
+
+/**
+ * This Mac's own addresses and the networks they're on, public ones too
+ * (an IPv6 /64 is usually public): looked up each time, as they change
+ * with Wi-Fi and VPNs. A network wider than a /16 (IPv4) or /48 (IPv6)
+ * is taken as the address alone, so an odd one can't refuse the internet.
+ */
+function macNetworks(): net.BlockList {
+  const networks = new net.BlockList();
+  for (const address of Object.values(os.networkInterfaces()).flat()) {
+    if (!address) continue;
+    const family = address.family === "IPv4" ? "ipv4" : "ipv6";
+    const prefix = Number(address.cidr?.split("/")[1] ?? (family === "ipv4" ? 32 : 128));
+    const network = family === "ipv4" ? (prefix >= 16 ? prefix : 32) : prefix >= 48 ? prefix : 128;
+    networks.addSubnet(address.address.split("%")[0], network, family);
+  }
+  return networks;
 }
 
 /** An IPv6 address's 16 bytes (a dotted IPv4 end too), or null if it isn't one. */
