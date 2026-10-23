@@ -2,7 +2,10 @@ import { spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+// Several waits in a row, each on a 250ms poll: more than 5s, on a loaded machine.
+vi.setConfig({ testTimeout: 20_000 });
 import { BackgroundTasks } from "./BackgroundTasks.ts";
 
 let dir: string;
