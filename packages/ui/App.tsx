@@ -243,6 +243,11 @@ export const StyledApp = styled.div`
         margin: 0;
         font: ${fonts.display({ size: 14, line: "20px" })};
       }
+
+      > .hint {
+        color: ${colors.textSecondary()};
+        font: ${fonts.display({ size: 13, line: "18px" })};
+      }
     }
   }
 
@@ -260,13 +265,15 @@ function MacChooser({ connecting }: { connecting: string }) {
   const current = mac.get();
   const [text, setText] = useState(current?.replace(/:2741$/, "") ?? "");
   const host = gatewayHost(text);
+  // Its certificate is for the full name only, so "air" alone can't connect.
+  const short = !!host && !host.split(":")[0].includes(".");
 
   return (
     <form
       className="mac"
       onSubmit={(event) => {
         event.preventDefault();
-        if (host) mac.set(host);
+        if (host && !short) mac.set(host);
       }}
     >
       {current ? (
@@ -285,7 +292,9 @@ function MacChooser({ connecting }: { connecting: string }) {
         autoCorrect="off"
         spellCheck={false}
       />
-      <Button newStyle primary type="submit" disabled={!host || host === current} children="Connect" />
+      {short && <p className="hint">Use its full name, with your tailnet's: {host!.split(":")[0]}.something.ts.net.</p>}
+      {/* Again with the same Mac is a retry. */}
+      <Button newStyle primary type="submit" disabled={!host || short} children="Connect" />
     </form>
   );
 }

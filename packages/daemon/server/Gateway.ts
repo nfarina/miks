@@ -287,7 +287,7 @@ async function tailscaleJson(args: string[]): Promise<any> {
 }
 
 /** Tailscale, by its CLI, which talks to the Tailscale app running on this Mac. */
-const cliTailscale: Tailscale = {
+export const cliTailscale: Tailscale = {
   async self() {
     const status = await tailscaleJson(["status", "--json"]);
     if (status?.BackendState !== "Running" || !status.Self) return null;
@@ -306,14 +306,14 @@ const cliTailscale: Tailscale = {
     if (!whois?.Node?.StableID || whois.UserProfile?.ID == null) return null;
     return { node: String(whois.Node.StableID), owner: String(whois.UserProfile.ID) };
   },
-  // To stdout: the CLI is the sandboxed Mac app, which may not write files
-  // elsewhere ("operation not permitted"). The first takes half a minute.
+  // Both to stdout: the CLI is the sandboxed Mac app, which may not write
+  // files elsewhere ("operation not permitted"), and it fails on /dev/null
+  // ("not a regular file") after printing the other. The first takes half a minute.
   async cert(domain) {
-    const [cert, key] = await Promise.all([
-      tailscaleText(["cert", "--cert-file", "-", "--key-file", "/dev/null", domain]),
-      tailscaleText(["cert", "--cert-file", "/dev/null", "--key-file", "-", domain]),
-    ]);
-    if (!cert.includes("BEGIN CERTIFICATE") || !key.includes("PRIVATE KEY")) throw new Error("No certificate from Tailscale.");
+    const text = await tailscaleText(["cert", "--cert-file", "-", "--key-file", "-", domain]);
+    const key = text.match(/-----BEGIN [A-Z ]*PRIVATE KEY-----[^-]+-----END [A-Z ]*PRIVATE KEY-----\n?/)?.[0];
+    const cert = key && text.replace(key, "");
+    if (!key || !cert?.includes("BEGIN CERTIFICATE")) throw new Error("No certificate from Tailscale.");
     return { cert, key };
   },
 };
