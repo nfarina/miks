@@ -56,3 +56,38 @@ export async function writeFromPanel(
     return { error: String(error?.message ?? error) };
   }
 }
+
+/** The most a markdown file's image can be: they go to the window base64. */
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+/** What a markdown file in the panel can show as an image, by extension. */
+const IMAGE_TYPES: Record<string, string> = {
+  apng: "image/apng",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  gif: "image/gif",
+  ico: "image/x-icon",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+};
+
+/**
+ * An image for a markdown file in the panel, base64. Only images, by
+ * extension: a file's `![](~/.ssh/id_ed25519)` gets nothing.
+ */
+export async function readImageForPanel(file: string): Promise<{ data?: string; mime?: string; error?: string }> {
+  const mime = IMAGE_TYPES[file.split(".").pop()?.toLowerCase() ?? ""];
+  if (!mime) return { error: "Not an image." };
+
+  try {
+    const stat = await fs.promises.stat(file);
+    if (!stat.isFile()) return { error: "Not a file." };
+    if (stat.size > MAX_IMAGE_SIZE) return { error: "Too big to show (over 10 MB)." };
+    return { data: (await fs.promises.readFile(file)).toString("base64"), mime };
+  } catch (error: any) {
+    return { error: error?.code === "ENOENT" ? "No such file." : "Can't be read." };
+  }
+}

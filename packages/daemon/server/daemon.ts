@@ -6,6 +6,7 @@ import os from "os";
 import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientMessage, DaemonMessage } from "../shared/protocol.ts";
+import { readImageForPanel } from "./Files.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
@@ -287,6 +288,15 @@ export async function serve({
         }
         case "closeFile":
           return workspaces.closeFile(message.tabId);
+        case "openFile":
+          if (!path.isAbsolute(message.path)) return;
+          return void workspaces.openFile(message.tabId, message.path, { edit: false, wait: false });
+        case "readImage": {
+          const { requestId } = message;
+          if (!path.isAbsolute(message.path)) return send({ type: "image", requestId, error: "The path must be absolute." });
+          void readImageForPanel(message.path).then((image) => send({ type: "image", requestId, ...image }));
+          return;
+        }
         case "closePage":
           return workspaces.closePage(message.tabId);
         case "pageNavigated":
