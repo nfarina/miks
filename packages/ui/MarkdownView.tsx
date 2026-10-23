@@ -5,6 +5,7 @@ import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "r
 import { styled } from "styled-components";
 import { daemon, type ImageResult } from "./daemon";
 import { highlightCSS, renderMarkdownDocument, resolveLocalPath, taskListCSS } from "./markdown";
+import { terminalScrollbarCSS } from "./TerminalView";
 
 /**
  * A markdown file in the tab's panel, rendered, following the file as it
@@ -349,8 +350,7 @@ const StyledMarkdownView = styled.div`
      with the content replaced under it. */
   overflow-anchor: none;
   outline: none;
-  /* macOS's own scroll bars, dark in dark mode. */
-  color-scheme: light dark;
+  ${terminalScrollbarCSS()}
 
   > .content {
     max-width: 820px;
@@ -487,6 +487,7 @@ const StyledMarkdownView = styled.div`
       border: 1px solid ${colors.separator()};
       overflow-x: auto;
       font: ${fonts.displayMono({ size: 12, line: "18px" })};
+      ${terminalScrollbarCSS()}
     }
 
     /* Front matter: there, but not the point. */

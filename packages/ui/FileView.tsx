@@ -19,6 +19,7 @@ import { codemirrorLight } from "./highlighting/codemirrorLight";
 import { isMarkdown } from "./markdown";
 import { MarkdownView } from "./MarkdownView";
 import { autoFocus, getSettings } from "./settings";
+import { terminalScrollbarCSS } from "./TerminalView";
 
 /**
  * The file `miks open` or `miks edit` put in a tab's panel: read-only until
@@ -493,6 +494,7 @@ const StyledFileView = styled.div`
 
       .cm-scroller {
         font: inherit;
+        ${terminalScrollbarCSS()}
       }
     }
   }
