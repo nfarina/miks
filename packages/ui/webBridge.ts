@@ -70,7 +70,14 @@ function webBridge(): MiksBridge {
     if (!url) return status({ connected: false, error: "Which Mac?" });
     const name = fromGateway ? location.hostname : mac!.split(":")[0];
 
-    const next = new WebSocket(url);
+    // WebKit throws, rather than failing the socket, for an address the page's
+    // CSP doesn't allow (a short name like "air"), which took the page down.
+    let next: WebSocket;
+    try {
+      next = new WebSocket(url);
+    } catch {
+      return status({ connected: false, error: `Couldn't connect to ${name}.` });
+    }
     socket = next;
     next.onopen = () => status({ connected: true });
     next.onmessage = (event) => messageListeners.forEach((listener) => listener(String(event.data)));
