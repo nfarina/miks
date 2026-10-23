@@ -424,6 +424,45 @@ export const StyledTerminalView = styled.div`
 
 export const TERMINAL_BACKGROUND = { dark: "#1a1b1e", light: "#ffffff" };
 
+/**
+ * The terminal's scroll bar (xterm.js's, from VS Code), for what scrolls
+ * beside it: a square slider in its text's color. Always shown: Chromium
+ * doesn't redraw one that shows on the scroller's :hover.
+ */
+export const terminalScrollbarCSS = () => `
+  &::-webkit-scrollbar {
+    width: 14px;
+    height: 14px;
+  }
+
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(51, 51, 51, 0.2);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(51, 51, 51, 0.4);
+  }
+  &::-webkit-scrollbar-thumb:active {
+    background: rgba(51, 51, 51, 0.5);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &::-webkit-scrollbar-thumb {
+      background: rgba(204, 204, 204, 0.2);
+    }
+    &::-webkit-scrollbar-thumb:hover {
+      background: rgba(204, 204, 204, 0.4);
+    }
+    &::-webkit-scrollbar-thumb:active {
+      background: rgba(204, 204, 204, 0.5);
+    }
+  }
+`;
+
 const darkTheme: ITheme = {
   background: TERMINAL_BACKGROUND.dark,
   foreground: "#cccccc",
