@@ -80,6 +80,8 @@ export type PermissionsEvent = { app: string | null; permissions: Permission[] }
 /** A tab's open file, as `watchFile` hears it. */
 export type FileEvent = Omit<Extract<DaemonMessage, { type: "file" }>, "type" | "tabId">;
 export type SaveResult = Omit<Extract<DaemonMessage, { type: "fileSaved" }>, "type" | "tabId">;
+/** An image for a markdown file, as `readImage` gets it. */
+export type ImageResult = Omit<Extract<DaemonMessage, { type: "image" }>, "type" | "requestId">;
 
 /** A tab's conversation, as `watchChat` hears it. */
 export type ChatEvent = { session: string | null; entries: ChatEntry[]; reset: boolean };
@@ -96,6 +98,7 @@ class DaemonClient {
   private readonly chats = new Map<string, (event: ChatEvent) => void>();
   private readonly files = new Map<string, (event: FileEvent) => void>();
   private readonly saves = new Map<string, (result: SaveResult) => void>();
+  private readonly images = new Map<string, (result: ImageResult) => void>();
   private readonly connectListeners = new Set<() => void>();
   private readonly commandListeners = new Set<(command: string) => void>();
   private readonly permissionListeners = new Set<(event: PermissionsEvent) => void>();
@@ -192,6 +195,25 @@ class DaemonClient {
     });
   }
 
+  /**
+   * Reads an image on the daemon's Mac, for a markdown file in a panel. An
+   * older daemon never answers, so it gives up after a while.
+   */
+  readImage(path: string): Promise<ImageResult> {
+    if (!this.snapshot.connected) return Promise.resolve({ error: "Not connected to the daemon." });
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => answer({ error: "The daemon didn't answer." }), 15_000);
+      const answer = (result: ImageResult) => {
+        clearTimeout(timeout);
+        this.images.delete(requestId);
+        resolve(result);
+      };
+      this.images.set(requestId, answer);
+      this.send({ type: "readImage", requestId, path });
+    });
+  }
+
   /** Called on every (re)connection, which is when terminals must attach. */
   onConnect(listener: () => void): Unsubscribe {
     this.connectListeners.add(listener);
@@ -252,6 +274,10 @@ class DaemonClient {
         this.saves.get(tabId)?.(result);
         this.saves.delete(tabId);
         return;
+      }
+      case "image": {
+        const { requestId, ...result } = message;
+        return this.images.get(requestId)?.(result);
       }
       case "permissions": {
         const { type: _type, ...event } = message;

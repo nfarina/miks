@@ -6,7 +6,7 @@
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -210,7 +210,19 @@ export type ClientMessage =
    */
   | { type: "saveFile"; tabId: string; content: string; mtime: number | null; force?: boolean }
   /** Closes the tab's file, letting a `miks edit --wait` go. */
-  | { type: "closeFile"; tabId: string };
+  | { type: "closeFile"; tabId: string }
+  /**
+   * Shows another file in the tab's panel, read-only, as `miks open` does: a
+   * link in a markdown file. `path` is absolute, on the daemon's Mac. Since
+   * protocol 10.
+   */
+  | { type: "openFile"; tabId: string; path: string }
+  /**
+   * Reads an image a markdown file in a panel shows (`path` absolute, on the
+   * daemon's Mac, and an image by its extension); answered by `image` with
+   * the same `requestId`. Since protocol 10.
+   */
+  | { type: "readImage"; requestId: string; path: string };
 
 //
 // Daemon → client.
@@ -241,6 +253,8 @@ export type DaemonMessage =
    */
   | { type: "file"; tabId: string; id: string; content: string | null; mtime: number | null; problem?: FileProblem }
   /** How a `saveFile` went: saved (its new `mtime`), or changed on disk since, or an error. */
-  | { type: "fileSaved"; tabId: string; mtime?: number; changed?: boolean; error?: string };
+  | { type: "fileSaved"; tabId: string; mtime?: number; changed?: boolean; error?: string }
+  /** A `readImage`'s image, base64, or why there's none. */
+  | { type: "image"; requestId: string; data?: string; mime?: string; error?: string };
 
 // A pane whose program exits simply disappears from the next `state`.
