@@ -16,6 +16,8 @@ import { styled } from "styled-components";
 import { daemon, type FileEvent } from "./daemon";
 import { codemirrorDark } from "./highlighting/codemirrorDark";
 import { codemirrorLight } from "./highlighting/codemirrorLight";
+import { isMarkdown } from "./markdown";
+import { MarkdownView } from "./MarkdownView";
 import { autoFocus, getSettings } from "./settings";
 
 /**
@@ -23,7 +25,8 @@ import { autoFocus, getSettings } from "./settings";
  * you press Edit (or opened with `miks edit`), saved with ⌘S. The daemon
  * reads and writes it, so it's the file on the tab's Mac, in a window on
  * another Mac too. It follows the file on disk; a change there while you
- * have unsaved ones of your own asks which to keep.
+ * have unsaved ones of your own asks which to keep. A markdown file shows
+ * rendered (Preview) until you switch to its source or press Edit.
  */
 export function FileView({
   tab,
@@ -56,10 +59,21 @@ export function FileView({
   // Changed on disk while you had changes of your own.
   const [conflict, setConflict] = useState<FileEvent | null>(null);
   const [saving, setSaving] = useState(false);
+  const markdown = isMarkdown(file.path);
+  const [preview, setPreview] = useState(markdown && !file.edit);
+  const previewRef = useRef(preview);
+  // What the preview shows: the editor's text, saved or not.
+  const [previewText, setPreviewText] = useState<string | null>(null);
 
   const name = file.path.split("/").pop() ?? file.path;
   const folder = file.path.slice(0, file.path.length - name.length - 1);
   const home = daemon.getSnapshot().state?.home ?? null;
+
+  function showPreview(value: boolean) {
+    previewRef.current = value;
+    setPreview(value);
+    if (value && viewRef.current) setPreviewText(viewRef.current.state.doc.toString());
+  }
 
   function markDirty(value: boolean) {
     dirtyRef.current = value;
@@ -129,12 +143,18 @@ export function FileView({
           compartments.editable.of(editableExtension(editing)),
           // Unsaved: different from the file as it is on disk.
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) markDirty(update.state.doc.toString() !== diskRef.current?.content);
+            if (!update.docChanged) return;
+            const text = update.state.doc.toString();
+            markDirty(text !== diskRef.current?.content);
+            // Only the file changing on disk, while it's the preview on show.
+            if (previewRef.current) setPreviewText(text);
           }),
         ],
       }),
     });
     viewRef.current = view;
+    // A new editor (the file gone and back): the preview follows its text.
+    setPreviewText(null);
 
     // Highlighting for the file's language, loaded when it's first needed.
     const language = LanguageDescription.matchFilename(languages, name);
@@ -203,6 +223,29 @@ export function FileView({
     daemon.send({ type: "closeFile", tabId: tab.id });
   }
 
+  /** A link in the preview to another file, shown here in this one's place. */
+  async function openLinked(path: string) {
+    const linked = path.split("/").pop() ?? path;
+    if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) {
+      showToast({ title: `Couldn't open ${linked}`, message: "This tab's Mac has an older Miks. Update it there to follow links to files." });
+      return;
+    }
+    // Opening another file ends a `--wait` as Done would, so that's yours to do.
+    if (file.wait) {
+      showToast({ title: `Couldn't open ${linked}`, message: `Something's waiting on ${name}: press Done first.` });
+      return;
+    }
+    if (dirtyRef.current) {
+      const discard = await window.miks?.confirm({
+        message: `Open ${linked} without saving ${name}?`,
+        detail: "Your changes will be lost.",
+        button: "Don't save",
+      });
+      if (!discard) return;
+    }
+    daemon.send({ type: "openFile", tabId: tab.id, path });
+  }
+
   // `--wait` (as $EDITOR): saved, closed, and whatever waited goes on.
   async function done() {
     if (await save()) daemon.send({ type: "closeFile", tabId: tab.id });
@@ -237,8 +280,24 @@ export function FileView({
           </span>
           <span className="folder">{displayPath(folder || "/", getSettings().hidePathPrefix, home)}</span>
         </div>
+        {ready && markdown && (
+          <div className="mode">
+            <button data-on={preview} onClick={() => showPreview(true)}>
+              Preview
+            </button>
+            <button data-on={!preview} onClick={() => showPreview(false)}>
+              Source
+            </button>
+          </div>
+        )}
         {ready && !editing && (
-          <button className="action" onClick={() => setEditing(true)}>
+          <button
+            className="action"
+            onClick={() => {
+              showPreview(false);
+              setEditing(true);
+            }}
+          >
             Edit
           </button>
         )}
@@ -263,7 +322,23 @@ export function FileView({
           <button onClick={() => resolveConflict("mine")}>Keep mine</button>
         </div>
       )}
-      {problem ? <div className="note">{problem}</div> : <div className="editor" ref={editorRef} />}
+      {problem ? (
+        <div className="note">{problem}</div>
+      ) : (
+        <>
+          {/* Kept while the preview shows, with whatever you haven't saved. */}
+          <div className="editor" ref={editorRef} hidden={preview} />
+          {preview && ready && (
+            <MarkdownView
+              tab={tab}
+              file={file}
+              text={previewText ?? disk?.content ?? ""}
+              onOpenFile={(path) => void openLinked(path)}
+              onHide={onHide}
+            />
+          )}
+        </>
+      )}
     </StyledFileView>
   );
 }
@@ -314,6 +389,29 @@ const StyledFileView = styled.div`
         white-space: nowrap;
         color: ${colors.textSecondary()};
         font: ${fonts.display({ size: 11, line: "15px" })};
+      }
+    }
+
+    /* Like the panel's switcher above it. */
+    > .mode {
+      flex-shrink: 0;
+      display: flex;
+      gap: 2px;
+
+      > button {
+        height: 26px;
+        padding: 0 10px;
+        border: none;
+        border-radius: 13px;
+        background: transparent;
+        color: ${colors.textSecondary()};
+        font: ${fonts.displayMedium({ size: 12, line: "16px" })};
+        cursor: pointer;
+
+        &[data-on="true"] {
+          background: ${colors.buttonBackgroundGlow()};
+          color: ${colors.text()};
+        }
       }
     }
 
@@ -387,6 +485,10 @@ const StyledFileView = styled.div`
     padding: 24px;
     color: ${colors.textSecondary()};
     text-align: center;
+  }
+
+  > .editor[hidden] {
+    display: none;
   }
 
   > .editor {
