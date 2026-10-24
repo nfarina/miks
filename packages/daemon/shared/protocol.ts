@@ -217,6 +217,12 @@ export type ClientMessage =
   /** Closes one of the tab's files, letting a `miks edit --wait` on it go. */
   | { type: "closeFile"; tabId: string; fileId?: string }
   /**
+   * Whether this window has changes to one of its files it hasn't saved
+   * (sent as that changes, while it watches the file): the daemon closes
+   * files with none to make room for more. Since protocol 10.
+   */
+  | { type: "fileUnsaved"; tabId: string; fileId: string; unsaved: boolean }
+  /**
    * Shows another file in the tab's panel, read-only, as `miks open` does: a
    * link in a markdown file. `path` is absolute, on the daemon's Mac. Since
    * protocol 10.

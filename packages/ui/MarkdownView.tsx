@@ -83,8 +83,7 @@ export function MarkdownView({
     for (const source of images.keys()) if (!sources.has(source)) images.delete(source);
 
     // Opened from a link to one of its headings.
-    const linked = !shown && pendingHeading?.tabId === tab.id && pendingHeading.path === file.path ? pendingHeading.id : null;
-    if (!shown) pendingHeading = null;
+    const linked = shown ? null : takeHeading(tab.id, file.path);
     const heading = linked ? findHeading(content, linked) : null;
 
     pinRef.current = heading ? { heading: heading.id, offset: 12 } : pin;
@@ -109,9 +108,8 @@ export function MarkdownView({
   useEffect(() => {
     if (opened.current === file.opened) return;
     opened.current = file.opened;
-    if (pendingHeading?.tabId !== tab.id || pendingHeading.path !== file.path || !contentRef.current) return;
-    const heading = findHeading(contentRef.current, pendingHeading.id);
-    pendingHeading = null;
+    const linked = takeHeading(tab.id, file.path);
+    const heading = linked && contentRef.current ? findHeading(contentRef.current, linked) : null;
     if (!heading) return;
     pinRef.current = { heading: heading.id, offset: 12 };
     requestAnimationFrame(keepPlace);
@@ -193,7 +191,7 @@ export function MarkdownView({
       // A heading in this file: the content's own, not the window's.
       if (contentRef.current) findHeading(contentRef.current, hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (local) {
-      if (hash) pendingHeading = { tabId: tab.id, path: local, id: hash };
+      if (hash) pendingHeading = { tabId: tab.id, path: local, id: hash, at: Date.now() };
       onOpenFile(local);
     } else if (/^(https?|mailto):/i.test(href)) {
       // Only the web and mail: the file's markdown, not ours, so no tel:,
@@ -276,8 +274,24 @@ function decodeHash(hash: string): string {
   }
 }
 
-/** A heading in a file a link is opening, to start at once it shows. */
-let pendingHeading: { tabId: string; path: string; id: string } | null = null;
+/** A heading in a file a link is opening, to start at once it shows, if that's soon. */
+let pendingHeading: { tabId: string; path: string; id: string; at: number } | null = null;
+
+/** Time enough for the file to open, even through a remote's tunnel; past it, it's no longer what you asked for. */
+const PENDING_HEADING_MS = 5000;
+
+/** Whether a link is opening this file at one of its headings (the file panel shows it rendered for that). */
+export function headingPending(tabId: string, path: string): boolean {
+  return !!pendingHeading && pendingHeading.tabId === tabId && pendingHeading.path === path && Date.now() - pendingHeading.at < PENDING_HEADING_MS;
+}
+
+/** The heading a link is opening this file at, once: whoever shows it takes it. */
+function takeHeading(tabId: string, path: string): string | null {
+  if (!headingPending(tabId, path)) return null;
+  const id = pendingHeading!.id;
+  pendingHeading = null;
+  return id;
+}
 
 /**
  * Where you are in the file, as a place in it rather than a pixel offset,
