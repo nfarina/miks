@@ -17,9 +17,10 @@ export function handlePathLinks(terminal: Terminal, tabId: string): IDisposable 
   const lookups = new Map<string, { at: number; found: Promise<FoundPath> }>();
   let hovered: ILink | null = null;
 
-  function find(tokens: string[]): Promise<FoundPath[]> {
+  /** With `fresh`, asks again whatever it knew: what a click opens is what's there now. */
+  function find(tokens: string[], { fresh = false } = {}): Promise<FoundPath[]> {
     const now = Date.now();
-    const missing = tokens.filter((token) => !((lookups.get(token)?.at ?? 0) > now - FRESH_MS));
+    const missing = tokens.filter((token) => fresh || !((lookups.get(token)?.at ?? 0) > now - FRESH_MS));
     if (missing.length > 0) {
       const found = daemon.findPaths(tabId, missing);
       missing.forEach((token, index) => lookups.set(token, { at: now, found: found.then((all) => all[index] ?? null) }));
@@ -62,8 +63,12 @@ export function handlePathLinks(terminal: Terminal, tabId: string): IDisposable 
             },
             activate: (event) => {
               if (!event.metaKey) return;
-              if (path.folder) daemon.send({ type: "showFolder", path: path.path });
-              else daemon.send({ type: "openFile", tabId, path: path.path });
+              // The shell may have moved since the lookup (`cd` and ⌘-click), so where it is now.
+              void find([text], { fresh: true }).then(([now]) => {
+                if (!now || !isLinked(now)) return;
+                if (now.folder) daemon.send({ type: "showFolder", path: now.path });
+                else daemon.send({ type: "openFile", tabId, path: now.path });
+              });
             },
           };
           links.push(link);

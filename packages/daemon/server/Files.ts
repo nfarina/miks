@@ -1,3 +1,4 @@
+import { execFile, spawn } from "child_process";
 import dns from "dns";
 import fs from "fs";
 import http from "http";
@@ -105,6 +106,33 @@ export async function readImageForPanel(
     return { error: error?.code === "ENOENT" ? "No such file." : "Can't be read." };
   }
 }
+
+/**
+ * Shows a folder in Finder on this Mac: opens it, or for a bundle (an app,
+ * a `.rtfd`), which opening would start or open as a document, shows it in
+ * its own folder.
+ */
+export async function showFolder(folder: string) {
+  try {
+    const real = await fs.promises.realpath(folder);
+    if (!(await fs.promises.stat(real)).isDirectory()) return;
+    const args = (await isPackage(real)) ? ["-R", real] : [real];
+    spawn("open", args, { stdio: "ignore" }).on("error", () => {});
+  } catch {
+    // Gone since it was found.
+  }
+}
+
+/** Whether macOS takes a folder as one thing, as Finder does. Failing to tell, it's taken as one: showing it is the safe way round. */
+function isPackage(folder: string): Promise<boolean> {
+  // Not without an extension (lodash.merge has one, but isn't).
+  if (!path.extname(folder)) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    execFile("osascript", ["-l", "JavaScript", "-e", IS_PACKAGE, folder], (error, stdout) => resolve(!!error || stdout.trim() !== "false"));
+  });
+}
+
+const IS_PACKAGE = 'ObjC.import("AppKit"); function run(argv) { return $.NSWorkspace.sharedWorkspace.isFilePackageAtPath($(argv[0])); }';
 
 /**
  * Paths as a terminal shows them, found on disk: relative to `cwd`, `~` the

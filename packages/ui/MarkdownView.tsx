@@ -210,28 +210,28 @@ export function MarkdownView({
           <button onClick={() => showWebImages()}>Show images</button>
         </StyledWebImages>
       )}
-    <StyledMarkdownView
-      className="markdown-view"
-      ref={scrollerRef}
-      tabIndex={-1}
-      // You scrolling: stay where you put it, not where it was.
-      onWheel={() => (pinRef.current = null)}
-      onPointerDown={() => (pinRef.current = null)}
-      onKeyDown={(event) => {
-        pinRef.current = null;
-        if (event.key === "Escape") onHide();
-      }}
-    >
-      <div
-        className="content"
-        ref={contentRef}
-        onClick={onClick}
-        // A middle click isn't a click: it'd open the link as it is, past onClick.
-        onAuxClick={(event) => {
-          if ((event.target as HTMLElement).closest("a")) event.preventDefault();
+      <StyledMarkdownView
+        className="markdown-view"
+        ref={scrollerRef}
+        tabIndex={-1}
+        // You scrolling: stay where you put it, not where it was.
+        onWheel={() => (pinRef.current = null)}
+        onPointerDown={() => (pinRef.current = null)}
+        onKeyDown={(event) => {
+          pinRef.current = null;
+          if (event.key === "Escape") onHide();
         }}
-      />
-    </StyledMarkdownView>
+      >
+        <div
+          className="content"
+          ref={contentRef}
+          onClick={onClick}
+          // A middle click isn't a click: it'd open the link as it is, past onClick.
+          onAuxClick={(event) => {
+            if ((event.target as HTMLElement).closest("a")) event.preventDefault();
+          }}
+        />
+      </StyledMarkdownView>
     </>
   );
 }
