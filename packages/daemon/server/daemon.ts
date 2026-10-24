@@ -6,7 +6,7 @@ import os from "os";
 import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientMessage, DaemonMessage } from "../shared/protocol.ts";
-import { fetchImageForPanel, findPaths, readImageForPanel } from "./Files.ts";
+import { fetchImageForPanel, findPaths, readImageForPanel, showFolder } from "./Files.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
@@ -317,21 +317,9 @@ export async function serve({
             .then((found) => send({ type: "paths", requestId, found }));
           return;
         }
-        case "showFolder": {
-          const folder = message.path;
-          if (!path.isAbsolute(folder)) return;
-          void fs.promises.stat(folder).then(
-            (stat) => {
-              if (!stat.isDirectory()) return;
-              // A bundle (Miks.app) is a folder too, but opening it would
-              // start it: one with an extension is shown in its folder instead.
-              const args = path.extname(folder) ? ["-R", folder] : [folder];
-              spawn("open", args, { stdio: "ignore" }).on("error", () => {});
-            },
-            () => {},
-          );
+        case "showFolder":
+          if (path.isAbsolute(message.path)) void showFolder(message.path);
           return;
-        }
         case "closePage":
           return workspaces.closePage(message.tabId);
         case "pageNavigated":
