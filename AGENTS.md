@@ -175,7 +175,8 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   `https://<this Mac>:8443/<App>/`. Tailscale's Mac app won't serve a folder
   (sandboxed), so a launchd agent (`local.ios-builds`) runs python3's
   `http.server` on 127.0.0.1:8442, which `tailscale serve` puts on 8443:
-  one server for every app, each in its own folder.
+  one server for every app, each in its own folder. Verified: an iPhone
+  off Wi-Fi installed from the link over Tailscale.
 - Miks keeps its Claude Code hooks in `~/.claude/settings.json` itself
   (`packages/app/claudeHooks.ts`, on launch and when the setting changes),
   running a copy of the script in Miks's home so the path is the same for

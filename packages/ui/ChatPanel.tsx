@@ -1574,6 +1574,19 @@ const StyledChatPanel = styled.div`
         width: 14px;
         height: 14px;
       }
+
+      /* Filled, it reads bigger than the bare icons beside it at the same size. */
+      > .send {
+        width: 34px;
+        height: 34px;
+        border-radius: 17px;
+        margin: 3px;
+
+        > svg {
+          width: 18px;
+          height: 18px;
+        }
+      }
     `)}
   }
 `;
