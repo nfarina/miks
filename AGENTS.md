@@ -347,7 +347,7 @@ resizes); keep it passing.
   `$EDITOR`/`$VISUAL` in Miks's zsh is `shell/bin/miks-editor`
   (`miks edit --wait`), for git, `crontab -e` and Claude Code's ⌃G. It's
   `POST /api/open` (the path as the body); with `wait=1` the request stays
-  open until the file closes (Done, ✕, another file over it, the tab
+  open until the file closes (Done, ✕, it opening again, the tab
   closing). The daemon reads, watches (`fs.watchFile`: git and editors
   replace files) and saves it, so a remote window edits that Mac's file. A
   save is refused if the file's mtime moved since the editor's copy, unless
@@ -355,6 +355,34 @@ resizes); keep it passing.
   switches Chat | file, both kept mounted (CSS hides one). The panel's
   open or not apart from the file (⌘⇧C, Escape in the editor once
   CodeMirror has nothing to close): hidden, the file stays as it was.
+  A tab's panel holds up to 5 files (`Tab.files`, each in the switcher,
+  every one mounted), and file messages name one by `fileId`. Older Miks
+  knows only `Tab.file`, the latest, and sends no `fileId`, which means
+  that one. Opening one that's open brings it to the front (`opened`
+  counts up) as it is; for `miks edit`, unsaved changes kept. Past 5, the
+  least recently opened goes, but never one waited on or with changes a
+  window hasn't saved (`fileUnsaved`, per watcher).
+- Markdown files open rendered (`ui/MarkdownView.tsx`, Preview | Source):
+  marked and DOMPurify, through `ui/markdown.ts` like the chat panel's,
+  sharing its styles and Copy buttons. Images never load from the page:
+  each `src` comes out in a `<template>` before anything's in the document.
+  A file's own images (`readImage`, by the extension of the file a link
+  points at) come from its Mac, and are sent again only if their mtime
+  moved. Web ones wait for Show images, then `fetchImage` gets them on that
+  Mac too (image types, 10 MB, 15s): never from loopback, private,
+  link-local, CGNAT, multicast or reserved addresses (IPv4 in IPv6 too),
+  nor the networks of this Mac's own interfaces, checked as each
+  connection (and redirect) is made, so DNS rebinding can't get past.
+  `data:` images stay as they are.
+- ⌘-click in a terminal (`ui/pathLinks.ts`, an xterm.js link provider):
+  each token on the line that looks like a path (absolute, `~/`, `./`,
+  `../`, with a `/` in it, or a markdown file's name; any `:line:col` off)
+  goes to `findPaths`, which looks for it on the tab's Mac from where its
+  shell is now (`lsof`, not the 2s-old poll). Only what's there is a link,
+  underlined only while ⌘ is down: markdown files open in the panel,
+  folders in Finder (`showFolder`; a bundle is shown in its folder, not
+  opened), only in a Miks window on this Mac, never a remote's or a
+  browser's. The click looks again, so a `cd` just before it counts.
 
 - `miks browse <url>` (`POST /api/browse`, `Tab.page`) shows a page in the
   panel (`ui/BrowseView.tsx`, a `<webview>`), switching Chat | file | page
