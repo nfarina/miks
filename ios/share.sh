@@ -1,28 +1,43 @@
 #!/usr/bin/env bash
 # @chatwing
 #
-# Builds the iOS app, signed for development, and hands it out as a link to
-# tap on any of your devices on Tailscale (in Safari): it installs from
-# anywhere, no cable or Xcode. It installs on the devices in the team's
-# development profile, which is any device that's been paired with Xcode
-# once.
+# Gets a native build onto one of Nick's devices, wherever it is: installed
+# directly if this Mac can reach it (`build.sh device`), else as a link to
+# tap in Safari on any device on Tailscale, which installs it from anywhere,
+# no cable or Xcode. Either way it goes on devices in the team's development
+# profile: any device that's been paired with Xcode once.
 #
 # Usage:
-#   ios/share.sh
+#   ios/share.sh                    # the one reachable device, else a link
+#   ios/share.sh "Nick's iPhone"    # that device (a name fragment or id), else a link
+#   ios/share.sh --link             # a link, without trying a device
 #
-# How: an archive, exported (method "debugging") to an .ipa, beside an
+# The link: an archive, exported (method "debugging") to an .ipa, beside an
 # install manifest and a page with the itms-services:// link, in
 # ~/Library/Application Support/iOS Builds/<App>/, served at this Mac's
-# Tailscale name on port 8443. iOS installs from a manifest only over HTTPS
-# with a trusted certificate, which Tailscale's is. Tailscale's Mac app
-# can't serve a folder itself ("Path serving is not supported on macOS due to
-# sandbox restrictions"), so a launchd agent runs python3's http.server on
-# 127.0.0.1:8442 and `tailscale serve` puts it on 8443. Both are set up the
-# first time and stay: the agent across reboots, serve in Tailscale's config.
+# Tailscale name on port 8443, one server for every app. iOS installs from a
+# manifest only over HTTPS with a trusted certificate, which Tailscale's is.
+# Tailscale's Mac app can't serve a folder itself ("Path serving is not
+# supported on macOS due to sandbox restrictions"), so a launchd agent
+# (local.ios-builds) runs python3's http.server on 127.0.0.1:8442 and
+# `tailscale serve` puts it on 8443. Both are set up the first time and stay:
+# the agent across reboots, serve in Tailscale's config.
 
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if [[ "${1:-}" != "--link" ]]; then
+  # A device that's asleep or away fails here (no match, or "Connection was
+  # invalidated"), and the link is the way round that. Done only if devicectl
+  # says where it installed it: one failure came with "exit code 0".
+  mkdir -p build
+  if ./build.sh device "${1:-}" 2>&1 | tee build/share-install.log && grep -q "installationURL" build/share-install.log; then
+    exit 0
+  fi
+  echo
+  echo "Couldn't install it directly, so here's a link instead."
+fi
 
 if [[ -f project.yml ]]; then
   xcodegen generate >/dev/null
