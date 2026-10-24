@@ -338,6 +338,15 @@ resizes); keep it passing.
   overlay mode the terminal is `inert`. A background window (as in
   `MIKS_BACKGROUND` tests) gets no focus events at all, so test focus with
   CDP's `Emulation.setFocusEmulationEnabled`.
+  The composer's paperclip types files as paths on the tab's Mac, as a drop
+  does (`attachedText` in `TerminalView.tsx`); from a device without the
+  Mac's files (the iOS app), the daemon writes them to its tmpdir
+  (`sendFile`). Its microphone records with `MediaRecorder` (a timeslice,
+  or Safari hands over nothing) and the daemon has Groq transcribe it
+  (`server/Dictation.ts`, `whisper-large-v3-turbo`), with the key as
+  `groq` in `keys.json` in Miks's home, never in a page: the iOS app's
+  bundle is public. The iOS app needs the microphone and camera usage
+  strings (the picker offers Take Photo).
 
 - `miks open <file>` and `miks edit [--wait] <file>` show a file in the
   tab's panel (`ui/FileView.tsx`, CodeMirror 6 with `@codemirror/language-data`

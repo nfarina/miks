@@ -114,6 +114,8 @@ class DaemonClient {
   private readonly saves = new Map<string, { tabId: string; resolve: (result: SaveResult) => void }>();
   private readonly images = new Map<string, (result: ImageResult) => void>();
   private readonly foundPaths = new Map<string, (found: FoundPath[]) => void>();
+  /** `transcribe`'s and `sendFile`'s, answered alike. */
+  private readonly answers = new Map<string, (answer: { text?: string; path?: string; error?: string }) => void>();
   private readonly connectListeners = new Set<() => void>();
   private readonly commandListeners = new Set<(command: string) => void>();
   private readonly permissionListeners = new Set<(event: PermissionsEvent) => void>();
@@ -274,6 +276,32 @@ class DaemonClient {
     });
   }
 
+  /** Dictation's words: the audio, to text by Groq on the daemon's Mac (Dictation.ts). */
+  async transcribe(audio: Blob): Promise<{ text?: string; error?: string }> {
+    return this.ask({ type: "transcribe", requestId: "", audio: await base64(audio), mime: audio.type }, 40_000);
+  }
+
+  /** A file from a device without the Mac's files, into the daemon's tmpdir: where it went. */
+  async sendFile(file: File): Promise<{ path?: string; error?: string }> {
+    return this.ask({ type: "sendFile", requestId: "", name: file.name, data: await base64(file) }, 60_000);
+  }
+
+  private ask(message: Extract<ClientMessage, { type: "transcribe" | "sendFile" }>, wait: number) {
+    if (!this.snapshot.connected) return Promise.resolve({ error: "Not connected to the daemon." });
+    if (!this.speaks(11)) return Promise.resolve({ error: "This Mac's Miks is older: restart its daemon (Miks → Restart daemon…)." });
+    const requestId = String(++this.requestCount);
+    return new Promise<{ text?: string; path?: string; error?: string }>((resolve) => {
+      const timeout = setTimeout(() => answer({ error: "The daemon didn't answer." }), wait);
+      const answer = (result: { text?: string; path?: string; error?: string }) => {
+        clearTimeout(timeout);
+        this.answers.delete(requestId);
+        resolve(result);
+      };
+      this.answers.set(requestId, answer);
+      this.send({ ...message, requestId });
+    });
+  }
+
   /** Whether the daemon is at least this PROTOCOL_VERSION. */
   speaks(version: number): boolean {
     return (this.snapshot.state?.protocol ?? 0) >= version;
@@ -349,6 +377,11 @@ class DaemonClient {
         const { requestId, ...result } = message;
         return this.images.get(requestId)?.(result);
       }
+      case "transcribed":
+      case "fileSent": {
+        const { type: _type, requestId, ...result } = message;
+        return this.answers.get(requestId)?.(result);
+      }
       case "permissions": {
         const { type: _type, ...event } = message;
         for (const listener of this.permissionListeners) listener(event);
@@ -390,4 +423,14 @@ const subscribeMacs = (listener: () => void) => window.miks?.macs?.onChange(list
 
 export function useDaemon(): DaemonSnapshot {
   return useSyncExternalStore(daemon.subscribe, daemon.getSnapshot);
+}
+
+/** A blob's bytes as base64, for a message. */
+function base64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }

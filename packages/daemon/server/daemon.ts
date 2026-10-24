@@ -10,6 +10,7 @@ import { fetchImageForPanel, findPaths, readImageForPanel, showFolder } from "./
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
+import { transcribe } from "./Dictation.ts";
 import { isProxyRequest, proxyConnect, proxyRequest } from "./Proxy.ts";
 import { type SavedState, Workspaces } from "./Workspaces.ts";
 
@@ -323,6 +324,21 @@ export async function serve({
         case "showFolder":
           if (path.isAbsolute(message.path)) void showFolder(message.path);
           return;
+        case "transcribe": {
+          const { requestId } = message;
+          const audio = Buffer.from(message.audio, "base64");
+          void transcribe(path.dirname(socketPath), audio, message.mime).then((result) => send({ type: "transcribed", requestId, ...result }));
+          return;
+        }
+        case "sendFile": {
+          const { requestId } = message;
+          try {
+            send({ type: "fileSent", requestId, path: saveSentFile(message.name, Buffer.from(message.data, "base64")) });
+          } catch (error: any) {
+            send({ type: "fileSent", requestId, error: String(error?.message ?? error) });
+          }
+          return;
+        }
         case "closePage":
           return workspaces.closePage(message.tabId);
         case "pageNavigated":
@@ -439,6 +455,15 @@ async function receiveDrop(body: NodeJS.ReadableStream, folder: string): Promise
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/** A device's file, as a drop from a remote window is: in a folder of its own in the tmpdir, under its own name. */
+function saveSentFile(name: string, data: Buffer): string {
+  const base = path.basename(name);
+  if (!base || base === "." || base === "..") throw new Error("The file has no name.");
+  const saved = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "miks-drop-")), base);
+  fs.writeFileSync(saved, data);
+  return saved;
 }
 
 /** `name` in `folder`, or "name 2", "name 3"… (before any extension) if taken. */

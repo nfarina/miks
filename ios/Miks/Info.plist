@@ -34,6 +34,12 @@
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
+	<!-- The chat panel's dictation, and the attachment picker's Take Photo
+	     (without which taking one crashes the app). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Miks listens while you dictate a message.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Miks takes photos you attach to a message.</string>
 	<!-- Your Macs are reached on Tailscale, which iOS counts as the local
 	     network when it's on the same Wi-Fi. -->
 	<key>NSLocalNetworkUsageDescription</key>

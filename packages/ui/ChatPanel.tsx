@@ -5,7 +5,7 @@ import { fonts } from "crosswing/fonts";
 import { ModalContext } from "crosswing/modals/context";
 import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView";
 import { tooltip } from "crosswing/modals/popup";
-import { ArrowUp, ChevronRight, Square, TextQuote } from "lucide-react";
+import { ArrowUp, ChevronRight, LoaderCircle, Mic, Paperclip, Square, TextQuote } from "lucide-react";
 import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
@@ -27,12 +27,14 @@ import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { daemon } from "./daemon";
+import { useDictation } from "./dictation";
 import { FileView } from "./FileView";
 import { addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
 import { autoFocus, useSettings } from "./settings";
 import { openLink } from "./links";
 import {
+  attachedText,
   droppedText,
   focusActiveTerminal,
   isPasteImageKey,
@@ -643,7 +645,9 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     drafts.set(tab, next);
   }
 
+  // What's there now, not as of this render: words and files arrive later.
   function insert(addition: string) {
+    const text = drafts.get(tab);
     const joined = text && !text.endsWith("\n") && !text.endsWith(" ") ? `${text} ${addition}` : text + addition;
     changeText(joined);
     focusComposer();
@@ -692,6 +696,19 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
       event.preventDefault();
       leave();
     }
+  }
+
+  const fileInput = useRef<HTMLInputElement>(null);
+  const dictation = useDictation({
+    onText: insert,
+    onError: (error) => showToast({ title: "Couldn't dictate", message: error, destructive: true }),
+  });
+
+  // Photos and files, typed as their paths on the tab's Mac, as a drop's.
+  async function attach(files: File[]) {
+    if (files.length === 0) return;
+    const attached = await attachedText(files, tab.id, showToast);
+    if (attached) insert(attached);
   }
 
   async function onDrop(event: DragEvent) {
@@ -878,6 +895,25 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
         onDrop={onDrop}
       >
         <Pill notice={notice} />
+        <button
+          type="button"
+          className="tool attach"
+          disabled={!session}
+          {...tooltip("Attach files", { delay: true })}
+          onClick={() => fileInput.current?.click()}
+        >
+          <Paperclip size={16} />
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            void attach([...(event.target.files ?? [])]);
+            event.target.value = "";
+          }}
+        />
         <TextArea
           value={text}
           onValueChange={changeText}
@@ -896,6 +932,16 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
           maxHeight={240}
           rows={1}
         />
+        <button
+          type="button"
+          className="tool dictate"
+          data-state={dictation.state}
+          disabled={!session || dictation.state === "transcribing"}
+          {...tooltip(dictation.state === "recording" ? "Stop dictating" : "Dictate", { delay: true })}
+          onClick={dictation.toggle}
+        >
+          {dictation.state === "transcribing" ? <LoaderCircle size={16} /> : dictation.state === "recording" ? <Square size={11} fill="currentColor" /> : <Mic size={16} />}
+        </button>
         {status === "working" && !text ? (
           <button type="button" className="send" {...tooltip("Stop", { delay: true })} onClick={() => sendEscape(tab.id)}>
             <Square size={12} fill="currentColor" />
@@ -1419,6 +1465,52 @@ const StyledChatPanel = styled.div`
         background: transparent;
         color: ${colors.text()};
         font: ${fonts.display({ size: 14, line: "20px" })};
+      }
+    }
+
+    > .tool {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      border: none;
+      background: transparent;
+      color: ${colors.textSecondary()};
+      cursor: pointer;
+
+      &:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+
+      &.attach {
+        /* Sits against the field's own left padding. */
+        margin-left: -6px;
+      }
+
+      &[data-state="recording"] {
+        background: #e5484d;
+        color: #fff;
+        animation: dictating 1.2s ease-in-out infinite;
+      }
+
+      &[data-state="transcribing"] > svg {
+        animation: spin 0.9s linear infinite;
+      }
+    }
+
+    @keyframes dictating {
+      50% {
+        opacity: 0.7;
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
       }
     }
 

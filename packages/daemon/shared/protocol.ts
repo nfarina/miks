@@ -6,7 +6,7 @@
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -252,7 +252,19 @@ export type ClientMessage =
    */
   | { type: "findPaths"; requestId: string; tabId: string; paths: string[] }
   /** Shows a folder (absolute) in Finder, on the daemon's Mac. Since protocol 10. */
-  | { type: "showFolder"; path: string };
+  | { type: "showFolder"; path: string }
+  /**
+   * Speech to text for the chat panel's microphone, base64 audio of `mime`,
+   * by Groq from the daemon's Mac, which keeps the key. Answered by
+   * `transcribed`. Since protocol 11.
+   */
+  | { type: "transcribe"; requestId: string; audio: string; mime: string }
+  /**
+   * A file from a device without the Mac's files (the iOS app's attachments),
+   * base64, into a folder of its own in the daemon's tmpdir under its own
+   * name. Answered by `fileSent`. Since protocol 11.
+   */
+  | { type: "sendFile"; requestId: string; name: string; data: string };
 
 //
 // Daemon → client.
@@ -287,6 +299,10 @@ export type DaemonMessage =
   /** A `readImage`'s (or `fetchImage`'s) image, base64 with its file's `mtime`, or `unchanged`, or why there's none. */
   | { type: "image"; requestId: string; data?: string; mime?: string; mtime?: number; unchanged?: boolean; error?: string }
   /** A `findPaths`'s answer, in its order: each one's absolute path, or null if it isn't there. */
-  | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] };
+  | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] }
+  /** A `transcribe`'s words, or why there are none. */
+  | { type: "transcribed"; requestId: string; text?: string; error?: string }
+  /** Where a `sendFile`'s file is now, or why it isn't. */
+  | { type: "fileSent"; requestId: string; path?: string; error?: string };
 
 // A pane whose program exits simply disappears from the next `state`.

@@ -238,9 +238,10 @@ export async function droppedText(
 ): Promise<string | null> {
   event.preventDefault();
   const altKey = event.altKey;
-  const dropped = Array.from(event.dataTransfer.files)
-    .map((file) => window.miks?.pathForFile(file))
-    .filter(Boolean) as string[];
+  const files = Array.from(event.dataTransfer.files);
+  const dropped = files.map((file) => window.miks?.pathForFile(file)).filter(Boolean) as string[];
+  // A device without the Mac's files (the iOS app): sent over.
+  if (dropped.length === 0 && files.length > 0) return attachedText(files, tabId, showToast);
   if (dropped.length === 0 || !window.miks) return null;
 
   if (altKey) {
@@ -259,6 +260,26 @@ export async function droppedText(
   }
 
   const paths = isRemote() ? await window.miks.sendFiles(tabId, dropped, "tmp") : dropped;
+  return paths.length > 0 ? paths.map(shellEscape).join(" ") + " " : null;
+}
+
+/**
+ * Files to type, as paths on the tab's Mac, as a drop's are (Claude Code
+ * attaches an image by its path): their own on this Mac, copies on a
+ * remote, and from a device without the Mac's files (the iOS app's
+ * attachments), copies the daemon makes in its tmpdir.
+ */
+export async function attachedText(files: File[], tabId: string, showToast: ModalContextValue["showToast"]): Promise<string | null> {
+  const local = files.map((file) => window.miks?.pathForFile(file)).filter(Boolean) as string[];
+  let paths: string[];
+  if (local.length === files.length && window.miks) {
+    paths = isRemote() ? await window.miks.sendFiles(tabId, local, "tmp") : local;
+  } else {
+    const sent = await Promise.all(files.map((file) => daemon.sendFile(file)));
+    const failed = sent.find((result) => result.error);
+    if (failed) showToast({ title: "Couldn't attach a file", message: failed.error, destructive: true });
+    paths = sent.flatMap((result) => (result.path ? [result.path] : []));
+  }
   return paths.length > 0 ? paths.map(shellEscape).join(" ") + " " : null;
 }
 
