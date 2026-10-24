@@ -190,7 +190,7 @@ export async function serve({
     const viewers = new Map<string, PaneViewer>();
     // And the conversations it's watching, by tab, and the open files.
     const chats = new Map<string, () => void>();
-    const files = new Map<string, () => void>();
+    const files = new Map<string, ReturnType<Workspaces["watchFile"]>>();
 
     const sendPermissions = async () =>
       send({ type: "permissions", app: await permissionsApp(), permissions: await checkPermissions() });
@@ -271,7 +271,7 @@ export async function serve({
         case "watchFile": {
           const { tabId, fileId } = message;
           const key = `${tabId}:${fileId ?? ""}`;
-          files.get(key)?.();
+          files.get(key)?.stop();
           files.set(
             key,
             workspaces.watchFile(tabId, fileId, (file) => send({ type: "file", tabId, ...file })),
@@ -280,10 +280,12 @@ export async function serve({
         }
         case "unwatchFile": {
           const key = `${message.tabId}:${message.fileId ?? ""}`;
-          files.get(key)?.();
+          files.get(key)?.stop();
           files.delete(key);
           return;
         }
+        case "fileUnsaved":
+          return files.get(`${message.tabId}:${message.fileId}`)?.unsaved(message.unsaved);
         case "saveFile": {
           const { tabId, fileId, content, mtime, force } = message;
           void workspaces
@@ -351,7 +353,7 @@ export async function serve({
       sockets.delete(socket);
       for (const [tabId, viewer] of viewers) workspaces.getPane(tabId)?.detach(viewer);
       for (const unwatch of chats.values()) unwatch();
-      for (const unwatch of files.values()) unwatch();
+      for (const watch of files.values()) watch.stop();
       if (stopWhenIdle && sockets.size === 0) onStop?.(false);
     });
   });

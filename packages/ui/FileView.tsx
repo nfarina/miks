@@ -11,13 +11,13 @@ import { tooltip } from "crosswing/modals/popup";
 import { X } from "lucide-react";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon, type FileEvent } from "./daemon";
 import { codemirrorDark } from "./highlighting/codemirrorDark";
 import { codemirrorLight } from "./highlighting/codemirrorLight";
 import { isMarkdown } from "./markdown";
-import { MarkdownView } from "./MarkdownView";
+import { headingPending, MarkdownView } from "./MarkdownView";
 import { autoFocus, getSettings } from "./settings";
 import { terminalScrollbarCSS } from "./TerminalView";
 
@@ -79,6 +79,8 @@ export function FileView({
   function markDirty(value: boolean) {
     dirtyRef.current = value;
     setDirty(value);
+    // Kept open while it has changes, however many more files open.
+    daemon.fileUnsaved(tab.id, file.id, value);
   }
 
   function replaceText(text: string) {
@@ -177,6 +179,21 @@ export function FileView({
     viewRef.current?.dispatch({ effects: compartments.editable.reconfigure(editableExtension(editing)) });
     if (editing) viewRef.current?.focus();
   }, [editing]);
+
+  // Open already, and opened again: a link to one of its headings shows it
+  // rendered, and `miks edit` (or $EDITOR) to edit, any unsaved changes kept.
+  // A layout effect, to see the heading before the preview's own effect takes it.
+  const opened = useRef(file.opened);
+  useLayoutEffect(() => {
+    if (opened.current === file.opened) return;
+    opened.current = file.opened;
+    if (markdown && headingPending(tab.id, file.path)) {
+      showPreview(true);
+    } else if (file.edit && !editing) {
+      showPreview(false);
+      setEditing(true);
+    }
+  }, [file.opened]);
 
   /** Saves, asking first if it changed on disk since. Resolves with whether it's saved. */
   async function save(force = false): Promise<boolean> {

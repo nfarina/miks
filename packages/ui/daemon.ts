@@ -98,7 +98,7 @@ class DaemonClient {
   private readonly listeners = new Set<() => void>();
   private readonly streams = new Map<string, (event: PaneStreamEvent) => void>();
   private readonly chats = new Map<string, (event: ChatEvent) => void>();
-  private readonly files = new Map<string, { tabId: string; fileId: string; handler: (event: FileEvent) => void }>();
+  private readonly files = new Map<string, { tabId: string; fileId: string; handler: (event: FileEvent) => void; unsaved?: boolean }>();
   private readonly saves = new Map<string, { tabId: string; resolve: (result: SaveResult) => void }>();
   private readonly images = new Map<string, (result: ImageResult) => void>();
   private readonly foundPaths = new Map<string, (found: FoundPath[]) => void>();
@@ -130,7 +130,11 @@ class DaemonClient {
 
       this.send({ type: "hello" });
       for (const tabId of this.chats.keys()) this.send({ type: "watchChat", tabId });
-      for (const { tabId, fileId } of this.files.values()) this.send({ type: "watchFile", tabId, fileId });
+      for (const { tabId, fileId, unsaved } of this.files.values()) {
+        this.send({ type: "watchFile", tabId, fileId });
+        // Older daemons pass over messages they don't know.
+        if (unsaved) this.send({ type: "fileUnsaved", tabId, fileId, unsaved });
+      }
       for (const listener of this.connectListeners) listener();
     });
 
@@ -191,6 +195,14 @@ class DaemonClient {
       this.files.delete(key);
       this.send({ type: "unwatchFile", tabId, fileId });
     };
+  }
+
+  /** Tells the daemon whether a file this window watches has changes it hasn't saved, so it's kept open. */
+  fileUnsaved(tabId: string, fileId: string, unsaved: boolean) {
+    const watch = this.files.get(`${tabId}:${fileId}`);
+    if (!watch || !!watch.unsaved === unsaved) return;
+    watch.unsaved = unsaved;
+    this.send({ type: "fileUnsaved", tabId, fileId, unsaved });
   }
 
   /** Saves one of a tab's open files; see `saveFile` in the protocol. One at a time per file. */

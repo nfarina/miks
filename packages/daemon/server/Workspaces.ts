@@ -39,7 +39,19 @@ export type SavedState = {
 export type FileListener = (file: FileContents & { id: string }) => void;
 
 /** A file open in a tab's panel, who's watching it, and what's waiting for it to close. */
-type OpenEntry = { file: OpenFile; listeners: Set<FileListener>; waiters: Set<() => void>; onDisk?: () => void };
+type OpenEntry = {
+  file: OpenFile;
+  listeners: Set<FileListener>;
+  waiters: Set<() => void>;
+  /** The watchers (windows) with changes to it they haven't saved. */
+  unsaved: Set<FileListener>;
+  /** When it last opened or came to the front, as a count: the least recent goes first to make room. */
+  used: number;
+  onDisk?: () => void;
+};
+
+/** A tab's panel holds this many files; past it, opening another closes the one least recently opened that's free to go. */
+const MAX_FILES = 5;
 
 /** Hears a tab's conversation: all of it with `reset`, then what's added. */
 export type ChatListener = (chat: { session: string | null; entries: ChatEntry[]; reset: boolean }) => void;
@@ -90,6 +102,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * (`miks edit --wait`).
    */
   private readonly files = new Map<string, OpenEntry[]>();
+  private fileUses = 0;
   /** The page in each tab's panel (`miks browse`). */
   private readonly pages = new Map<string, OpenPage>();
   /** Each tab's own shell history file's name, kept across restores. */
@@ -616,36 +629,52 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   }
 
   /**
-   * Shows a file in the tab's panel, beside any it had. Open already, it
-   * comes to the front as it is (unsaved changes and all), unless it's to
-   * edit or wait on: then it opens again in its place. With `wait`, resolves
-   * once it's closed (the panel's Done or close, it opening again, or the
-   * tab closing); otherwise at once.
+   * Shows a file in the tab's panel, beside any it had (the least recently
+   * opened of those with nothing unsaved or waiting on them going, past
+   * MAX_FILES). Open already, it comes to the front as it is, unsaved
+   * changes and all, and to edit or wait on, it's now for that, whatever
+   * waited on it before going on. With `wait`, resolves once it's closed
+   * (the panel's Done or close, it opening again, or the tab closing);
+   * otherwise at once.
    */
   openFile(tabId: string, file: string, { edit, wait }: { edit: boolean; wait: boolean }): Promise<void> {
     if (!this.panes.has(tabId)) return Promise.resolve();
 
     const list = this.files.get(tabId) ?? [];
     this.files.set(tabId, list);
-    const index = list.findIndex((open) => open.file.path === file);
-    const already = list[index];
-    if (already && !edit && !wait) {
-      already.file = { ...already.file, opened: (already.file.opened ?? 0) + 1 };
+    const already = list.find((open) => open.file.path === file);
+    if (already) {
+      already.used = ++this.fileUses;
+      if (edit || wait) {
+        for (const resolve of already.waiters) resolve();
+        already.waiters.clear();
+      }
+      already.file = {
+        ...already.file,
+        edit: already.file.edit || edit,
+        wait: edit || wait ? wait : already.file.wait,
+        opened: (already.file.opened ?? 0) + 1,
+      };
       this.emit("change");
-      return Promise.resolve();
+      return wait ? new Promise((resolve) => already.waiters.add(resolve)) : Promise.resolve();
     }
 
+    if (list.length >= MAX_FILES) {
+      const free = list.filter((open) => open.waiters.size === 0 && open.unsaved.size === 0);
+      const oldest = free.sort((a, b) => a.used - b.used)[0];
+      if (oldest) {
+        list.splice(list.indexOf(oldest), 1);
+        this.letGo(oldest);
+      }
+    }
     const open: OpenEntry = {
       file: { id: randomUUID().slice(0, 8), path: file, edit, wait },
       listeners: new Set(),
       waiters: new Set(),
+      unsaved: new Set(),
+      used: ++this.fileUses,
     };
-    if (already) {
-      this.letGo(already);
-      list[index] = open;
-    } else {
-      list.push(open);
-    }
+    list.push(open);
     this.emit("change");
 
     return wait ? new Promise((resolve) => open.waiters.add(resolve)) : Promise.resolve();
@@ -666,10 +695,13 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     return this.cwds.get(tabId) ?? (await this.panes.get(tabId)?.cwd()) ?? null;
   }
 
-  /** Follows an open file: as it is now, then each change on disk, until the returned function is called. */
-  watchFile(tabId: string, fileId: string | undefined, listener: FileListener): () => void {
+  /**
+   * Follows an open file: as it is now, then each change on disk, until
+   * `stop`. `unsaved` is whether this watcher has changes it hasn't saved.
+   */
+  watchFile(tabId: string, fileId: string | undefined, listener: FileListener): { stop: () => void; unsaved: (unsaved: boolean) => void } {
     const open = this.openEntry(tabId, fileId);
-    if (!open) return () => {};
+    if (!open) return { stop: () => {}, unsaved: () => {} };
 
     open.listeners.add(listener);
     this.followFile(tabId, open);
@@ -677,9 +709,13 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       if (this.isOpen(tabId, open) && open.listeners.has(listener)) listener({ id: open.file.id, ...contents });
     });
 
-    return () => {
-      open.listeners.delete(listener);
-      this.followFile(tabId, open);
+    return {
+      stop: () => {
+        open.listeners.delete(listener);
+        open.unsaved.delete(listener);
+        this.followFile(tabId, open);
+      },
+      unsaved: (unsaved) => void (unsaved ? open.unsaved.add(listener) : open.unsaved.delete(listener)),
     };
   }
 
