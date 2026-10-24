@@ -177,7 +177,7 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   upload replaces the app's last; the bucket expires objects after 7 days.
   It was a launchd agent behind `tailscale serve` first (Tailscale's Mac app
   won't serve a folder), which meant a server running on every Mac. Verified
-  (that first version): an iPhone off Wi-Fi installed from the link.
+  both ways: an iPhone installed from each version's link.
 - Miks keeps its Claude Code hooks in `~/.claude/settings.json` itself
   (`packages/app/claudeHooks.ts`, on launch and when the setting changes),
   running a copy of the script in Miks's home so the path is the same for

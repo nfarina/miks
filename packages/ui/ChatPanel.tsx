@@ -923,7 +923,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
           {...tooltip("Attach files", { delay: true })}
           onClick={() => fileInput.current?.click()}
         >
-          <Paperclip size={16} />
+          <Paperclip size={19} />
         </button>
         <input
           ref={fileInput}
@@ -961,7 +961,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
           {...tooltip(dictation.state === "recording" ? "Stop dictating" : "Dictate", { delay: true })}
           onClick={dictation.toggle}
         >
-          {dictation.state === "transcribing" ? <LoaderCircle size={16} /> : dictation.state === "recording" ? <Square size={11} fill="currentColor" /> : <Mic size={16} />}
+          {dictation.state === "transcribing" ? <LoaderCircle size={18} /> : dictation.state === "recording" ? <Square size={11} fill="currentColor" /> : <Mic size={19} />}
         </button>
         {status === "working" && !text ? (
           <button type="button" className="send" {...tooltip("Stop", { delay: true })} onClick={() => sendEscape(tab.id)}>
