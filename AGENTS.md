@@ -164,7 +164,14 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   `controller`, a progress bar tagged 1), and crashed at launch without it. The gateway marks its own page (`<meta name="miks-gateway">`) so a
   browser's connects back to it, and lets the app's origins in
   (`APP_ORIGINS`). `ios/build.sh device "iPad mini"` installs onto a
-  paired device; there's an iPhone Duo simulator.
+  paired device; there's an iPhone Duo simulator. `ios/share.sh` (chatwing's)
+  instead makes an install link to tap in Safari on a device on Tailscale,
+  from anywhere: a development-signed `.ipa` (export method `debugging`;
+  Xcode's team profile lists every device ever paired, so the account needs
+  nothing) with an `itms-services://` manifest, at
+  `https://<this Mac>:8443/<App>/`. Tailscale's Mac app won't serve a folder
+  (sandboxed), so a launchd agent (`local.ios-builds`) runs python3's
+  `http.server` on 127.0.0.1:8442, which `tailscale serve` puts on 8443.
 - Miks keeps its Claude Code hooks in `~/.claude/settings.json` itself
   (`packages/app/claudeHooks.ts`, on launch and when the setting changes),
   running a copy of the script in Miks's home so the path is the same for

@@ -205,8 +205,8 @@ private class Page: UIView, WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo, completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
         guard let link = elementInfo.linkURL else { return completionHandler(nil) }
         let url = Page.fromMac(link)
-        completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
-            var actions = [UIAction(title: "Open in New Tab", image: UIImage(systemName: "plus.square.on.square")) { [weak self] _ in self?.newTab(url) }]
+        completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            var actions = [UIAction(title: "Open in New Tab", image: UIImage(systemName: "plus.square.on.square")) { _ in self?.newTab(url) }]
             if !Page.loopback.contains(url.host() ?? "") {
                 actions.append(UIAction(title: "Open in Safari", image: UIImage(systemName: "safari")) { _ in UIApplication.shared.open(url) })
             }
