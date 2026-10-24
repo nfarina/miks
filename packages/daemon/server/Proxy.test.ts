@@ -5,6 +5,7 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { browseUrl } from "../shared/browse.ts";
+import { connectDaemon } from "../shared/connect.ts";
 import { type Daemon, serve } from "./daemon.ts";
 
 let home: string;
@@ -94,6 +95,19 @@ test("miks browse puts the page in the tab", async () => {
 
   daemon.workspaces.closePage(tabId);
   expect(daemon.workspaces.getState().workspaces[0].tabs[0].page).toBeUndefined();
+});
+
+test("a new tab can open on a page, after the active one", async () => {
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const workspace = daemon.workspaces.getState().workspaces[0];
+  const socket = connectDaemon(socketPath);
+  await new Promise((resolve) => socket.once("open", resolve));
+  socket.send(JSON.stringify({ type: "createTab", workspaceId: workspace.id, url: "localhost:2727/docs" }));
+  await expect.poll(() => daemon.workspaces.getState().workspaces[0].tabs.length).toBe(2);
+  const [first, second] = daemon.workspaces.getState().workspaces[0].tabs;
+  expect(first.id).toBe(workspace.activeTabId);
+  expect(second.page?.url).toBe("http://localhost:2727/docs");
+  socket.close();
 });
 
 test("what miks browse takes for a web address", () => {

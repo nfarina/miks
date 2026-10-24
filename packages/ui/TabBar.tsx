@@ -270,8 +270,12 @@ const StyledTab = styled.div`
       }
     }
 
-    &:hover > .close {
-      opacity: 0.7;
+    /* Only where there's hovering: on a touch screen, WebKit gives a tap
+       that would show something to hover, leaving the click for a second. */
+    @media (hover: hover) {
+      &:hover > .close {
+        opacity: 0.7;
+      }
     }
   }
 

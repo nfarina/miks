@@ -10,7 +10,7 @@ type Listener = (event: any) => void;
  * stands in for BrowseView's `<webview>`, by the same methods and events.
  */
 export class NativePage {
-  private state: PageState;
+  private state: Exclude<PageState, { newTab: string }>;
   private readonly listeners = new Map<string, Set<Listener>>();
   private readonly unsubscribe: () => void;
   private readonly clippers: HTMLElement[] = [];
@@ -71,6 +71,7 @@ export class NativePage {
   }
 
   private update(next: PageState) {
+    if ("newTab" in next) return this.emit("new-window", { url: next.newTab });
     const previous = this.state;
     this.state = next;
     if (next.loading && !previous.loading) this.emit("did-start-loading", {});

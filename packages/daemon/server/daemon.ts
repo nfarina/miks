@@ -213,9 +213,12 @@ export async function serve({
           return workspaces.closeWorkspace(message.workspaceId);
         case "renameWorkspace":
           return workspaces.renameWorkspace(message.workspaceId, message.title);
-        case "createTab":
-          workspaces.newTab(message.workspaceId);
+        case "createTab": {
+          const url = message.url && browseUrl(message.url);
+          // The page after the tab's own broadcast, so it arrives in a tab on screen and opens its panel (ChatPanel).
+          void workspaces.newTab(message.workspaceId).then((tabId) => tabId && url && setImmediate(() => workspaces.openPage(tabId, url)));
           return;
+        }
         case "moveWorkspace":
           return workspaces.moveWorkspace(message.workspaceId, message.index);
         case "moveTab":

@@ -134,6 +134,13 @@ private class Page: UIView, WKNavigationDelegate, WKUIDelegate {
         removeFromSuperview()
     }
 
+    /// A page's link that opens a new window opens a new tab on it (in Miks).
+    private func newTab(_ url: URL) {
+        let event = ["id": id, "newTab": Page.fromMac(url).absoluteString]
+        guard let data = try? JSONSerialization.data(withJSONObject: event), let json = String(data: data, encoding: .utf8) else { return }
+        onState(json)
+    }
+
     private func report(failed: String? = nil) {
         var state: [String: Any] = [
             "id": id,
@@ -186,9 +193,23 @@ private class Page: UIView, WKNavigationDelegate, WKUIDelegate {
         report(failed: error.localizedDescription)
     }
 
-    // A page's new windows open in Safari, as they open in a browser on a Mac.
+    // Not Safari, as on a Mac: its localhost is this device's.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = action.request.url { UIApplication.shared.open(Page.fromMac(url)) }
+        if let url = action.request.url { newTab(url) }
         return nil
+    }
+
+    // Holding a link: a new tab, or Safari where it'd be the same page there.
+    func webView(_ webView: WKWebView, contextMenuConfigurationForElement elementInfo: WKContextMenuElementInfo, completionHandler: @escaping (UIContextMenuConfiguration?) -> Void) {
+        guard let link = elementInfo.linkURL else { return completionHandler(nil) }
+        let url = Page.fromMac(link)
+        completionHandler(UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+            var actions = [UIAction(title: "Open in New Tab", image: UIImage(systemName: "plus.square.on.square")) { [weak self] _ in self?.newTab(url) }]
+            if !Page.loopback.contains(url.host() ?? "") {
+                actions.append(UIAction(title: "Open in Safari", image: UIImage(systemName: "safari")) { _ in UIApplication.shared.open(url) })
+            }
+            actions.append(UIAction(title: "Copy Link", image: UIImage(systemName: "doc.on.doc")) { _ in UIPasteboard.general.url = url })
+            return UIMenu(children: actions)
+        })
     }
 }

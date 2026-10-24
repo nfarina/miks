@@ -155,7 +155,8 @@ export type ClientMessage =
   | { type: "closeWorkspace"; workspaceId: string }
   /** An empty title goes back to following the active tab. */
   | { type: "renameWorkspace"; workspaceId: string; title: string }
-  | { type: "createTab"; workspaceId: string }
+  /** After the active tab; with `url`, showing that page (a page's link that opens a new window, in the iOS app). */
+  | { type: "createTab"; workspaceId: string; url?: string }
   /** Closes the tab's page (`miks browse`). */
   | { type: "closePage"; tabId: string }
   /** Where the tab's page has gone, to restore it there. */

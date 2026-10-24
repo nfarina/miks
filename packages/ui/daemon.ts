@@ -53,8 +53,10 @@ export type MiksBridge = {
 
 export type PageAction = "open" | "frame" | "back" | "forward" | "reload" | "stop" | "focus" | "close";
 
-/** Where one of the app's pages is, as it says whenever any of it changes. */
-export type PageState = { id: string; url: string; title: string; loading: boolean; back: boolean; forward: boolean; failed?: string };
+/** Where one of the app's pages is, as it says whenever any of it changes, or a link of its that opens a new window. */
+export type PageState =
+  | { id: string; url: string; title: string; loading: boolean; back: boolean; forward: boolean; failed?: string }
+  | { id: string; newTab: string };
 
 export type BridgeStatus = {
   connected: boolean;
