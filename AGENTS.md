@@ -168,15 +168,16 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   build, run `ios/share.sh [device]` (chatwing's): it installs directly if
   the device is reachable, else (or if that fails: a sleeping iPhone gave
   "The peer is no longer reachable") makes an install link to tap in
-  Safari on a device on Tailscale, from anywhere, and prints it to pass on:
-  a development-signed `.ipa` (export method `debugging`;
-  Xcode's team profile lists every device ever paired, so the account needs
-  nothing) with an `itms-services://` manifest, at
-  `https://<this Mac>:8443/<App>/`. Tailscale's Mac app won't serve a folder
-  (sandboxed), so a launchd agent (`local.ios-builds`) runs python3's
-  `http.server` on 127.0.0.1:8442, which `tailscale serve` puts on 8443:
-  one server for every app, each in its own folder. Verified: an iPhone
-  off Wi-Fi installed from the link over Tailscale.
+  Safari, from anywhere, and prints it to pass on: a development-signed
+  `.ipa` (export method `debugging`; Xcode's team profile lists every device
+  ever paired, so the account needs nothing) with an `itms-services://`
+  manifest, uploaded to the `ios-builds` R2 bucket (the "Nick Farina"
+  Cloudflare account, by Wrangler's login) and served by `ios/builds/worker.js`
+  at `https://ios-builds.nfarina.com/<App>/`, for every app and Mac. Each
+  upload replaces the app's last; the bucket expires objects after 7 days.
+  It was a launchd agent behind `tailscale serve` first (Tailscale's Mac app
+  won't serve a folder), which meant a server running on every Mac. Verified
+  (that first version): an iPhone off Wi-Fi installed from the link.
 - Miks keeps its Claude Code hooks in `~/.claude/settings.json` itself
   (`packages/app/claudeHooks.ts`, on launch and when the setting changes),
   running a copy of the script in Miks's home so the path is the same for

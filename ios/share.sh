@@ -3,9 +3,9 @@
 #
 # Gets a native build onto one of Nick's devices, wherever it is: installed
 # directly if this Mac can reach it (`build.sh device`), else as a link to
-# tap in Safari on any device on Tailscale, which installs it from anywhere,
-# no cable or Xcode. Either way it goes on devices in the team's development
-# profile: any device that's been paired with Xcode once.
+# tap in Safari, which installs it from anywhere, no cable or Xcode. Either
+# way it goes on devices in the team's development profile: any device
+# that's been paired with Xcode once.
 #
 # Usage:
 #   ios/share.sh                    # the one reachable device, else a link
@@ -13,15 +13,12 @@
 #   ios/share.sh --link             # a link, without trying a device
 #
 # The link: an archive, exported (method "debugging") to an .ipa, beside an
-# install manifest and a page with the itms-services:// link, in
-# ~/Library/Application Support/iOS Builds/<App>/, served at this Mac's
-# Tailscale name on port 8443, one server for every app. iOS installs from a
-# manifest only over HTTPS with a trusted certificate, which Tailscale's is.
-# Tailscale's Mac app can't serve a folder itself ("Path serving is not
-# supported on macOS due to sandbox restrictions"), so a launchd agent
-# (local.ios-builds) runs python3's http.server on 127.0.0.1:8442 and
-# `tailscale serve` puts it on 8443. Both are set up the first time and stay:
-# the agent across reboots, serve in Tailscale's config.
+# install manifest and a page with the itms-services:// link, uploaded to the
+# ios-builds R2 bucket on Nick's Cloudflare account (Wrangler's login) and
+# served at https://ios-builds.nfarina.com/<App>/ by ios/builds/worker.js,
+# one for every app and every Mac. Each upload replaces that app's last, and
+# the bucket deletes anything a week old. iOS installs from a manifest only
+# over HTTPS with a trusted certificate.
 
 set -euo pipefail
 
@@ -48,14 +45,8 @@ SCHEME="$(basename "$PROJECT" .xcodeproj)"
 WORK=build/share.noindex
 ARCHIVE="$WORK/$SCHEME.xcarchive"
 
-ROOT="$HOME/Library/Application Support/iOS Builds"
-OUT="$ROOT/$SCHEME"
-PORT=8443
-LOCAL_PORT=8442
-AGENT=local.ios-builds
-
-TAILSCALE="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
-HOST="$("$TAILSCALE" status --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
+OUT="$WORK/upload"
+BUCKET=ios-builds
 
 echo "Archiving $SCHEME"
 rm -rf "$WORK"
@@ -109,7 +100,7 @@ NAME="$(/usr/libexec/PlistBuddy -c "Print CFBundleDisplayName" "$INFO" 2>/dev/nu
 BUILT="$(date "+%b %-d, %-I:%M %p")"
 # In every URL, so a device never installs a copy it cached from before.
 STAMP="$(date +%s)"
-BASE="https://$HOST:$PORT/$SCHEME"
+BASE="https://ios-builds.nfarina.com/$SCHEME"
 
 mkdir -p "$OUT"
 cp "$WORK/export/$SCHEME.ipa" "$OUT/$SCHEME.ipa"
@@ -164,50 +155,13 @@ cat >"$OUT/index.html" <<EOF
 <p>Built $BUILT on $(hostname -s)</p>
 EOF
 
-# The local server, once: a launchd agent, so it's there after a reboot.
-if ! curl -s -o /dev/null "http://127.0.0.1:$LOCAL_PORT/"; then
-  echo "Starting the builds server (launchd agent $AGENT)"
-  PLIST="$HOME/Library/LaunchAgents/$AGENT.plist"
-  mkdir -p "$(dirname "$PLIST")"
-  cat >"$PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>Label</key>
-	<string>$AGENT</string>
-	<key>ProgramArguments</key>
-	<array>
-		<string>/usr/bin/python3</string>
-		<string>-m</string>
-		<string>http.server</string>
-		<string>$LOCAL_PORT</string>
-		<string>--bind</string>
-		<string>127.0.0.1</string>
-		<string>--directory</string>
-		<string>$ROOT</string>
-	</array>
-	<key>RunAtLoad</key>
-	<true/>
-	<key>KeepAlive</key>
-	<true/>
-</dict>
-</plist>
-EOF
-  launchctl bootout "gui/$(id -u)/$AGENT" 2>/dev/null || true
-  launchctl bootstrap "gui/$(id -u)" "$PLIST"
-  for _ in {1..20}; do
-    curl -s -o /dev/null "http://127.0.0.1:$LOCAL_PORT/" && break
-    sleep 0.25
-  done
-fi
-
-# And on Tailscale, once: serve keeps it in Tailscale's own configuration.
-if ! "$TAILSCALE" serve status 2>/dev/null | grep -q "$HOST:$PORT"; then
-  echo "Serving it on Tailscale at port $PORT"
-  "$TAILSCALE" serve --bg --https="$PORT" "http://127.0.0.1:$LOCAL_PORT" >/dev/null
-fi
+# From builds/, whose wrangler.jsonc names the account.
+echo "Uploading to $BASE/"
+for file in "$SCHEME.ipa:application/octet-stream" "manifest.plist:application/xml" "index.html:text/html; charset=utf-8"; do
+  (cd builds && npx --yes wrangler r2 object put "$BUCKET/$SCHEME/${file%%:*}" \
+    --file "../$OUT/${file%%:*}" --content-type "${file#*:}" --remote >/dev/null)
+done
 
 echo
-echo "Install $NAME $VERSION (open in Safari, on a device on Tailscale):"
+echo "Install $NAME $VERSION (open in Safari on the device):"
 echo "  $BASE/"

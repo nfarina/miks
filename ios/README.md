@@ -15,7 +15,8 @@ full name the setting shows.
 
 - `./build.sh sim`: build for the simulator (no signing).
 - `./build.sh device "iPad mini"`: build and install onto a paired device.
-- `./share.sh`: build it and print a link that installs it from Safari on
-  any of your devices on Tailscale (any device paired with Xcode once).
+- `./share.sh [device]`: install it on a device this Mac can reach, or else
+  print a link that installs it from Safari, anywhere (any device paired
+  with Xcode once), from https://ios-builds.nfarina.com (`builds/`).
 - Settings → Miks: a development server (Vite on a Mac, `yarn dev`) instead
   of the bundle.

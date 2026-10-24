@@ -1,0 +1,11 @@
+// @chatwing
+// The iOS builds ios/share.sh hands out, at https://ios-builds.nfarina.com
+// (worker.js). One for every app.
+{
+  "name": "ios-builds",
+  "account_id": "0a607a0daae512c38bb66f68e5ed5f0b",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  "r2_buckets": [{ "binding": "BUILDS", "bucket_name": "ios-builds" }],
+  "routes": [{ "pattern": "ios-builds.nfarina.com", "custom_domain": true }]
+}
