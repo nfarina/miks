@@ -1,8 +1,11 @@
 # The project is Xcode's JSON format (project.xcproj), which is source: its
 # folders sync with the disk, so it only changes when targets or settings do.
-# Xcode writes per-user state and generated schemes alongside it, which aren't.
+# Xcode writes per-user state alongside it, which isn't. The shared scheme is
+# kept: Xcode Cloud builds only a shared scheme (without one, Integrate →
+# Create Workflow is greyed out).
 *.xcodeproj/xcuserdata/
 *.xcodeproj/xcshareddata/*
+!*.xcodeproj/xcshareddata/xcschemes/
 !*.xcodeproj/xcshareddata/xcodecloud/
 
 # Package.resolved, the exact SPM versions a build was tested against:
