@@ -206,7 +206,17 @@ export async function serve({
 
       switch (message.type) {
         case "hello":
-          return send({ type: "state", state: workspaces.getState() });
+          send({ type: "state", state: workspaces.getState() });
+          for (const [tabId, text] of workspaces.getDrafts()) send({ type: "draft", tabId, text });
+          return;
+        case "draft": {
+          const { tabId, text } = message;
+          workspaces.setDraft(tabId, text);
+          // To the others: the window it came from has it.
+          const out = JSON.stringify({ type: "draft", tabId, text } satisfies DaemonMessage);
+          for (const other of sockets) if (other !== socket && other.readyState === WebSocket.OPEN) other.send(out);
+          return;
+        }
         case "createWorkspace":
           workspaces.createWorkspace(message);
           return;
@@ -415,6 +425,7 @@ function persist(workspaces: Workspaces, statePath: string) {
   };
 
   workspaces.on("change", schedule);
+  workspaces.on("draft", schedule);
   const interval = setInterval(schedule, 30_000);
   interval.unref();
 

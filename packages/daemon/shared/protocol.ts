@@ -264,7 +264,9 @@ export type ClientMessage =
    * base64, into a folder of its own in the daemon's tmpdir under its own
    * name. Answered by `fileSent`. Since protocol 11.
    */
-  | { type: "sendFile"; requestId: string; name: string; data: string };
+  | { type: "sendFile"; requestId: string; name: string; data: string }
+  /** What's written in a tab's chat panel so far, for its other windows (`draft` to them). Since protocol 11. */
+  | { type: "draft"; tabId: string; text: string };
 
 //
 // Daemon → client.
@@ -303,6 +305,8 @@ export type DaemonMessage =
   /** A `transcribe`'s words, or why there are none. */
   | { type: "transcribed"; requestId: string; text?: string; error?: string }
   /** Where a `sendFile`'s file is now, or why it isn't. */
-  | { type: "fileSent"; requestId: string; path?: string; error?: string };
+  | { type: "fileSent"; requestId: string; path?: string; error?: string }
+  /** A tab's draft, as another window has it now (and each one's, after `hello`). */
+  | { type: "draft"; tabId: string; text: string };
 
 // A pane whose program exits simply disappears from the next `state`.

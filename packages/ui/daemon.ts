@@ -114,6 +114,10 @@ class DaemonClient {
   private readonly saves = new Map<string, { tabId: string; resolve: (result: SaveResult) => void }>();
   private readonly images = new Map<string, (result: ImageResult) => void>();
   private readonly foundPaths = new Map<string, (found: FoundPath[]) => void>();
+  /** Each tab's chat panel draft, as the daemon has it (from any window). */
+  private readonly drafts = new Map<string, string>();
+  private readonly draftListeners = new Set<(tabId: string, text: string) => void>();
+  private readonly draftTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** `transcribe`'s and `sendFile`'s, answered alike. */
   private readonly answers = new Map<string, (answer: { text?: string; path?: string; error?: string }) => void>();
   private readonly connectListeners = new Set<() => void>();
@@ -276,6 +280,30 @@ class DaemonClient {
     });
   }
 
+  /** A tab's draft as the daemon last had it, if it said: what another window has written there. */
+  draft(tabId: string): string | undefined {
+    return this.drafts.get(tabId);
+  }
+
+  /** This window's draft, for the others; sent once typing pauses a moment. */
+  setDraft(tabId: string, text: string) {
+    this.drafts.set(tabId, text);
+    clearTimeout(this.draftTimers.get(tabId));
+    this.draftTimers.set(
+      tabId,
+      setTimeout(() => {
+        this.draftTimers.delete(tabId);
+        if (this.speaks(11)) this.send({ type: "draft", tabId, text });
+      }, 300),
+    );
+  }
+
+  /** Hears another window's draft. */
+  onDraft(listener: (tabId: string, text: string) => void): () => void {
+    this.draftListeners.add(listener);
+    return () => void this.draftListeners.delete(listener);
+  }
+
   /** Dictation's words: the audio, to text by Groq on the daemon's Mac (Dictation.ts). */
   async transcribe(audio: Blob): Promise<{ text?: string; error?: string }> {
     return this.ask({ type: "transcribe", requestId: "", audio: await base64(audio), mime: audio.type }, 40_000);
@@ -377,6 +405,10 @@ class DaemonClient {
         const { requestId, ...result } = message;
         return this.images.get(requestId)?.(result);
       }
+      case "draft":
+        this.drafts.set(message.tabId, message.text);
+        for (const listener of this.draftListeners) listener(message.tabId, message.text);
+        return;
       case "transcribed":
       case "fileSent": {
         const { type: _type, requestId, ...result } = message;

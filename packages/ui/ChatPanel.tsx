@@ -57,11 +57,14 @@ const keyOf = (tab: Pick<Tab, "id" | "key">) => tab.key ?? tab.id;
 
 /**
  * What you've started writing in each tab, kept while you look at others and
- * across relaunches and daemon restarts. In this window's storage: a draft is
- * this Mac's, and lost if it can't be kept, nothing worse.
+ * across relaunches and daemon restarts, and the same in every window (a
+ * Mac's, the iOS app's): the daemon keeps it with the tab and hands it on.
+ * Also in this window's storage, for an older daemon, which doesn't.
  */
 const drafts = {
   get(tab: Tab): string {
+    const shared = daemon.draft(tab.id);
+    if (shared !== undefined) return shared;
     try {
       return localStorage.getItem(`ChatPanel:draft:${keyOf(tab)}`) ?? "";
     } catch {
@@ -69,6 +72,11 @@ const drafts = {
     }
   },
   set(tab: Tab, text: string) {
+    drafts.keep(tab, text);
+    daemon.setDraft(tab.id, text);
+  },
+  /** Only here: for one another window wrote. */
+  keep(tab: Tab, text: string) {
     try {
       if (text) localStorage.setItem(`ChatPanel:draft:${keyOf(tab)}`, text);
       else localStorage.removeItem(`ChatPanel:draft:${keyOf(tab)}`);
@@ -697,6 +705,19 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
       leave();
     }
   }
+
+  // Another window's draft, unless you're writing here, where yours goes out next.
+  useEffect(
+    () =>
+      daemon.onDraft((tabId, next) => {
+        if (tabId !== tab.id) return;
+        const field = composerRef.current?.querySelector("textarea");
+        if (field && document.activeElement === field) return;
+        setText(next);
+        drafts.keep(tab, next);
+      }),
+    [tab.id],
+  );
 
   const fileInput = useRef<HTMLInputElement>(null);
   const dictation = useDictation({

@@ -31,7 +31,7 @@ export type SavedState = {
     title: string | null;
     cwd: string;
     activeTab: number;
-    tabs: { cwd: string; claudeSessionId?: string; historyId?: string; keep?: string; page?: string }[];
+    tabs: { cwd: string; claudeSessionId?: string; historyId?: string; keep?: string; page?: string; draft?: string }[];
   }[];
 };
 
@@ -105,6 +105,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   private fileUses = 0;
   /** The page in each tab's panel (`miks browse`). */
   private readonly pages = new Map<string, OpenPage>();
+  private readonly drafts = new Map<string, string>();
   /** Each tab's own shell history file's name, kept across restores. */
   private readonly historyIds = new Map<string, string>();
   /** Each tab's shell's directory, as of the last `pollCwds`. */
@@ -478,6 +479,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
             historyId: this.historyIds.get(tabId),
             keep: this.keeps.get(tabId)?.command,
             page: this.pages.get(tabId)?.url,
+            draft: this.drafts.get(tabId),
           })),
         ),
       })),
@@ -516,6 +518,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
           historyId: tab.historyId,
         });
         if (tabId && tab.page) this.openPage(tabId, tab.page);
+        if (tabId && tab.draft) this.drafts.set(tabId, tab.draft);
       }
       workspace.activeTabId = workspace.tabIds[savedWorkspace.activeTab] ?? workspace.tabIds[0] ?? null;
     }
@@ -770,6 +773,22 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     fs.watchFile(open.file.path, { interval: 500, persistent: false }, open.onDisk);
   }
 
+  /**
+   * What's being written in a tab's chat panel, from whichever window, so
+   * every window (a Mac's, the iOS app's) has it; saved with the tab. Not in
+   * `state`, which would go to every window on every keystroke.
+   */
+  setDraft(tabId: string, text: string) {
+    if (!this.panes.has(tabId)) return;
+    if (text) this.drafts.set(tabId, text);
+    else this.drafts.delete(tabId);
+    this.emit("draft");
+  }
+
+  getDrafts(): [string, string][] {
+    return [...this.drafts];
+  }
+
   /** Shows a web page in the tab's panel, in place of any it had. */
   openPage(tabId: string, url: string, { fill }: { fill?: boolean } = {}) {
     if (!this.panes.has(tabId)) return;
@@ -832,6 +851,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     this.chats.delete(tabId);
     this.closeFiles(tabId);
     this.pages.delete(tabId);
+    this.drafts.delete(tabId);
     this.backgrounds.get(tabId)?.close();
     this.backgrounds.delete(tabId);
     this.cwds.delete(tabId);
