@@ -693,9 +693,14 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     return !!this.files.get(tabId)?.includes(open);
   }
 
-  /** Where the tab's shell is now, not as last polled: a path typed just after a `cd` is from the new folder. */
-  async tabCwd(tabId: string): Promise<string | null> {
-    return (await this.panes.get(tabId)?.cwd()) ?? this.cwds.get(tabId) ?? null;
+  /**
+   * Where the tab's shell is, as last polled; or with `now`, where it is
+   * this moment (an `lsof`), for a path typed just after a `cd`.
+   */
+  async tabCwd(tabId: string, { now = false } = {}): Promise<string | null> {
+    const polled = this.cwds.get(tabId);
+    if (!now && polled) return polled;
+    return (await this.panes.get(tabId)?.cwd()) ?? polled ?? null;
   }
 
   /**

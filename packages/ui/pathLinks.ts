@@ -17,12 +17,15 @@ export function handlePathLinks(terminal: Terminal, tabId: string): IDisposable 
   const lookups = new Map<string, { at: number; found: Promise<FoundPath> }>();
   let hovered: ILink | null = null;
 
-  /** With `fresh`, asks again whatever it knew: what a click opens is what's there now. */
+  /**
+   * With `fresh`, asks again whatever it knew, from where the shell is this
+   * moment: what a click opens is what's there now.
+   */
   function find(tokens: string[], { fresh = false } = {}): Promise<FoundPath[]> {
     const now = Date.now();
     const missing = tokens.filter((token) => fresh || !((lookups.get(token)?.at ?? 0) > now - FRESH_MS));
     if (missing.length > 0) {
-      const found = daemon.findPaths(tabId, missing);
+      const found = daemon.findPaths(tabId, missing, { now: fresh });
       missing.forEach((token, index) => lookups.set(token, { at: now, found: found.then((all) => all[index] ?? null) }));
     }
     return Promise.all(tokens.map((token) => lookups.get(token)!.found));

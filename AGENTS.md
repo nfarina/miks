@@ -405,11 +405,13 @@ resizes); keep it passing.
   each token on the line that looks like a path (absolute, `~/`, `./`,
   `../`, with a `/` in it, or a markdown file's name; any `:line:col` off)
   goes to `findPaths`, which looks for it on the tab's Mac from where its
-  shell is now (`lsof`, not the 2s-old poll). Only what's there is a link,
+  shell was last polled (up to 2s old, so hovering starts no `lsof`, which
+  would be a process per line the mouse crosses). Only what's there is a link,
   underlined only while ⌘ is down: markdown files open in the panel,
   folders in Finder (`showFolder`; a bundle is shown in its folder, not
   opened), only in a Miks window on this Mac, never a remote's or a
-  browser's. The click looks again, so a `cd` just before it counts.
+  browser's. The click looks again, from where the shell is that moment
+  (`now`, an `lsof`), so a `cd` just before it counts.
 
 - `miks browse <url>` (`POST /api/browse`, `Tab.page`) shows a page in the
   panel (`ui/BrowseView.tsx`, a `<webview>`), switching Chat | file | page

@@ -236,7 +236,7 @@ class DaemonClient {
    * Which paths, as a tab's terminal shows them, are there on the daemon's
    * Mac; nothing from an older daemon, which never answers.
    */
-  findPaths(tabId: string, paths: string[]): Promise<FoundPath[]> {
+  findPaths(tabId: string, paths: string[], { now = false } = {}): Promise<FoundPath[]> {
     if (!this.snapshot.connected || !this.speaks(10)) return Promise.resolve(paths.map(() => null));
     const requestId = String(++this.requestCount);
     return new Promise((resolve) => {
@@ -247,7 +247,7 @@ class DaemonClient {
         resolve(found);
       };
       this.foundPaths.set(requestId, answer);
-      this.send({ type: "findPaths", requestId, tabId, paths });
+      this.send({ type: "findPaths", requestId, tabId, paths, now });
     });
   }
 

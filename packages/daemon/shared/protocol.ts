@@ -248,9 +248,11 @@ export type ClientMessage =
   /**
    * Which of these, as written in the tab's terminal, are there on the
    * daemon's Mac: relative to the tab's folder, `~` its home, and any
-   * `:line:column` left off. Answered by `paths`. Since protocol 10.
+   * `:line:column` left off. Answered by `paths`. The folder is the one
+   * last polled (up to 2s old), or with `now`, where the shell is this
+   * moment (an `lsof`: for a click, not every hover). Since protocol 10.
    */
-  | { type: "findPaths"; requestId: string; tabId: string; paths: string[] }
+  | { type: "findPaths"; requestId: string; tabId: string; paths: string[]; now?: boolean }
   /** Shows a folder (absolute) in Finder, on the daemon's Mac. Since protocol 10. */
   | { type: "showFolder"; path: string }
   /**
