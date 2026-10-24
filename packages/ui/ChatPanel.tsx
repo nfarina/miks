@@ -964,7 +964,18 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
           {dictation.state === "transcribing" ? <LoaderCircle size={18} /> : dictation.state === "recording" ? <Square size={11} fill="currentColor" /> : <Mic size={19} />}
         </button>
         {status === "working" && !text ? (
-          <button type="button" className="send" {...tooltip("Stop", { delay: true })} onClick={() => sendEscape(tab.id)}>
+          <button
+            type="button"
+            className="send"
+            {...tooltip("Stop", { delay: true })}
+            onClick={() => sendEscape(tab.id)}
+            // As Send below: the field keeps focus, so the keyboard stays up.
+            onMouseDown={(event) => event.preventDefault()}
+            onTouchEnd={(event) => {
+              event.preventDefault();
+              sendEscape(tab.id);
+            }}
+          >
             <Square size={12} fill="currentColor" />
           </button>
         ) : (
