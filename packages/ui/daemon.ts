@@ -20,6 +20,11 @@ export type MiksBridge = {
   sendClipboardImage(tabId: string): Promise<{ image: boolean; path?: string }>;
   /** The session for this window's `miks browse` pages, through its daemon. */
   browsePartition(): Promise<string>;
+  /** Where there's no `<webview>` (the iOS app), the pages the app shows itself, over this one (ios/Miks/Pages.swift). */
+  pages?: {
+    tell(id: string, action: PageAction, args?: object): void;
+    onState(listener: (state: PageState) => void): Unsubscribe;
+  };
   chooseBrowser(): Promise<string | null>;
   getSettings(): Settings;
   setSettings(changes: Partial<Settings>): void;
@@ -45,6 +50,11 @@ export type MiksBridge = {
     onChange(listener: () => void): Unsubscribe;
   };
 };
+
+export type PageAction = "open" | "frame" | "back" | "forward" | "reload" | "stop" | "focus" | "close";
+
+/** Where one of the app's pages is, as it says whenever any of it changes. */
+export type PageState = { id: string; url: string; title: string; loading: boolean; back: boolean; forward: boolean; failed?: string };
 
 export type BridgeStatus = {
   connected: boolean;

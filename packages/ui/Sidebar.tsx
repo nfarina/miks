@@ -159,10 +159,6 @@ function MacSwitcher() {
       <PopupMenuSeparator />
       <PopupMenuText onClick={() => bridge.select(null)} children="Add a Mac…" />
       <PopupMenuText onClick={() => daemon.runCommand("settings")} children="Settings…" />
-      {/* For now: whether a web view through the Mac's proxy gets the Mac's localhost (ios/Miks/TestBrowser.swift). */}
-      {active && (
-        <PopupMenuText onClick={() => testBrowser(active.host, firstPage())} children="Test browser…" />
-      )}
       {active && <PopupMenuText destructive onClick={() => bridge.remove(active.host)} children={`Remove ${active.name}`} />}
     </PopupMenu>
   ));
@@ -174,16 +170,6 @@ function MacSwitcher() {
       <ChevronDown />
     </StyledMacSwitcher>
   );
-}
-
-/** The first page a tab has open, or the Riot dashboard's address. */
-function firstPage(): string {
-  const tabs = daemon.getSnapshot().state?.workspaces.flatMap((workspace) => workspace.tabs) ?? [];
-  return tabs.find((tab) => tab.page)?.page?.url ?? "http://localhost:2727/";
-}
-
-function testBrowser(host: string, url: string) {
-  (window as any).webkit?.messageHandlers?.default?.postMessage({ plugin: "miks", name: "testBrowser", mac: host.split(":")[0], url });
 }
 
 const StyledMacSwitcher = styled.button`

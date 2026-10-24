@@ -407,6 +407,16 @@ resizes); keep it passing.
   webview keeps its size. The page is saved with its tab, at wherever it has
   navigated to (`pageNavigated`), so a restore reopens it there. Verified with the fake-ssh remote: a page and a
   fetch to another port both came from the remote daemon (by `lsof`).
+  In the iOS app a page is the app's own `WKWebView` (`ios/Miks/Pages.swift`),
+  over the app's at where `BrowseView` leaves room (`ui/nativePage.ts`
+  follows it each frame, and hides it while hidden or under a modal):
+  not under it, since every ancestor's background there would have to be
+  clear. It loads through the gateway, which is the proxy too
+  (`proxyConfigurations`, CONNECT over TLS to port 2741, even for plain
+  http). WebKit never proxies `localhost`, so it loads as `mac.localhost`,
+  which macOS (and so Node) resolves to the Mac itself and Vite allows
+  (`mac.internal` got Vite's "Blocked request"). Plain http needs
+  `NSAllowsArbitraryLoadsInWebContent`. Verified from an iPad.
 - ⌘⇧F (or the tab bar's button beside the panel's) has the panel fill the
   tab, per tab like open or not: CSS over the same PanelLayout (nothing
   remounts, so a page keeps its state), the terminal keeping its full size

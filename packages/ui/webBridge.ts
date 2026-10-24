@@ -7,7 +7,7 @@
 // their agents are doing. Imported first, before anything reads `window.miks`.
 import type { AgentStatus, DaemonMessage } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS, type Settings } from "miks/shared/settings";
-import type { BridgeStatus, Mac, MiksBridge } from "./daemon";
+import type { BridgeStatus, Mac, MiksBridge, PageState } from "./daemon";
 
 /** This device's own settings (the sidebar, the text size), kept in the browser, not the Mac's. */
 const SETTINGS_KEY = "miks-settings";
@@ -79,6 +79,11 @@ async function askApp<T>(name: string, args: object = {}): Promise<T | null> {
 }
 
 let callbacks = 0;
+
+/** Tells the iOS app's plugin something, wanting no answer. */
+function tellApp(name: string, args: object = {}) {
+  (window as any).webkit?.messageHandlers?.default?.postMessage({ plugin: "miks", name, ...args });
+}
 
 /** Whether the iOS app says a hardware keyboard is connected, so focusing brings up no on-screen one. */
 export const hardwareKeyboard = () => keyboardConnected;
@@ -167,6 +172,10 @@ function webBridge(): MiksBridge {
   const settingsListeners = new Set<(settings: Settings) => void>();
   const commandListeners = new Set<(command: string) => void>();
   (window as any).miks_command = (command: string) => commandListeners.forEach((listener) => listener(command));
+  const pageListeners = new Set<(state: PageState) => void>();
+  (window as any).miks_page = (state: PageState) => pageListeners.forEach((listener) => listener(state));
+  // Any left from before a reload are no tab's.
+  tellApp("page", { action: "closeAll" });
   const subscribe = <T>(set: Set<T>, listener: T) => (set.add(listener), () => void set.delete(listener));
 
   let socket: WebSocket | null = null;
@@ -317,7 +326,18 @@ function webBridge(): MiksBridge {
     pathForFile: () => "",
     sendFiles: async () => [],
     sendClipboardImage: async () => ({ image: false }),
-    browsePartition: () => Promise.reject(new Error("Pages open only in Miks on a Mac, for now.")),
+    browsePartition: () => Promise.reject(new Error("Pages open only in Miks, on a Mac or in the iOS app.")),
+    // In the app, which loads each through the gateway of the Mac on screen.
+    pages:
+      !fromGateway && (window as any).webkit?.messageHandlers?.default
+        ? {
+            tell: (id, action, args = {}) => {
+              const [host, port] = (mac ?? "").split(":");
+              tellApp("page", { id, action, ...(action === "open" ? { mac: host, port: Number(port) || GATEWAY_PORT } : {}), ...args });
+            },
+            onState: (listener) => subscribe(pageListeners, listener),
+          }
+        : undefined,
     getSettings: () => settings,
     setSettings: (changes) => {
       local = { ...local, ...changes };

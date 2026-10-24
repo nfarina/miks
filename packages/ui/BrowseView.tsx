@@ -4,9 +4,10 @@ import { tooltip } from "crosswing/modals/popup";
 import { ArrowLeft, ArrowRight, RotateCw, X } from "lucide-react";
 import { browseUrl } from "miks/shared/browse";
 import type { OpenPage, Tab } from "miks/shared/protocol";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon } from "./daemon";
+import { NativePage } from "./nativePage";
 
 /** What of Electron's `<webview>` this uses (its types are Electron's, not the page's). */
 type Webview = HTMLWebViewElement & {
@@ -24,7 +25,9 @@ type Webview = HTMLWebViewElement & {
  * The page `miks browse` put in a tab's panel. It loads through the tab's
  * daemon, as if on its Mac (Electron main gives this window's pages a
  * session whose proxy is the daemon), so in a window on another Mac,
- * `localhost` is that Mac's, on every port.
+ * `localhost` is that Mac's, on every port. In the iOS app, it's the app's
+ * own web view, over this one where `.native` is (nativePage.ts), loading
+ * through the Mac's gateway.
  */
 export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; onTitle: (title: string) => void }) {
   const ref = useRef<Webview>(null);
@@ -37,8 +40,23 @@ export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; o
   // The page it starts on; others are loaded into it, keeping its history.
   const [first] = useState(page.url);
   const ready = useRef(false);
+  const pages = window.miks?.pages;
+  const native = useRef<HTMLDivElement>(null);
+
+  // Before the effect below, which listens to it.
+  useLayoutEffect(() => {
+    if (!pages || !native.current) return;
+    const page = new NativePage(tab.id, native.current, first, pages);
+    ref.current = page as unknown as Webview;
+    ready.current = true;
+    return () => {
+      page.destroy();
+      ref.current = null;
+    };
+  }, []);
 
   useEffect(() => {
+    if (pages) return;
     void window.miks?.browsePartition().then(setPartition, (error) => setFailed(String(error?.message ?? error)));
   }, []);
 
@@ -145,6 +163,7 @@ export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; o
       </div>
       <div className="page">
         {/* A string: React leaves out `true` for an element it doesn't know, and without it a link that opens a new window does nothing. */}
+        {pages && <div className="native" ref={native} />}
         {partition && <webview ref={ref} src={first} partition={partition} allowpopups={"" as unknown as boolean} />}
         {failed && <div className="note">{failed}</div>}
       </div>
@@ -226,7 +245,8 @@ const StyledBrowseView = styled.div`
     position: relative;
     background: #fff;
 
-    > webview {
+    > webview,
+    > .native {
       flex-grow: 1;
     }
 

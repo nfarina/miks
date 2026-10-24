@@ -27,6 +27,13 @@
 	<string>$(MIKS_HOST)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
+	<!-- Plain http in a page's own web view (Pages.swift), as localhost
+	     dev servers are. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
 	<!-- Your Macs are reached on Tailscale, which iOS counts as the local
 	     network when it's on the same Wi-Fi. -->
 	<key>NSLocalNetworkUsageDescription</key>

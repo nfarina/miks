@@ -7,11 +7,13 @@ import GameController
 /// search domain), and gives the full one back for its address.
 /// `hardwareKeyboard` says whether one's connected (and `miks_hardwareKeyboard`
 /// whenever that changes), so the page knows focusing won't bring up the
-/// on-screen keyboard.
+/// on-screen keyboard. `page` is the pages in tabs' panels (Pages.swift).
 class MiksPlugin: WebAppPlugin {
     override var name: String { "miks" }
 
-    override var features: [String: Any] { ["fullName": true, "hardwareKeyboard": true] }
+    override var features: [String: Any] { ["fullName": true, "hardwareKeyboard": true, "pages": true] }
+
+    private lazy var pages = Pages(webApp: webApp) { [weak self] state in self?.sendToPluginListener("page", args: state) }
 
     override init(webApp: WebAppViewController) {
         super.init(webApp: webApp)
@@ -21,6 +23,11 @@ class MiksPlugin: WebAppPlugin {
     }
 
     private var hasHardwareKeyboard: Bool { GCKeyboard.coalesced != nil }
+
+    // The next page starts with no pages of its own.
+    override func webContentProcessDidTerminate() {
+        pages.handle(["action": "closeAll"])
+    }
 
     @objc private func keyboardChanged() {
         sendToPluginListener("hardwareKeyboard", args: hasHardwareKeyboard ? "true" : "false")
@@ -32,11 +39,8 @@ class MiksPlugin: WebAppPlugin {
             guard let callback = body["callback"] as? String else { return false }
             webApp.executeJSCallback(callback, result: ["connected": hasHardwareKeyboard])
             return true
-        case "testBrowser":
-            guard let mac = body["mac"] as? String, let url = body["url"] as? String else { return false }
-            let browser = TestBrowserController(mac: mac, url: url)
-            browser.modalPresentationStyle = .fullScreen
-            webApp.present(browser, animated: true)
+        case "page":
+            pages.handle(body)
             return true
         case "fullName":
             guard let callback = body["callback"] as? String, let host = body["host"] as? String else { return false }
