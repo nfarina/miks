@@ -23,6 +23,7 @@ import { workspaceTitle } from "./status";
 import { StyledTabBar, TabBar } from "./TabBar";
 import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
+import { KeyBar } from "./KeyBar";
 import {
   clearActiveTerminal,
   selectLastCommand,
@@ -149,6 +150,7 @@ export function App() {
         </div>
         <Sidebar workspaces={state.workspaces} activeWorkspaceId={state.activeWorkspaceId} home={state.home} />
       </PanelLayout>
+      <KeyBar />
     </StyledApp>
   );
 }
@@ -157,6 +159,8 @@ export const StyledApp = styled.div`
   position: fixed;
   inset: 0;
   display: flex;
+  /* The key bar, if any, under it all, on the on-screen keyboard. */
+  flex-flow: column;
   background: ${colors.textBackground()};
   color: ${colors.text()};
   font: ${fonts.display({ size: 13 })};
@@ -164,6 +168,7 @@ export const StyledApp = styled.div`
   > .layout {
     flex-grow: 1;
     min-width: 0;
+    min-height: 0;
   }
 
   .main {

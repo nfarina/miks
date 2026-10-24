@@ -156,7 +156,14 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   app's root takes the height above it. On a touch screen nothing takes the
   keyboard on its own (`autoFocus()` in `ui/settings.ts`: focusing brings the
   on-screen keyboard up) unless a hardware one is connected, which the app
-  knows from `GCKeyboard.coalesced` and tells the page. Its keyboard
+  knows from `GCKeyboard.coalesced` and tells the page. While a terminal
+  has the on-screen keyboard, the key bar (`ui/KeyBar.tsx`) sits on it: Esc,
+  Tab, ⇧Tab, Ctrl (`ui/keys.ts`: the next character typed goes as its
+  control key; twice, locked), arrows that repeat while held (`typeKey`, in
+  the program's cursor-key mode) and buried symbols. Its keys act on
+  pointerdown and cancel touchend, so the terminal keeps focus (and the
+  keyboard stays up). Two fingers scroll a terminal as a trackpad does
+  (`ui/wheel.ts`). Its keyboard
   shortcuts are the Mac menu's, from `buildMenu` in `ios/Miks/AppDelegate.swift`
   (keep the two lists alike), sent to the page as `miks_command`, which the
   bridge hands to `onCommand` as Electron's menu does. The

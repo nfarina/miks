@@ -32,35 +32,33 @@ export function handleWheel(terminal: Terminal, send: (data: string) => void): {
   // Fractions of a line carried over to the next event.
   let partial = 0;
 
-  terminal.attachCustomWheelEventHandler((event) => {
+  // Scrolls by `pixels` (down, positive) at a point on the screen; false if
+  // it's xterm.js's own to scroll (the normal screen's scrollback).
+  const scrollBy = (pixels: number, clientX: number, clientY: number, mode: number = WheelEvent.DOM_DELTA_PIXEL): boolean => {
     const tracking = terminal.modes.mouseTrackingMode !== "none";
     const alternate = terminal.buffer.active.type === "alternate";
-    if (event.deltaY === 0 || event.shiftKey || (!tracking && !alternate)) return true;
+    if (pixels === 0 || (!tracking && !alternate)) return false;
 
     const screen = terminal.element?.querySelector(".xterm-screen");
-    if (!screen) return true;
+    if (!screen) return false;
     const rect = screen.getBoundingClientRect();
     const cellHeight = rect.height / terminal.rows;
 
     const lines =
-      event.deltaMode === WheelEvent.DOM_DELTA_LINE
-        ? event.deltaY
-        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-          ? event.deltaY * terminal.rows
-          : event.deltaY / cellHeight;
+      mode === WheelEvent.DOM_DELTA_LINE ? pixels : mode === WheelEvent.DOM_DELTA_PAGE ? pixels * terminal.rows : pixels / cellHeight;
     partial += lines;
     // A change of direction starts over, so the first line back isn't eaten.
     if (Math.sign(partial) !== Math.sign(lines)) partial = lines;
 
     const count = Math.min(Math.trunc(Math.abs(partial)), terminal.rows);
     partial -= Math.trunc(partial);
-    if (count === 0) return false;
+    if (count === 0) return true;
 
-    const up = event.deltaY < 0;
+    const up = pixels < 0;
     let report: string;
     if (tracking) {
-      const col = clamp(Math.floor((event.clientX - rect.left) / (rect.width / terminal.cols)) + 1, 1, terminal.cols);
-      const row = clamp(Math.floor((event.clientY - rect.top) / cellHeight) + 1, 1, terminal.rows);
+      const col = clamp(Math.floor((clientX - rect.left) / (rect.width / terminal.cols)) + 1, 1, terminal.cols);
+      const row = clamp(Math.floor((clientY - rect.top) / cellHeight) + 1, 1, terminal.rows);
       // Wheel up and down are buttons 64 and 65.
       const button = up ? 64 : 65;
       report = sgr
@@ -73,8 +71,51 @@ export function handleWheel(terminal: Terminal, send: (data: string) => void): {
     }
 
     send(report.repeat(count));
-    return false;
+    return true;
+  };
+
+  terminal.attachCustomWheelEventHandler((event) => {
+    if (event.shiftKey) return true;
+    return !scrollBy(event.deltaY, event.clientX, event.clientY, event.deltaMode);
   });
+
+  // Two fingers on a touch screen scroll as a trackpad does: reports to a
+  // full-screen program, or the normal screen's scrollback. One is a tap or
+  // a selection.
+  const element = terminal.element;
+  let lastY: number | null = null;
+  // As `partial`, for the scrollback.
+  let touchPartial = 0;
+  const middle = (touches: TouchList) => ({
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  });
+  const onTouchStart = (event: TouchEvent) => {
+    lastY = event.touches.length === 2 ? middle(event.touches).y : null;
+  };
+  const onTouchMove = (event: TouchEvent) => {
+    if (event.touches.length !== 2 || lastY === null) return;
+    event.preventDefault();
+    const { x, y } = middle(event.touches);
+    // Fingers going up move the content up: further down, as a trackpad's natural scrolling.
+    const pixels = lastY - y;
+    lastY = y;
+    if (!scrollBy(pixels, x, y)) {
+      const screen = terminal.element?.querySelector(".xterm-screen");
+      const cellHeight = screen ? screen.getBoundingClientRect().height / terminal.rows : 16;
+      touchPartial += pixels / cellHeight;
+      const lines = Math.trunc(touchPartial);
+      touchPartial -= lines;
+      if (lines) terminal.scrollLines(lines);
+    }
+  };
+  const onTouchEnd = (event: TouchEvent) => {
+    if (event.touches.length < 2) lastY = null;
+  };
+  element?.addEventListener("touchstart", onTouchStart, { passive: true });
+  element?.addEventListener("touchmove", onTouchMove, { passive: false });
+  element?.addEventListener("touchend", onTouchEnd, { passive: true });
+  element?.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
   return { reset: () => (sgr = false) };
 }
