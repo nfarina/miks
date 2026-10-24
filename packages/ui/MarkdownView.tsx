@@ -4,7 +4,7 @@ import type { OpenFile, Tab } from "miks/shared/protocol";
 import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon, type ImageResult } from "./daemon";
-import { highlightCSS, renderMarkdownDocument, resolveLocalPath, taskListCSS } from "./markdown";
+import { addCopyButtons, copyCode, markdownCSS, renderMarkdownDocument, resolveLocalPath } from "./markdown";
 import { terminalScrollbarCSS } from "./TerminalView";
 
 /**
@@ -73,15 +73,7 @@ export function MarkdownView({
         image.after(waiting);
       }
     }
-    for (const pre of template.content.querySelectorAll("pre")) {
-      const wrapper = document.createElement("div");
-      wrapper.className = "code";
-      pre.replaceWith(wrapper);
-      const button = document.createElement("button");
-      button.className = "copy";
-      button.textContent = "Copy";
-      wrapper.append(pre, button);
-    }
+    addCopyButtons(template.content.querySelectorAll("pre"));
     content.replaceChildren(template.content);
 
     // Opened from a link to one of its headings.
@@ -181,14 +173,7 @@ export function MarkdownView({
 
   function onClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
-    const copy = target.closest("button.copy");
-    if (copy) {
-      const code = copy.parentElement?.querySelector("pre")?.textContent ?? "";
-      window.miks?.copy(code);
-      copy.textContent = "Copied";
-      setTimeout(() => (copy.textContent = "Copy"), 1200);
-      return;
-    }
+    if (copyCode(target)) return;
 
     const link = target.closest("a");
     const href = link?.getAttribute("href");
@@ -386,7 +371,7 @@ const StyledMarkdownView = styled.div`
       margin-top: 4px;
     }
 
-    ${taskListCSS()}
+    ${markdownCSS()}
 
     h1,
     h2,
@@ -441,52 +426,11 @@ const StyledMarkdownView = styled.div`
       font: ${fonts.display({ size: 12, line: "18px" })};
     }
 
-    blockquote {
-      padding-left: 12px;
-      border-left: 3px solid ${colors.separator()};
-      color: ${colors.textSecondary()};
-    }
-
     hr {
-      border: none;
-      border-top: 1px solid ${colors.separator()};
       margin: 20px 0;
     }
 
-    .code {
-      position: relative;
-
-      > pre {
-        margin: 0;
-      }
-
-      > .copy {
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid ${colors.separator()};
-        background: ${colors.textBackground()};
-        color: ${colors.textSecondary()};
-        font: ${fonts.display({ size: 11, line: "16px" })};
-        cursor: pointer;
-        opacity: 0;
-        transition: opacity 0.15s;
-      }
-
-      &:hover > .copy {
-        opacity: 1;
-      }
-    }
-
     pre {
-      background: ${colors.textBackground()};
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid ${colors.separator()};
-      overflow-x: auto;
-      font: ${fonts.displayMono({ size: 12, line: "18px" })};
       ${terminalScrollbarCSS()}
     }
 
@@ -496,36 +440,9 @@ const StyledMarkdownView = styled.div`
       color: ${colors.textSecondary()};
     }
 
-    code:not(pre > code) {
-      padding: 1px 4px;
-      border-radius: 4px;
-      background: ${colors.textBackground()};
-      border: 1px solid ${colors.separator()};
-      overflow-wrap: anywhere;
-      font: ${fonts.displayMono({ size: 12.5, line: "18px" })};
+    th,
+    td {
+      padding: 5px 10px;
     }
-
-    table {
-      border-collapse: collapse;
-      display: block;
-      overflow-x: auto;
-      max-width: 100%;
-      font: ${fonts.display({ size: 13, line: "19px" })};
-
-      th,
-      td {
-        padding: 5px 10px;
-        text-align: left;
-        vertical-align: top;
-        border: 1px solid ${colors.separator()};
-      }
-
-      th {
-        font: ${fonts.displayBold({ size: 13, line: "19px" })};
-        background: ${colors.textBackgroundAlt()};
-      }
-    }
-
-    ${highlightCSS()}
   }
 `;

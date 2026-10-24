@@ -28,7 +28,7 @@ import { padSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { daemon } from "./daemon";
 import { FileView } from "./FileView";
-import { highlightCSS, renderMarkdown, taskListCSS } from "./markdown";
+import { addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
 import { autoFocus, useSettings } from "./settings";
 import {
@@ -765,14 +765,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   // Code's copy buttons, and links (which open in the browser).
   function onClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
-    const copy = target.closest("button.copy");
-    if (copy) {
-      const code = copy.parentElement?.querySelector("pre")?.textContent ?? "";
-      window.miks?.copy(code);
-      copy.textContent = "Copied";
-      setTimeout(() => (copy.textContent = "Copy"), 1200);
-      return;
-    }
+    if (copyCode(target)) return;
     const link = target.closest("a");
     if (link?.href) {
       event.preventDefault();
@@ -949,15 +942,7 @@ function Reply({ text }: { text: string }) {
 
   // A copy button on each block of code.
   useLayoutEffect(() => {
-    for (const pre of ref.current?.querySelectorAll(":scope > pre") ?? []) {
-      const wrapper = document.createElement("div");
-      wrapper.className = "code";
-      pre.replaceWith(wrapper);
-      const button = document.createElement("button");
-      button.className = "copy";
-      button.textContent = "Copy";
-      wrapper.append(pre, button);
-    }
+    addCopyButtons(ref.current?.querySelectorAll<HTMLPreElement>(":scope > pre") ?? []);
   }, [html]);
 
   return <div className="reply" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />;
@@ -1237,7 +1222,7 @@ const StyledChatPanel = styled.div`
         margin: 4px 0;
       }
 
-      ${taskListCSS()}
+      ${markdownCSS()}
 
       h1,
       h2,
@@ -1263,61 +1248,11 @@ const StyledChatPanel = styled.div`
         text-underline-offset: 2px;
       }
 
-      blockquote {
-        padding-left: 12px;
-        border-left: 3px solid ${colors.separator()};
-        color: ${colors.textSecondary()};
-      }
-
       hr {
-        border: none;
-        border-top: 1px solid ${colors.separator()};
         margin: 14px 0;
       }
 
-      > .code {
-        position: relative;
-
-        > pre {
-          margin: 0;
-        }
-
-        > .copy {
-          position: absolute;
-          top: 6px;
-          right: 6px;
-          padding: 2px 8px;
-          border-radius: 6px;
-          border: 1px solid ${colors.separator()};
-          background: ${colors.textBackground()};
-          color: ${colors.textSecondary()};
-          font: ${fonts.display({ size: 11, line: "16px" })};
-          cursor: pointer;
-          opacity: 0;
-          transition: opacity 0.15s;
-        }
-
-        &:hover > .copy {
-          opacity: 1;
-        }
-      }
-
-      pre {
-        background: ${colors.textBackground()};
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid ${colors.separator()};
-        overflow-x: auto;
-        font: ${fonts.displayMono({ size: 12, line: "18px" })};
-      }
-
       code:not(pre > code) {
-        padding: 1px 4px;
-        border-radius: 4px;
-        background: ${colors.textBackground()};
-        border: 1px solid ${colors.separator()};
-        overflow-wrap: anywhere;
-        font: ${fonts.displayMono({ size: 12.5, line: "18px" })};
         /* Blue-violet, so code stands out from the prose around it. */
         color: #5b4fd1;
 
@@ -1326,28 +1261,10 @@ const StyledChatPanel = styled.div`
         }
       }
 
-      table {
-        border-collapse: collapse;
-        display: block;
-        overflow-x: auto;
-        max-width: 100%;
-        font: ${fonts.display({ size: 13, line: "19px" })};
-
-        th,
-        td {
-          padding: 4px 8px;
-          text-align: left;
-          vertical-align: top;
-          border: 1px solid ${colors.separator()};
-        }
-
-        th {
-          font: ${fonts.displayBold({ size: 13, line: "19px" })};
-          background: ${colors.textBackgroundAlt()};
-        }
+      th,
+      td {
+        padding: 4px 8px;
       }
-
-      ${highlightCSS()}
     }
 
     > .tools {
