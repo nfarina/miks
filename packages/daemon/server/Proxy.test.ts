@@ -103,10 +103,9 @@ test("a new tab can open on a page, after the active one", async () => {
   const socket = connectDaemon(socketPath);
   await new Promise((resolve) => socket.once("open", resolve));
   socket.send(JSON.stringify({ type: "createTab", workspaceId: workspace.id, url: "localhost:2727/docs" }));
-  await expect.poll(() => daemon.workspaces.getState().workspaces[0].tabs.length).toBe(2);
-  const [first, second] = daemon.workspaces.getState().workspaces[0].tabs;
-  expect(first.id).toBe(workspace.activeTabId);
-  expect(second.page).toMatchObject({ url: "http://localhost:2727/docs", fill: true });
+  // The page comes just after the tab, so the tab is on screen for it.
+  await expect.poll(() => daemon.workspaces.getState().workspaces[0].tabs[1]?.page).toMatchObject({ url: "http://localhost:2727/docs", fill: true });
+  expect(daemon.workspaces.getState().workspaces[0].tabs[0].id).toBe(workspace.activeTabId);
   socket.close();
 });
 

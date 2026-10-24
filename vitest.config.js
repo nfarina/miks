@@ -20,6 +20,11 @@ export default defineConfig({
           environment: "node",
           include: ["packages/**/*.test.ts"],
           exclude,
+          // Room for a loaded machine (a sync runs several repos' suites at
+          // once): the daemon's tests wait on real shells, polls and lsof, and
+          // expect.poll gives up after a second by default.
+          testTimeout: 30_000,
+          expect: { poll: { timeout: 15_000 } },
         },
       },
     ],

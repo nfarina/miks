@@ -816,13 +816,20 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   }
 
   /** Ends every pane. For tests; the real daemon just exits. */
-  killAll() {
+  /**
+   * Ends every pane, resolving once they've all exited (zsh writes its
+   * history as it goes, into a home a test is about to delete) or `wait`
+   * has passed, for one that ignores the hangup.
+   */
+  killAll(wait = 2000): Promise<void> {
     this.stopping = true;
     for (const chat of this.chats.values()) chat.transcript?.close();
     for (const background of this.backgrounds.values()) background.close();
     for (const tabId of [...this.files.keys()]) this.closeFiles(tabId);
     for (const timer of this.pendingDone.values()) clearTimeout(timer);
+    const exited = [...this.panes.values()].map((pane) => new Promise<void>((resolve) => pane.once("exit", () => resolve())));
     for (const pane of this.panes.values()) pane.kill();
+    return Promise.race([Promise.all(exited).then(() => {}), new Promise<void>((resolve) => setTimeout(resolve, wait).unref())]);
   }
 
   private getTab(id: string): Tab {

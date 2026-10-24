@@ -26,6 +26,18 @@ afterEach(async () => {
   fs.rmSync(home, { recursive: true, force: true });
 });
 
+/**
+ * Ends a pane of a test's own, which the daemon's close doesn't know of, and
+ * waits for it: zsh writes its history into `home` as it exits, and
+ * afterEach deleting `home` meanwhile failed with ENOTEMPTY on a loaded
+ * machine.
+ */
+async function end(pane: Pane) {
+  const exited = new Promise((resolve) => pane.once("exit", resolve));
+  pane.kill();
+  await exited;
+}
+
 test("a new client sees exactly the screen the last one left, plus what happened since", async () => {
   daemon.workspaces.createWorkspace({ cwd: home });
 
@@ -511,7 +523,7 @@ test("zsh reads your startup files, gives ZDOTDIR back, and marks each command",
     expect(output.indexOf("\x1b]133;C\x07")).toBeLessThan(output.indexOf("read: .zshenv"));
     expect(output.lastIndexOf("\x1b]133;A\x07")).toBeGreaterThan(output.indexOf("\x1b]133;D;0\x07"));
   } finally {
-    pane.kill();
+    await end(pane);
   }
 });
 
@@ -526,7 +538,7 @@ test("zsh's history is yours, not saved inside Miks's own folder", async () => {
     await waitFor(() => /\x1b\]133;D;0\x07/.test(output));
     expect(output).toContain(`histfile:${home}/.zsh_history`);
   } finally {
-    pane.kill();
+    await end(pane);
   }
 });
 
@@ -575,7 +587,7 @@ test("in zsh, ⌥← moves back a word", async () => {
     pane.write("X\n");
     await waitFor(() => output.includes("one Xtwo\r\n"));
   } finally {
-    pane.kill();
+    await end(pane);
   }
 });
 
@@ -613,7 +625,7 @@ test("pbcopy in a zsh tab also copies through the terminal, for windows on other
     // Still copied the usual way too, trailing newline and all.
     expect(fs.readFileSync(copied, "utf8")).toBe("two\nlines\n");
   } finally {
-    pane.kill();
+    await end(pane);
   }
 });
 
@@ -632,7 +644,7 @@ test("a zsh tab's own commands come back first on ↑ when it's restored", async
       }
       await waitFor(() => output.includes(until));
     } finally {
-      pane.kill();
+      await end(pane);
     }
   };
 
@@ -745,7 +757,7 @@ test("the miks keep function in zsh registers the command, quoted, then runs it"
     await waitFor(() => output.includes("two words ran-2"));
     expect(received).toEqual(["/api/keep?pane=p1 echo 'two words' ran-2"]);
   } finally {
-    pane.kill();
+    await end(pane);
     server.close();
   }
 });
@@ -799,7 +811,7 @@ test("miks edit --wait: the file opens in the tab's panel, saves, follows the di
     expect(daemon.workspaces.getState().workspaces[0].tabs[0].file).toBeUndefined();
   } finally {
     client.close();
-    pane.kill();
+    await end(pane);
   }
 });
 

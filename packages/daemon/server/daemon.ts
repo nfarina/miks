@@ -392,7 +392,7 @@ export async function serve({
       clearInterval(cwdPoll);
       clearInterval(foregroundPoll);
       await persistence?.final();
-      workspaces.killAll();
+      await workspaces.killAll();
       for (const socket of sockets) socket.terminate();
       wss.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));

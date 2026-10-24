@@ -58,6 +58,10 @@ export class BackgroundTasks extends EventEmitter<{ change: [] }> {
     }
     this.partial = "";
     fs.watchFile(file, { interval: POLL_INTERVAL, persistent: false }, this.changedOnDisk);
+    // The watcher takes its first look at the file in a moment, off this
+    // thread: what's written before then is in that look, so it never sees
+    // it change. On a loaded machine, a test's lines were.
+    void this.read();
   }
 
   /** How many of each are running, or nothing when none are. */

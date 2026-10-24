@@ -4,8 +4,8 @@ import os from "os";
 import path from "path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
-// Several waits in a row, each on a 250ms poll: more than 5s, on a loaded machine.
-vi.setConfig({ testTimeout: 20_000 });
+// Several waits in a row, on a loaded machine.
+vi.setConfig({ testTimeout: 40_000 });
 import { BackgroundTasks } from "./BackgroundTasks.ts";
 import { Transcript } from "./Transcript.ts";
 
@@ -46,9 +46,9 @@ function ended(id: string, status: string): string {
   return `${JSON.stringify({ type: "queue-operation", operation: "enqueue", timestamp: new Date().toISOString(), sessionId: "s", content })}\n`;
 }
 
+// Up to 15s: a shell's end waits on lsof, which takes seconds on a loaded machine.
 async function waitFor(check: () => boolean) {
-  for (let i = 0; i < 100 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(check()).toBe(true);
+  await expect.poll(check, { timeout: 15_000, interval: 50 }).toBe(true);
 }
 
 test("keeps following after the chat panel on the same transcript closes", async () => {
