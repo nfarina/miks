@@ -225,7 +225,7 @@ export function FileView({
 
   /** A link in the preview to another file: it opens beside this one. */
   function openLinked(path: string) {
-    if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) {
+    if (!daemon.speaks(10)) {
       const linked = path.split("/").pop() ?? path;
       showToast({ title: `Couldn't open ${linked}`, message: "This tab's Mac has an older Miks. Update it there to follow links to files." });
       return;
