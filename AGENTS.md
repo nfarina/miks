@@ -65,7 +65,10 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
 - `yarn release <version>` (`scripts/release.ts`) notarizes and publishes a
   GitHub release with `Miks-macos.zip` and `update.json`, the feed
   `packages/app/updates.ts` reads (Electron's autoUpdater, Squirrel.Mac, in
-  `serverType: "json"` mode) from `releases/latest/download/`. Squirrel
+  `serverType: "json"` mode) from `releases/latest/download/`. Notarizing
+  uses notarytool's keychain profile `miks-notary`, which Claude Code's
+  sandbox hides ("No Keychain password item found", though Keychain Access
+  shows it): run the release outside the sandbox. Squirrel
   installs a downloaded update on any quit, and swaps the bundle, so a daemon
   kept running ("Keep terminals running") is left on the old one.
   `MIKS_UPDATE_FEED` points a packaged copy at a test feed; verified that way
