@@ -11,6 +11,7 @@ import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
 import { transcribe } from "./Dictation.ts";
+import { versionReport } from "./Version.ts";
 import { isProxyRequest, proxyConnect, proxyRequest } from "./Proxy.ts";
 import { type SavedState, Workspaces } from "./Workspaces.ts";
 
@@ -86,6 +87,12 @@ export async function serve({
       // How many UIs are connected, so one quitting can tell whether another
       // (the dev build beside Miks.app, say) still needs the daemon.
       return json(res, 200, { ok: true, pid: process.pid, clients: sockets.size, stopWhenIdle });
+    }
+
+    // `miks version`, as text.
+    if (req.method === "GET" && url.pathname === "/api/version") {
+      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+      return res.end(versionReport());
     }
 
     if (req.method === "POST" && url.pathname === "/api/restart") {
@@ -210,6 +217,11 @@ export async function serve({
           // Every tab's, empty ones too: a window that was away (the iOS app,
           // suspended) still has the draft that was sent while it was gone.
           for (const [tabId, text] of workspaces.getDrafts()) send({ type: "draft", tabId, text });
+          return;
+        case "running":
+          return send({ type: "running", requestId: message.requestId, running: workspaces.running() });
+        case "restart":
+          if (onStop) setImmediate(() => onStop(true));
           return;
         case "machineSettings":
           return workspaces.setMachineSettings(message.changes);

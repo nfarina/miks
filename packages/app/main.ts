@@ -7,9 +7,9 @@ import http from "http";
 import path from "path";
 import { connectDaemon as openDaemonSocket } from "miks/shared/connect";
 import { logPath, miksHome, settingsPath as settingsFile, socketPath } from "miks/shared/paths";
-import type { Background } from "miks/shared/protocol";
-import { describeBackground } from "miks/shared/background";
-import { DEFAULT_SETTINGS, displayPath, type Remote, type Settings } from "miks/shared/settings";
+import type { RunningProgram } from "miks/shared/protocol";
+import { describeRunning } from "miks/shared/background";
+import { DEFAULT_SETTINGS, type Remote, type Settings } from "miks/shared/settings";
 import os from "os";
 import type { WebSocket } from "ws";
 import { browsePartition, isBrowsePartition } from "./browse.ts";
@@ -1111,24 +1111,11 @@ function hidePathPrefix(): string {
   return settings.hidePathPrefix;
 }
 
-/**
- * With `restored` (the daemon is stopping but its layout comes back: a
- * restart, or Miks opening again), only what that would lose: programs that
- * won't come back, and ones that will but are mid-task (a Claude turn).
- */
+/** What's running, a line each; with `restored`, only what a restart would lose (describeRunning). */
 async function runningPrograms(socketFile = socketPath(), { restored = false } = {}): Promise<string[]> {
-  type Running = { program: string; cwd: string | null; kept?: boolean; active?: boolean; background?: Background };
   const result = await daemonGet("/api/running", socketFile);
   if (Array.isArray(result?.running)) {
-    return (result.running as Running[])
-      // A daemon from before `kept` comes back with nothing. A resumed
-      // Claude session doesn't start its background work again.
-      .filter(({ kept, active, background }) => !restored || !kept || active || background)
-      .map(({ program, cwd, kept, active, background }) => {
-        const where = cwd ? ` in ${displayPath(cwd, hidePathPrefix(), app.getPath("home"))}` : "";
-        const notes = [restored && kept && active && "mid-task", describeBackground(background)].filter(Boolean);
-        return `${program}${where}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}`;
-      });
+    return describeRunning(result.running as RunningProgram[], { restored, prefix: hidePathPrefix(), home: app.getPath("home") });
   }
 
   // A daemon from before /api/running: all we can say is how many terminals.

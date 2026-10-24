@@ -4,6 +4,7 @@ import { tooltip } from "crosswing/modals/popup";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { ChevronDown, PanelLeft, Plus } from "lucide-react";
+import { describeRunning } from "miks/shared/background";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, useState } from "react";
 import { styled } from "styled-components";
@@ -11,7 +12,7 @@ import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
-import { displayPath, updateSettings, useSettings } from "./settings";
+import { displayPath, getSettings, updateSettings, useSettings } from "./settings";
 import { backgroundSummary, STATUS_LABELS, URGENCY, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
 import { StatusDot } from "./StatusDot";
 
@@ -159,6 +160,7 @@ function MacSwitcher() {
       <PopupMenuSeparator />
       <PopupMenuText onClick={() => bridge.select(null)} children="Add a Mac…" />
       <PopupMenuText onClick={() => daemon.runCommand("settings")} children="Settings…" />
+      {active && <PopupMenuText onClick={() => void restartDaemon(active.name)} children="Restart daemon…" />}
       {active && <PopupMenuText destructive onClick={() => bridge.remove(active.host)} children={`Remove ${active.name}`} />}
     </PopupMenu>
   ));
@@ -170,6 +172,30 @@ function MacSwitcher() {
       <ChevronDown />
     </StyledMacSwitcher>
   );
+}
+
+/**
+ * The Mac app's Restart daemon…, over the socket (the app has nothing else):
+ * every tab comes back, so it asks only about what won't, or would be cut
+ * off mid-task.
+ */
+async function restartDaemon(name: string) {
+  if (!daemon.speaks(11)) {
+    return window.miks?.confirm({ message: `${name}'s Miks can't restart from here`, detail: "Update Miks there and restart its daemon there once.", button: "OK" });
+  }
+  const running = await daemon.running();
+  const lost = describeRunning(running ?? [], { restored: true, prefix: getSettings().hidePathPrefix, home: daemon.getSnapshot().state?.home ?? null });
+  if (lost.length > 0) {
+    const shown = lost.slice(0, 8);
+    const more = lost.length - shown.length;
+    const restart = await window.miks?.confirm({
+      message: `Restart ${name}'s daemon?`,
+      detail: `Every tab comes back, but restarting stops what's running in these:\n\n${shown.join("\n")}${more ? `\nand ${more} more` : ""}`,
+      button: "Restart",
+    });
+    if (!restart) return;
+  }
+  daemon.send({ type: "restart" });
 }
 
 const StyledMacSwitcher = styled.button`

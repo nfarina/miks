@@ -366,6 +366,15 @@ resizes); keep it passing.
   in `state` (every window, every keystroke). A window takes another's
   only while its composer isn't focused, where its own goes out next.
 
+- `miks version` (`/api/version`, `server/Version.ts`): what the daemon
+  runs, from Miks.app's `build.json` (version, commit, build time, written
+  by `build-app.ts`) or, in the repo, its version and checked-out commit;
+  and, read again then, what's installed now if that differs, which it runs
+  only once restarted.
+- The iOS app restarts its Mac's daemon from the Mac switcher (Restart
+  daemon…): `running`, to ask about what a restart loses (`describeRunning`,
+  shared with the Mac app's), then `restart`, over the socket, since the
+  gateway passes only `/ws`.
 - `miks open <file>` and `miks edit [--wait] <file>` show a file in the
   tab's panel (`ui/FileView.tsx`, CodeMirror 6 with `@codemirror/language-data`
   loading each language as needed; chatwing's GitHub themes in

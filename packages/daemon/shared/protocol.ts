@@ -116,6 +116,9 @@ export type Workspace = {
   activeTabId: string | null;
 };
 
+/** A tab's program, for what stopping or restarting the daemon would end (`/api/running`). */
+export type RunningProgram = { program: string; cwd: string | null; kept?: boolean; active?: boolean; background?: Background };
+
 export type DaemonState = {
   /** The daemon's PROTOCOL_VERSION; missing before 2. */
   protocol?: number;
@@ -271,6 +274,10 @@ export type ClientMessage =
    * name. Answered by `fileSent`. Since protocol 11.
    */
   | { type: "sendFile"; requestId: string; name: string; data: string }
+  /** What's running in each tab, as `/api/running` says: answered by `running`. Since protocol 11. */
+  | { type: "running"; requestId: string }
+  /** Restarts the daemon (through launchd), as `/api/restart` does, for a window that has only the socket (the iOS app's). Since protocol 11. */
+  | { type: "restart" }
   /** Changes this daemon's Mac's settings, for every window on it. Since protocol 11. */
   | { type: "machineSettings"; changes: Partial<MachineSettings> }
   /** What's written in a tab's chat panel so far, for its other windows (`draft` to them). Since protocol 11. */
@@ -310,6 +317,8 @@ export type DaemonMessage =
   | { type: "image"; requestId: string; data?: string; mime?: string; mtime?: number; unchanged?: boolean; error?: string }
   /** A `findPaths`'s answer, in its order: each one's absolute path, or null if it isn't there. */
   | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] }
+  /** A `running`'s answer. */
+  | { type: "running"; requestId: string; running: RunningProgram[] }
   /** A `transcribe`'s words, or why there are none. */
   | { type: "transcribed"; requestId: string; text?: string; error?: string }
   /** Where a `sendFile`'s file is now, or why it isn't. */

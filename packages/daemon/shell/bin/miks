@@ -9,6 +9,8 @@
 #                              once you're done with it (Done, or closing it).
 #   miks browse <url>          Shows the page in the tab's panel, loaded from
 #                              this Mac: its localhost, wherever the window is.
+#   miks version               Which Miks the daemon runs, and whether the one
+#                              installed now is another (it needs a restart).
 
 emulate -L zsh
 
@@ -16,12 +18,26 @@ usage() {
   print -u2 "Usage: miks open <file>"
   print -u2 "       miks edit [--wait] <file>"
   print -u2 "       miks browse <url>"
+  print -u2 "       miks version"
   exit 2
 }
 
 mode=$1
-[[ $mode == (open|edit|browse) ]] || usage
+[[ $mode == (open|edit|browse|version) ]] || usage
 shift
+
+if [[ $mode == version ]]; then
+  if [[ ! -S $MIKS_SOCKET ]]; then
+    print -u2 "miks version: only in a Miks tab."
+    exit 1
+  fi
+  # A daemon from before it answers 404.
+  curl -sf -m 5 --unix-socket "$MIKS_SOCKET" "http://miks/api/version" || {
+    print -u2 "miks version: this daemon is from a Miks before miks version."
+    exit 1
+  }
+  exit 0
+fi
 
 if [[ $mode == browse ]]; then
   (( $# == 1 )) || usage

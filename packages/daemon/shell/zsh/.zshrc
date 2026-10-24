@@ -52,13 +52,14 @@ miks() {
     keep) shift; __miks_keep "$@" ;;
     update) __miks_update ;;
     # An executable (../bin/miks), so programs other than your shell can too.
-    open|edit|browse) command miks "$@" ;;
+    open|edit|browse|version) command miks "$@" ;;
     *)
       builtin print -u2 "Usage: miks keep <command> [arguments...]"
       builtin print -u2 "       miks update"
       builtin print -u2 "       miks open <file>"
       builtin print -u2 "       miks edit [--wait] <file>"
       builtin print -u2 "       miks browse <url>"
+      builtin print -u2 "       miks version"
       return 2
       ;;
   esac

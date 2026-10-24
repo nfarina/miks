@@ -76,6 +76,17 @@ export async function buildApp(): Promise<string> {
   }
 
   const appPackage = JSON.parse(fs.readFileSync(path.join(root, "packages/app/package.json"), "utf8"));
+  // Which Miks this is, for `miks version` (server/Version.ts): the commit,
+  // "+changes" with work not committed yet.
+  const git = (...args: string[]) => output("git", ["-C", root, ...args]);
+  fs.writeFileSync(
+    path.join(stage, "build.json"),
+    JSON.stringify({
+      version: appPackage.version,
+      commit: git("rev-parse", "--short", "HEAD") + (git("status", "--porcelain", "--untracked-files=no") ? "+changes" : ""),
+      built: new Date().toISOString(),
+    }),
+  );
   fs.writeFileSync(
     path.join(stage, "package.json"),
     JSON.stringify(
