@@ -34,8 +34,9 @@ export function MarkdownView({
   // Where to stay as the content changes size (images arriving), until
   // you scroll yourself.
   const pinRef = useRef<ScrollPin | null>(null);
-  // Images as last read, shown at once while they're read again.
-  const [images] = useState(() => new Map<string, string>());
+  // Images as last read, by path or URL, shown at once while a file's are
+  // checked again. Only those the file still has.
+  const [images] = useState(() => new Map<string, ShownImage>());
   // Images from the web: how many, and whether you've said to show them
   // (loading one tells its server you're reading this).
   const [webImages, setWebImages] = useState(0);
@@ -58,9 +59,11 @@ export function MarkdownView({
     // Still inert in the template: no image loads from the window's own origin.
     for (const image of template.content.querySelectorAll("img")) {
       const src = image.getAttribute("src") ?? "";
+      image.removeAttribute("srcset");
+      // In the file itself (a badge, often), so there's nothing to fetch.
+      if (/^data:image\//i.test(src)) continue;
       const local = resolveLocalPath(src, file.path);
       image.removeAttribute("src");
-      image.removeAttribute("srcset");
       if (local) image.dataset.path = local;
       else if (/^https?:\/\//i.test(src)) {
         // Until it's shown, its alt text, as a missing one's.
@@ -76,6 +79,9 @@ export function MarkdownView({
     addCopyButtons(template.content.querySelectorAll("pre"));
     content.replaceChildren(template.content);
 
+    const sources = new Set([...content.querySelectorAll<HTMLImageElement>("img[data-path], img[data-url]")].map(imageSource));
+    for (const source of images.keys()) if (!sources.has(source)) images.delete(source);
+
     // Opened from a link to one of its headings.
     const linked = !shown && pendingHeading?.tabId === tab.id && pendingHeading.path === file.path ? pendingHeading.id : null;
     if (!shown) pendingHeading = null;
@@ -84,16 +90,16 @@ export function MarkdownView({
     pinRef.current = heading ? { heading: heading.id, offset: 12 } : pin;
     if (pinRef.current) restorePin(scroller, content, pinRef.current);
     // Each image read once per change, however many times it's shown.
-    const reads = new Map<string, Promise<string | null>>();
+    const reads = new Map<string, Promise<ShownImage | null>>();
     for (const image of content.querySelectorAll<HTMLImageElement>("img[data-path]")) void showImage(image, reads);
     setWebImages(content.querySelectorAll("img[data-url]").length);
     if (showWebRef.current) showWebImages(reads);
   }, [text]);
 
-  function showWebImages(reads?: Map<string, Promise<string | null>>) {
+  function showWebImages(reads?: Map<string, Promise<ShownImage | null>>) {
     showWebRef.current = true;
     setShowWeb(true);
-    const shared = reads ?? new Map<string, Promise<string | null>>();
+    const shared = reads ?? new Map<string, Promise<ShownImage | null>>();
     for (const image of contentRef.current?.querySelectorAll<HTMLImageElement>("img[data-url]") ?? []) void showImage(image, shared);
   }
 
@@ -133,29 +139,29 @@ export function MarkdownView({
 
   /**
    * Reads the image from the file's Mac (or the web, from there), showing
-   * what it had meanwhile. A file's change reads its own images again, but
-   * not the web's.
+   * what it had meanwhile. A file's change checks its own images again
+   * (read again only if they changed), but not the web's.
    */
-  async function showImage(image: HTMLImageElement, reads: Map<string, Promise<string | null>>) {
+  async function showImage(image: HTMLImageElement, reads: Map<string, Promise<ShownImage | null>>) {
     const { path, url } = image.dataset;
-    const source = path ?? url!;
+    const source = imageSource(image);
     // A web image's stand-in goes, for it or (failing) a missing one.
     const shown = () => {
       if (image.nextElementSibling?.matches(".missing.web")) image.nextElementSibling.remove();
       image.hidden = false;
     };
     const before = images.get(source);
-    if (before) image.src = before;
+    if (before) image.src = before.src;
     if (before && url) return shown();
 
     let read = reads.get(source);
     if (!read) {
-      read = path ? readImage(path) : fetchImage(source);
+      read = path ? readImage(path, before) : fetchImage(source);
       reads.set(source, read);
     }
-    const src = await read;
+    const result = await read;
     shown();
-    if (!src) {
+    if (!result) {
       images.delete(source);
       // Its alt text, rather than the browser's broken image.
       const missing = document.createElement("span");
@@ -164,9 +170,9 @@ export function MarkdownView({
       missing.title = `Couldn't show ${source}`;
       return image.replaceWith(missing);
     }
-    images.set(source, src);
-    if (src === before) return;
-    image.src = src;
+    images.set(source, result);
+    if (result.src === before?.src) return;
+    image.src = result.src;
     await image.decode().catch(() => {});
     keepPlace();
   }
@@ -232,20 +238,27 @@ export function MarkdownView({
   );
 }
 
-/** An image on the daemon's Mac, as a data URL, or null if it can't be shown. */
-async function readImage(path: string): Promise<string | null> {
+/** An image as shown: a data URL, and for one on the daemon's Mac, its file's mtime then. */
+type ShownImage = { src: string; mtime?: number };
+
+const imageSource = (image: HTMLImageElement) => image.dataset.path ?? image.dataset.url!;
+
+/** An image on the daemon's Mac, or null if it can't be shown; `known` again if it hasn't changed since. */
+async function readImage(path: string, known?: ShownImage): Promise<ShownImage | null> {
   // Older daemons don't answer, so there's no waiting on them.
-  if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) return null;
-  return dataURL(await daemon.readImage(path));
+  if (!daemon.speaks(10)) return null;
+  const result = await daemon.readImage(path, known?.mtime);
+  return result.unchanged && known ? known : shownImage(result);
 }
 
-/** An image from the web, fetched from the daemon's Mac, as a data URL. */
-async function fetchImage(url: string): Promise<string | null> {
-  if ((daemon.getSnapshot().state?.protocol ?? 0) < 10) return null;
-  return dataURL(await daemon.fetchImage(url));
+/** An image from the web, fetched from the daemon's Mac. */
+async function fetchImage(url: string): Promise<ShownImage | null> {
+  if (!daemon.speaks(10)) return null;
+  return shownImage(await daemon.fetchImage(url));
 }
 
-const dataURL = (result: ImageResult) => (result.data ? `data:${result.mime};base64,${result.data}` : null);
+const shownImage = (result: ImageResult): ShownImage | null =>
+  result.data ? { src: `data:${result.mime};base64,${result.data}`, mtime: result.mtime } : null;
 
 /**
  * Where a link's `#…` goes. Ids get DOMPurify's `user-content-` (as on

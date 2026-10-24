@@ -81,18 +81,26 @@ const IMAGE_TYPES: Record<string, string> = {
 };
 
 /**
- * An image for a markdown file in the panel, base64. Only images, by
- * extension: a file's `![](~/.ssh/id_ed25519)` gets nothing.
+ * An image for a markdown file in the panel, base64. Only images, by the
+ * extension of the file itself, not of a link to it: a file's
+ * `![](~/.ssh/id_ed25519)` gets nothing, nor does a `logo.png` linked to it.
+ * With `known`, the mtime of the copy the window has: the same, and it's
+ * `unchanged` rather than read again.
  */
-export async function readImageForPanel(file: string): Promise<{ data?: string; mime?: string; error?: string }> {
-  const mime = IMAGE_TYPES[file.split(".").pop()?.toLowerCase() ?? ""];
-  if (!mime) return { error: "Not an image." };
-
+export async function readImageForPanel(
+  file: string,
+  known?: number,
+): Promise<{ data?: string; mime?: string; mtime?: number; unchanged?: boolean; error?: string }> {
   try {
-    const stat = await fs.promises.stat(file);
+    const real = await fs.promises.realpath(file);
+    const mime = IMAGE_TYPES[real.split(".").pop()?.toLowerCase() ?? ""];
+    if (!mime) return { error: "Not an image." };
+
+    const stat = await fs.promises.stat(real);
     if (!stat.isFile()) return { error: "Not a file." };
+    if (stat.mtimeMs === known) return { mtime: known, unchanged: true };
     if (stat.size > MAX_IMAGE_SIZE) return { error: "Too big to show (over 10 MB)." };
-    return { data: (await fs.promises.readFile(file)).toString("base64"), mime };
+    return { data: (await fs.promises.readFile(real)).toString("base64"), mime, mtime: stat.mtimeMs };
   } catch (error: any) {
     return { error: error?.code === "ENOENT" ? "No such file." : "Can't be read." };
   }

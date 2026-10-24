@@ -225,8 +225,8 @@ class DaemonClient {
    * Reads an image on the daemon's Mac, for a markdown file in a panel. An
    * older daemon never answers, so it gives up after a while.
    */
-  readImage(path: string): Promise<ImageResult> {
-    return this.requestImage((requestId) => ({ type: "readImage", requestId, path }));
+  readImage(path: string, mtime?: number): Promise<ImageResult> {
+    return this.requestImage((requestId) => ({ type: "readImage", requestId, path, mtime }));
   }
 
   /** Fetches an image from the web, from the daemon's Mac, for a markdown file in a panel. */

@@ -225,9 +225,11 @@ export type ClientMessage =
   /**
    * Reads an image a markdown file in a panel shows (`path` absolute, on the
    * daemon's Mac, and an image by its extension); answered by `image` with
-   * the same `requestId`. Since protocol 10.
+   * the same `requestId`. With `mtime`, the one the window has: if the file's
+   * is the same, `unchanged` comes back rather than the image again. Since
+   * protocol 10.
    */
-  | { type: "readImage"; requestId: string; path: string }
+  | { type: "readImage"; requestId: string; path: string; mtime?: number }
   /**
    * Fetches an image from the web (http or https) for a markdown file in a
    * panel, from the daemon's Mac, once you've said to show them; answered
@@ -273,8 +275,8 @@ export type DaemonMessage =
   | { type: "file"; tabId: string; id: string; content: string | null; mtime: number | null; problem?: FileProblem }
   /** How a `saveFile` went: saved (its new `mtime`), or changed on disk since, or an error. */
   | { type: "fileSaved"; tabId: string; fileId?: string; mtime?: number; changed?: boolean; error?: string }
-  /** A `readImage`'s image, base64, or why there's none. */
-  | { type: "image"; requestId: string; data?: string; mime?: string; error?: string }
+  /** A `readImage`'s (or `fetchImage`'s) image, base64 with its file's `mtime`, or `unchanged`, or why there's none. */
+  | { type: "image"; requestId: string; data?: string; mime?: string; mtime?: number; unchanged?: boolean; error?: string }
   /** A `findPaths`'s answer, in its order: each one's absolute path, or null if it isn't there. */
   | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] };
 
