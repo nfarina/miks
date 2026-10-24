@@ -299,7 +299,7 @@ export async function serve({
         case "readImage": {
           const { requestId } = message;
           if (!path.isAbsolute(message.path)) return send({ type: "image", requestId, error: "The path must be absolute." });
-          void readImageForPanel(message.path).then((image) => send({ type: "image", requestId, ...image }));
+          void readImageForPanel(message.path, message.mtime).then((image) => send({ type: "image", requestId, ...image }));
           return;
         }
         case "fetchImage": {
