@@ -1532,5 +1532,27 @@ const StyledChatPanel = styled.div`
         cursor: default;
       }
     }
+
+    /* Finger-sized, with their icons a size up. */
+    ${coarsePointer(`
+      align-items: center;
+
+      > .tool,
+      > .send {
+        width: 40px;
+        height: 40px;
+        border-radius: 20px;
+
+        > svg {
+          width: 22px;
+          height: 22px;
+        }
+      }
+
+      > .tool[data-state="recording"] > svg {
+        width: 14px;
+        height: 14px;
+      }
+    `)}
   }
 `;
