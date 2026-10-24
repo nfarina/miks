@@ -5,6 +5,7 @@
 import type { IDisposable, ILink, Terminal } from "@xterm/xterm";
 import { daemon, type FoundPath, isRemote } from "./daemon";
 import { isMarkdown } from "./markdown";
+import { DEVICE_SETTINGS } from "./settings";
 
 /** What could be a path: a run of anything but spaces, quotes, brackets and markdown's `*`. */
 const TOKEN = /[^\s'"`()[\]{}<>|;,*]+/g;
@@ -44,7 +45,7 @@ export function handlePathLinks(terminal: Terminal, tabId: string): IDisposable 
         const links: ILink[] = [];
         tokens.forEach(({ text, index }, i) => {
           const path = found[i];
-          if (!path || !(path.folder ? !isRemote() : isMarkdown(path.path))) return;
+          if (!isLinked(path)) return;
           const first = line.cells[index];
           const last = line.cells[index + text.length - 1];
           const link: ILink = {
@@ -86,6 +87,15 @@ export function handlePathLinks(terminal: Terminal, tabId: string): IDisposable 
       window.removeEventListener("keyup", onKey, true);
     },
   };
+}
+
+/**
+ * Markdown files, and folders in Finder only where Finder is: a Miks window
+ * on this Mac, not a remote's or a browser's (an iPad's, through the gateway).
+ */
+function isLinked(path: FoundPath): path is NonNullable<FoundPath> {
+  if (!path) return false;
+  return path.folder ? !DEVICE_SETTINGS && !isRemote() : isMarkdown(path.path);
 }
 
 /** Shows a link as one only while ⌘ is down (xterm.js redraws as these change). */

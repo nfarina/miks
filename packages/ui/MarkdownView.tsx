@@ -213,7 +213,7 @@ export function MarkdownView({
 
   return (
     <>
-      {webImages > 0 && !showWeb && (daemon.getSnapshot().state?.protocol ?? 0) >= 10 && (
+      {webImages > 0 && !showWeb && daemon.speaks(10) && (
         <StyledWebImages>
           <span>
             {webImages === 1 ? "An image" : `${webImages} images`} from the web {webImages === 1 ? "isn't" : "aren't"} shown.

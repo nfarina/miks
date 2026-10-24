@@ -106,6 +106,8 @@ class DaemonClient {
   private readonly commandListeners = new Set<(command: string) => void>();
   private readonly permissionListeners = new Set<(event: PermissionsEvent) => void>();
   private readonly bridge: MiksBridge | undefined = window.miks;
+  /** Not crypto.randomUUID(), which a page that isn't a secure context (plain http) doesn't have. */
+  private requestCount = 0;
 
   constructor() {
     if (!this.bridge) {
@@ -205,8 +207,8 @@ class DaemonClient {
    * Mac; nothing from an older daemon, which never answers.
    */
   findPaths(tabId: string, paths: string[]): Promise<FoundPath[]> {
-    if (!this.snapshot.connected || (this.snapshot.state?.protocol ?? 0) < 10) return Promise.resolve(paths.map(() => null));
-    const requestId = crypto.randomUUID();
+    if (!this.snapshot.connected || !this.speaks(10)) return Promise.resolve(paths.map(() => null));
+    const requestId = String(++this.requestCount);
     return new Promise((resolve) => {
       const timeout = setTimeout(() => answer(paths.map(() => null)), 5_000);
       const answer = (found: FoundPath[]) => {
@@ -234,7 +236,7 @@ class DaemonClient {
 
   private requestImage(message: (requestId: string) => ClientMessage): Promise<ImageResult> {
     if (!this.snapshot.connected) return Promise.resolve({ error: "Not connected to the daemon." });
-    const requestId = crypto.randomUUID();
+    const requestId = String(++this.requestCount);
     return new Promise((resolve) => {
       // Fetching waits on the web for up to 15s, so a little longer than that.
       const timeout = setTimeout(() => answer({ error: "The daemon didn't answer." }), 20_000);
@@ -246,6 +248,11 @@ class DaemonClient {
       this.images.set(requestId, answer);
       this.send(message(requestId));
     });
+  }
+
+  /** Whether the daemon is at least this PROTOCOL_VERSION. */
+  speaks(version: number): boolean {
+    return (this.snapshot.state?.protocol ?? 0) >= version;
   }
 
   /** Called on every (re)connection, which is when terminals must attach. */
