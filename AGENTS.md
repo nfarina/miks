@@ -361,7 +361,7 @@ resizes); keep it passing.
   strings (the picker offers Take Photo).
   A tab's draft is every window's: each sends its own (`draft`, once
   typing pauses 300ms), and the daemon keeps it with the tab (saved in
-  `state.json`), hands it to the others and to each window's `hello`, never
+  `state.json`), hands it to the others and, every tab's, empty ones too (a window that was away missed the emptying), to each window's `hello`; never
   in `state` (every window, every keystroke). A window takes another's
   only while its composer isn't focused, where its own goes out next.
 

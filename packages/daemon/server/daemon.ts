@@ -207,6 +207,8 @@ export async function serve({
       switch (message.type) {
         case "hello":
           send({ type: "state", state: workspaces.getState() });
+          // Every tab's, empty ones too: a window that was away (the iOS app,
+          // suspended) still has the draft that was sent while it was gone.
           for (const [tabId, text] of workspaces.getDrafts()) send({ type: "draft", tabId, text });
           return;
         case "draft": {

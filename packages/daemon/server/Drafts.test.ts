@@ -39,15 +39,31 @@ test("a draft goes to every other window, and to one that connects later", async
   const tabId = daemon.workspaces.getState().workspaces[0].activeTabId!;
   const mac = await window();
   const phone = await window();
+  // Each hears of every tab's on hello, none written yet.
+  await expect.poll(() => phone.drafts).toEqual([{ tabId, text: "" }]);
 
   mac.socket.send(JSON.stringify({ type: "draft", tabId, text: "Half a thought" }));
-  await expect.poll(() => phone.drafts).toEqual([{ tabId, text: "Half a thought" }]);
+  await expect.poll(() => phone.drafts.at(-1)).toEqual({ tabId, text: "Half a thought" });
   // Not back to the window it came from.
-  expect(mac.drafts).toEqual([]);
+  expect(mac.drafts).toEqual([{ tabId, text: "" }]);
 
   const later = await window();
   await expect.poll(() => later.drafts).toEqual([{ tabId, text: "Half a thought" }]);
   expect((await daemon.workspaces.save()).workspaces[0].tabs[0].draft).toBe("Half a thought");
 
   for (const each of [mac, phone, later]) each.socket.close();
+});
+
+test("a window that was away hears that a draft was sent (emptied) while it was gone", async () => {
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const tabId = daemon.workspaces.getState().workspaces[0].activeTabId!;
+  const mac = await window();
+  mac.socket.send(JSON.stringify({ type: "draft", tabId, text: "Run the tests" }));
+  await expect.poll(() => daemon.workspaces.getDrafts()).toEqual([[tabId, "Run the tests"]]);
+  mac.socket.send(JSON.stringify({ type: "draft", tabId, text: "" }));
+  await expect.poll(() => daemon.workspaces.getDrafts()).toEqual([[tabId, ""]]);
+
+  const phone = await window();
+  await expect.poll(() => phone.drafts).toEqual([{ tabId, text: "" }]);
+  for (const each of [mac, phone]) each.socket.close();
 });

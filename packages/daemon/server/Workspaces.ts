@@ -785,8 +785,9 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     this.emit("draft");
   }
 
+  /** Every tab's draft, "" for one with none. */
   getDrafts(): [string, string][] {
-    return [...this.drafts];
+    return [...this.panes.keys()].map((tabId) => [tabId, this.drafts.get(tabId) ?? ""]);
   }
 
   /** Shows a web page in the tab's panel, in place of any it had. */
