@@ -1102,6 +1102,15 @@ async function stopDaemonForQuit(): Promise<boolean> {
 }
 
 /** "claude in sage", one per program in front of a shell. */
+/** This Mac's, which its daemon keeps for every window (machine.json); settings.json's before that. */
+function hidePathPrefix(): string {
+  try {
+    const prefix = JSON.parse(fs.readFileSync(path.join(miksHome(), "machine.json"), "utf8")).hidePathPrefix;
+    if (typeof prefix === "string") return prefix;
+  } catch {}
+  return settings.hidePathPrefix;
+}
+
 /**
  * With `restored` (the daemon is stopping but its layout comes back: a
  * restart, or Miks opening again), only what that would lose: programs that
@@ -1116,7 +1125,7 @@ async function runningPrograms(socketFile = socketPath(), { restored = false } =
       // Claude session doesn't start its background work again.
       .filter(({ kept, active, background }) => !restored || !kept || active || background)
       .map(({ program, cwd, kept, active, background }) => {
-        const where = cwd ? ` in ${displayPath(cwd, settings.hidePathPrefix, app.getPath("home"))}` : "";
+        const where = cwd ? ` in ${displayPath(cwd, hidePathPrefix(), app.getPath("home"))}` : "";
         const notes = [restored && kept && active && "mid-task", describeBackground(background)].filter(Boolean);
         return `${program}${where}${notes.length > 0 ? ` (${notes.join(", ")})` : ""}`;
       });

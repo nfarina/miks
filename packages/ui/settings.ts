@@ -1,19 +1,37 @@
 // The app's settings, as the main process keeps them (packages/app/main.ts),
 // live in every window: a change in Settings shows up everywhere at once.
+// The machine's ones (MACHINE_SETTINGS) come from the window's daemon, which
+// keeps them for every window on its Mac, a remote's and the iOS app's too.
 import { COARSE_POINTER_QUERY } from "crosswing/host/pointer";
-import { DEFAULT_SETTINGS, type Settings } from "miks/shared/settings";
+import { DEFAULT_SETTINGS, MACHINE_SETTINGS, type MachineSettings, type Settings } from "miks/shared/settings";
 import { useSyncExternalStore } from "react";
+import { daemon } from "./daemon";
 import { hardwareKeyboard } from "./webBridge";
 
 export { displayPath } from "miks/shared/settings";
 
 const bridge = window.miks;
 const listeners = new Set<() => void>();
-let current: Settings = bridge?.getSettings() ?? DEFAULT_SETTINGS;
+let own: Settings = bridge?.getSettings() ?? DEFAULT_SETTINGS;
+let machine: MachineSettings | undefined;
+let current: Settings = own;
+
+function refresh() {
+  current = machine ? { ...own, ...machine } : own;
+  for (const listener of listeners) listener();
+}
 
 bridge?.onSettings((settings) => {
-  current = settings;
-  for (const listener of listeners) listener();
+  own = settings;
+  refresh();
+});
+
+// Every state has them, so only when they've changed.
+daemon.subscribe(() => {
+  const next = daemon.getSnapshot().state?.machine;
+  if (next === machine || (next && machine && MACHINE_SETTINGS.every((key) => next[key] === machine![key]))) return;
+  machine = next;
+  refresh();
 });
 
 export function getSettings(): Settings {
@@ -21,7 +39,19 @@ export function getSettings(): Settings {
 }
 
 export function updateSettings(changes: Partial<Settings>) {
-  bridge?.setSettings(changes);
+  // The machine's to its daemon, unless it's older than that.
+  const machineChanges: Partial<Record<string, unknown>> = {};
+  const rest: Partial<Record<string, unknown>> = { ...changes };
+  if (daemon.speaks(11)) {
+    for (const key of MACHINE_SETTINGS) {
+      if (key in changes) {
+        machineChanges[key] = changes[key];
+        delete rest[key];
+      }
+    }
+  }
+  if (Object.keys(machineChanges).length > 0) daemon.send({ type: "machineSettings", changes: machineChanges as Partial<MachineSettings> });
+  if (Object.keys(rest).length > 0) bridge?.setSettings(rest as Partial<Settings>);
 }
 
 export function useSettings(): Settings {

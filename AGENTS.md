@@ -110,7 +110,7 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   at `MIKS_HOME="/tmp/fh/Library/Application Support/Miks"`.
 - Your other devices on Tailscale (Settings → Remotes → Open from your other
   devices, `tailnetAccess`): the daemon's gateway (`server/Gateway.ts`, started
-  in `server/main.ts`, which follows `settings.json`) serves the built UI
+  in `server/main.ts`, which follows the Mac's `machine.json`) serves the built UI
   (`packages/ui/dist`) and pipes `/ws` to the socket, on port 2741 of this
   Mac's Tailscale addresses only. It lets in only devices `tailscale whois`
   says are signed in as this Mac's owner (`UserProfile.ID`, vs `status`'s
@@ -459,6 +459,12 @@ resizes); keep it passing.
 - Settings (`miks/shared/settings`) live in `settings.json`, owned by the
   Electron main process and pushed to every window; not localStorage, which
   is per origin, so the dev build and Miks.app would each have their own.
+  A Mac's own (`MACHINE_SETTINGS`: `tailnetAccess`, `hidePathPrefix`) are
+  its daemon's instead, in `machine.json` (seeded from `settings.json` the
+  first time), in `state.machine` for every window on it and changed by any
+  of them (`machineSettings`): a window on another Mac turns on that Mac's
+  gateway and shows its prefix, and the iOS app needn't set its own. Not in
+  `settings.json`, which main writes back whole on any change.
   Settings (⌘,) is a crosswing dialog; a dialog must take focus from the
   terminal, or keys (Escape included) go to the shell behind it.
 - In dev, `window.miksCommand("<name>")` runs a menu command from DevTools,

@@ -211,6 +211,8 @@ export async function serve({
           // suspended) still has the draft that was sent while it was gone.
           for (const [tabId, text] of workspaces.getDrafts()) send({ type: "draft", tabId, text });
           return;
+        case "machineSettings":
+          return workspaces.setMachineSettings(message.changes);
         case "draft": {
           const { tabId, text } = message;
           workspaces.setDraft(tabId, text);

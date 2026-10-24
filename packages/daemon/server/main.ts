@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
-import { logPath, settingsPath, socketPath, statePath } from "../shared/paths.ts";
+import { logPath, socketPath, statePath } from "../shared/paths.ts";
 import { serve } from "./daemon.ts";
 import { Gateway } from "./Gateway.ts";
 
@@ -57,15 +57,10 @@ if (command === "serve") {
     uiDir: path.resolve(import.meta.dirname, "../../ui/dist"),
   });
   gateway.on("change", () => daemon.workspaces.setGateway(gateway.state));
-  const followSettings = () => {
-    let enabled = false;
-    try {
-      enabled = JSON.parse(fs.readFileSync(settingsPath(), "utf8")).tailnetAccess === true;
-    } catch {}
-    gateway.setEnabled(enabled);
-  };
+  // As this Mac's settings say (machine.json), which any window on this daemon changes.
+  const followSettings = () => gateway.setEnabled(daemon.workspaces.getMachineSettings().tailnetAccess);
   followSettings();
-  fs.watchFile(settingsPath(), { interval: 1000, persistent: false }, followSettings);
+  daemon.workspaces.on("machine", followSettings);
 
   log(`Listening on ${socketPath()} (pid ${process.pid}).`);
 

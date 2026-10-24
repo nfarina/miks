@@ -40,6 +40,14 @@ export type Settings = {
   tailnetAccess: boolean;
 };
 
+/**
+ * The ones a Mac keeps for every window on its daemon (another Mac's, the
+ * iOS app's), in `machine.json`, rather than each window's own: whether its
+ * gateway runs, and what its directories leave off.
+ */
+export const MACHINE_SETTINGS = ["hidePathPrefix", "tailnetAccess"] as const;
+export type MachineSettings = Pick<Settings, (typeof MACHINE_SETTINGS)[number]>;
+
 export const DEFAULT_SETTINGS: Settings = {
   fontSize: 13,
   hidePathPrefix: "",

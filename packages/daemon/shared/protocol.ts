@@ -2,6 +2,8 @@
 // daemon over a WebSocket on its Unix socket, one JSON message per frame.
 // This file is the only edge between the daemon and the UI.
 
+import type { MachineSettings } from "./settings.ts";
+
 /**
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
@@ -123,6 +125,8 @@ export type DaemonState = {
   activeWorkspaceId: string | null;
   /** Its gateway for your other devices on Tailscale, while it's turned on. */
   gateway?: GatewayState;
+  /** Its Mac's settings for every window on it (`machine.json`). Since protocol 11. */
+  machine?: MachineSettings;
 };
 
 /** Where your other devices open Miks (a browser, on Tailscale), or why they can't. */
@@ -267,6 +271,8 @@ export type ClientMessage =
    * name. Answered by `fileSent`. Since protocol 11.
    */
   | { type: "sendFile"; requestId: string; name: string; data: string }
+  /** Changes this daemon's Mac's settings, for every window on it. Since protocol 11. */
+  | { type: "machineSettings"; changes: Partial<MachineSettings> }
   /** What's written in a tab's chat panel so far, for its other windows (`draft` to them). Since protocol 11. */
   | { type: "draft"; tabId: string; text: string };
 

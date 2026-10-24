@@ -190,7 +190,9 @@ function AdvancedSettings() {
       <label className="field">
         <div className="content">
           <div className="label">Hide path prefix</div>
-          <div className="detail">Left off directories in the sidebar, so ~/Code/sage shows as sage.</div>
+          <div className="detail">
+            Left off directories in the sidebar, so ~/Code/sage shows as sage. Kept on the Mac, for every window and device on it.
+          </div>
         </div>
         <TextInput newStyle placeholder="~/Code/" {...pathPrefix.props} />
       </label>
@@ -324,20 +326,22 @@ const StyledPermissions = styled.div`
 const REMOTE_COLORS = ["#3b82f6", "#e5734a", "#22a06b", "#9b5de5", "#d4a20b", "#e0567a"];
 
 /**
- * The other way around: this Mac's terminals, from your other devices on
- * Tailscale (an iPad, a phone), in a browser. This Mac's own daemon only, so
- * not in a window on another Mac.
+ * The other way around: the window's Mac's terminals, from your other
+ * devices on Tailscale (an iPad, a phone). The setting is that Mac's
+ * (`machine.json`), so a window on another Mac turns on that one's, if its
+ * Miks is new enough to have it.
  */
 function TailnetAccess() {
   const { tailnetAccess } = useSettings();
   const { state } = useDaemon();
-  if (useTarget()) return null;
+  const target = useTarget();
+  if (target && !state?.machine) return null;
   const gateway = state?.gateway;
 
   return (
     <SeparatorLayout bordered>
       <LabeledToggle
-        label="Open from your other devices"
+        label={target ? `Open ${target.name} from your other devices` : "Open from your other devices"}
         detail="Your iPad or phone can use Miks in a browser, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
         on={tailnetAccess}
         onClick={() => updateSettings({ tailnetAccess: !tailnetAccess })}

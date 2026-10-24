@@ -19,6 +19,8 @@ import { type FileContents, readForPanel, writeFromPanel } from "./Files.ts";
 import { Pane } from "./Pane.ts";
 import { BackgroundTasks } from "./BackgroundTasks.ts";
 import { Transcript } from "./Transcript.ts";
+import type { MachineSettings } from "../shared/settings.ts";
+import { loadMachineSettings, only, saveMachineSettings } from "./MachineSettings.ts";
 
 /** What survives a daemon restart, in `state.json`. */
 /** How long a finished turn waits for its session to end before it's `done`. */
@@ -69,7 +71,7 @@ type WorkspaceRecord = {
  * the agents in those panes are doing. Emits `change` after any mutation that
  * clients should hear about.
  */
-export class Workspaces extends EventEmitter<{ change: [] }> {
+export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [] }> {
   private readonly workspaces: WorkspaceRecord[] = [];
   private activeWorkspaceId: string | null = null;
   private readonly panes = new Map<string, Pane>();
@@ -84,6 +86,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   private readonly keeps = new Map<string, { command: string; seenRunning: boolean }>();
   /** The gateway for your other devices on Tailscale, as the UI shows it. */
   private gateway: GatewayState | undefined;
+  private machine: MachineSettings;
   /** What each tab's Claude session has running in the background. */
   private readonly backgrounds = new Map<string, BackgroundTasks>();
   /** A finished turn waits a moment before it's `done` (see applyHook). */
@@ -132,6 +135,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
     this.socketPath = socketPath;
     this.command = command;
     this.claudeCommand = claudeCommand;
+    this.machine = loadMachineSettings(path.dirname(socketPath));
   }
 
   getState(): DaemonState {
@@ -140,6 +144,7 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
       home: os.homedir(),
       activeWorkspaceId: this.activeWorkspaceId,
       gateway: this.gateway,
+      machine: this.machine,
       workspaces: this.workspaces.map((workspace) => ({
         id: workspace.id,
         title: workspace.title,
@@ -439,6 +444,20 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
    * it yourself there's nothing new to see. Only the change from spinning to
    * ✳ counts, never a ✳ on its own, which can trail a prompt just submitted.
    */
+  getMachineSettings(): MachineSettings {
+    return this.machine;
+  }
+
+  /** From any window on this daemon: this Mac's, kept for all of them. */
+  setMachineSettings(changes: Partial<MachineSettings>) {
+    this.machine = { ...this.machine, ...only(changes) };
+    try {
+      saveMachineSettings(path.dirname(this.socketPath), this.machine);
+    } catch {}
+    this.emit("machine");
+    this.emit("change");
+  }
+
   setGateway(gateway: GatewayState | undefined) {
     this.gateway = gateway;
     this.emit("change");
