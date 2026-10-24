@@ -2,6 +2,7 @@
 // highlighted. As chatwing renders it (its db/markdown.ts), for the
 // languages Claude writes here.
 import { colors } from "crosswing/colors";
+import { fonts } from "crosswing/fonts";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/core";
 import bash from "highlight.js/lib/languages/bash";
@@ -137,6 +138,117 @@ export function resolveLocalPath(href: string, from: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** A Copy button on each of these blocks of code, which `copyCode` makes work. */
+export function addCopyButtons(blocks: Iterable<HTMLPreElement>) {
+  for (const pre of [...blocks]) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "code";
+    pre.replaceWith(wrapper);
+    const button = document.createElement("button");
+    button.className = "copy";
+    button.textContent = "Copy";
+    wrapper.append(pre, button);
+  }
+}
+
+/** For a click on a code block's Copy: copies its code, and says so for a moment. Whether it was one. */
+export function copyCode(target: HTMLElement): boolean {
+  const copy = target.closest("button.copy");
+  if (!copy) return false;
+  window.miks?.copy(copy.parentElement?.querySelector("pre")?.textContent ?? "");
+  copy.textContent = "Copied";
+  setTimeout(() => (copy.textContent = "Copy"), 1200);
+  return true;
+}
+
+/**
+ * Markdown as both panels show it: quotes, code (with `addCopyButtons`'),
+ * tables, task lists. Each adds its own spacing, headings and links.
+ */
+export function markdownCSS(): string {
+  return `
+    ${taskListCSS()}
+
+    blockquote {
+      padding-left: 12px;
+      border-left: 3px solid ${colors.separator()};
+      color: ${colors.textSecondary()};
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid ${colors.separator()};
+    }
+
+    .code {
+      position: relative;
+
+      > pre {
+        margin: 0;
+      }
+
+      > .copy {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid ${colors.separator()};
+        background: ${colors.textBackground()};
+        color: ${colors.textSecondary()};
+        font: ${fonts.display({ size: 11, line: "16px" })};
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+
+      &:hover > .copy {
+        opacity: 1;
+      }
+    }
+
+    pre {
+      background: ${colors.textBackground()};
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid ${colors.separator()};
+      overflow-x: auto;
+      font: ${fonts.displayMono({ size: 12, line: "18px" })};
+    }
+
+    code:not(pre > code) {
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: ${colors.textBackground()};
+      border: 1px solid ${colors.separator()};
+      overflow-wrap: anywhere;
+      font: ${fonts.displayMono({ size: 12.5, line: "18px" })};
+    }
+
+    table {
+      border-collapse: collapse;
+      display: block;
+      overflow-x: auto;
+      max-width: 100%;
+      font: ${fonts.display({ size: 13, line: "19px" })};
+
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        border: 1px solid ${colors.separator()};
+      }
+
+      th {
+        font: ${fonts.displayBold({ size: 13, line: "19px" })};
+        background: ${colors.textBackgroundAlt()};
+      }
+    }
+
+    ${highlightCSS()}
+  `;
 }
 
 /** highlight.js's classes, in VS Code's colors (as the terminal's are). */
