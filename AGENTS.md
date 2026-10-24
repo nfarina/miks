@@ -287,8 +287,9 @@ resizes); keep it passing.
 - Each tab has its own zsh history, like Terminal.app's: a `historyId` saved
   in `state.json`, and `MIKS_HISTORY` (`<home>/history/<id>.zsh`), which
   Miks's `.zshrc` appends each command to in preexec (zsh's history format)
-  and `fc -R`s last on start, so ↑ in a restored tab is its own last
-  command. Deleted when the tab closes; restore deletes orphans.
+  and `fc -R`s at the first prompt, so ↑ in a restored tab is its own last
+  command. Not while `.zshrc` runs: zsh loads your HISTFILE only after the
+  startup files, which put it after the tab's, so ↑ was any tab's last. Deleted when the tab closes; restore deletes orphans.
 - `miks keep <command>` (a function in Miks's `.zshrc`) posts the command,
   shell-quoted, to `/api/keep`, then runs it. The daemon saves it with the
   tab (`keep` in `state.json`) and a restore runs it again (before any

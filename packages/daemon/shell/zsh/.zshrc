@@ -21,22 +21,26 @@ export VISUAL=$EDITOR
 # This tab's own history (MIKS_HISTORY, kept by the daemon across restarts):
 # each command it runs, written as it runs in zsh's history format, then read
 # back last when the tab returns, so ↑ starts with what this tab was doing.
-# Your shared history goes on as ever, before it.
+# Your shared history goes on as ever, before it. Read at the first prompt:
+# zsh loads your HISTFILE only once the startup files are done, which put it
+# after this tab's, and ↑ started with whatever any tab ran last.
 if [[ -n $MIKS_HISTORY ]]; then
-  if [[ -s $MIKS_HISTORY ]]; then
-    __miks_lines=("${(@f)$(<$MIKS_HISTORY)}")
+  __miks_read_history() {
+    add-zsh-hook -d precmd __miks_read_history
+    unfunction __miks_read_history
+    [[ -s $MIKS_HISTORY ]] || return
+    local -a lines=("${(@f)$(<$MIKS_HISTORY)}")
     # Only the last few hundred lines, cut where a command starts (after a
     # line that doesn't continue onto the next with a backslash).
-    if (( $#__miks_lines > 400 )); then
-      __miks_start=$(( $#__miks_lines - 199 ))
-      while (( __miks_start > 1 )) && [[ ${__miks_lines[__miks_start - 1]} == *\\ ]]; do
-        (( __miks_start-- ))
+    if (( $#lines > 400 )); then
+      local start=$(( $#lines - 199 ))
+      while (( start > 1 )) && [[ ${lines[start - 1]} == *\\ ]]; do
+        (( start-- ))
       done
-      builtin print -rl -- "${(@)__miks_lines[__miks_start,-1]}" >| $MIKS_HISTORY
+      builtin print -rl -- "${(@)lines[start,-1]}" >| $MIKS_HISTORY
     fi
     builtin fc -R $MIKS_HISTORY
-    unset __miks_lines __miks_start
-  fi
+  }
   __miks_remember() {
     # zsh's history format: a newline within a command follows a backslash.
     local nl=$'\n'
@@ -124,7 +128,10 @@ __miks_preexec() {
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd __miks_precmd
 add-zsh-hook preexec __miks_preexec
-[[ -n $MIKS_HISTORY ]] && add-zsh-hook preexec __miks_remember
+if [[ -n $MIKS_HISTORY ]]; then
+  add-zsh-hook precmd __miks_read_history
+  add-zsh-hook preexec __miks_remember
+fi
 
 # ⌥←/→ by word. With Option as Meta, Miks sends them as xterm does
 # (ESC [1;3D), which zsh leaves unbound; Terminal.app's ESC b/f already are.

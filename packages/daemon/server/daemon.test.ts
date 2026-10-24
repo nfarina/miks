@@ -630,7 +630,8 @@ test("pbcopy in a zsh tab also copies through the terminal, for windows on other
 });
 
 test("a zsh tab's own commands come back first on ↑ when it's restored", async () => {
-  fs.writeFileSync(path.join(home, ".zshrc"), "PS1='%% '\n");
+  // Your shared history, which zsh loads once the startup files are done.
+  fs.writeFileSync(path.join(home, ".zshrc"), "PS1='%% '\nHISTFILE=$HOME/.zsh_history\nsetopt INC_APPEND_HISTORY\n");
   const history = path.join(home, "tab.zsh");
   const run = async (input: string[], until: string) => {
     const pane = new Pane({ id: "zsh", cwd: home, env: { HOME: home, MIKS_HISTORY: history }, command: ["/bin/zsh", "-l"] });
@@ -652,7 +653,11 @@ test("a zsh tab's own commands come back first on ↑ when it's restored", async
   // Recorded as they ran, the newline inside the second kept as zsh writes it.
   expect(fs.readFileSync(history, "utf8")).toBe("echo first-$((1+1))\necho 'multi\\\nline'\necho done-$((2+2))\n");
 
-  // A new shell on the same file (a restored tab): ↑↑ is the multi-line one.
+  // Another tab ran something since, into the shared history.
+  fs.appendFileSync(path.join(home, ".zsh_history"), ": 1700000000:0;echo from-another-tab\n");
+
+  // A new shell on the same file (a restored tab): ↑↑ is the multi-line one,
+  // not the other tab's (it was, when this tab's history was read first).
   await run(["\x1b[A", "\x1b[A", "\r"], "multi\r\nline");
   // Two zsh startups in a row, slow when the whole suite runs at once.
 }, 20_000);
