@@ -416,7 +416,11 @@ resizes); keep it passing.
   http). WebKit never proxies `localhost`, so it loads as `mac.localhost`,
   which macOS (and so Node) resolves to the Mac itself and Vite allows
   (`mac.internal` got Vite's "Blocked request"). Plain http needs
-  `NSAllowsArbitraryLoadsInWebContent`. Verified from an iPad.
+  `NSAllowsArbitraryLoadsInWebContent`. A modal's layer spans the screen
+  (crosswing's toasts' is always there), taking no touches where it has
+  nothing, so only what takes touches counts as over a page. Verified from
+  an iPad. The app has no web `Notification` (throwing for one blanked the
+  page).
 - ⌘⇧F (or the tab bar's button beside the panel's) has the panel fill the
   tab, per tab like open or not: CSS over the same PanelLayout (nothing
   remounts, so a page keeps its state), the terminal keeping its full size

@@ -46,11 +46,8 @@ export class NativePage {
     let clip = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     for (const parent of this.clippers) clip = intersect(clip, parent.getBoundingClientRect());
     clip = intersect(clip, rect);
-    const covered = [...(document.querySelector("[data-is-modal-root]")?.children ?? [])].some((modal) => {
-      const box = modal.getBoundingClientRect();
-      return box.left < clip.right && box.right > clip.left && box.top < clip.bottom && box.bottom > clip.top;
-    });
-    const visible = !covered && clip.right > clip.left && clip.bottom > clip.top && this.element.checkVisibility({ visibilityProperty: true, opacityProperty: true });
+    const covered = [...document.querySelectorAll("[data-is-modal-root] > *")].some((modal) => covers(modal, clip));
+    const visible = !covered && clip.right > clip.left && clip.bottom > clip.top && this.shown();
     const frame = JSON.stringify({
       visible,
       rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
@@ -60,6 +57,18 @@ export class NativePage {
     this.frame = frame;
     this.pages.tell(this.id, "frame", JSON.parse(frame));
   };
+
+  /** Whether it's shown: not hidden (a tab's page not on screen, `visibility: hidden`), or faded out (the panel filling the tab, ⌘⇧F). */
+  private shown() {
+    if (!this.element.checkVisibility() || getComputedStyle(this.element).visibility !== "visible") return false;
+    return !this.ancestors().some((element) => getComputedStyle(element).opacity === "0");
+  }
+
+  private ancestors() {
+    const ancestors: HTMLElement[] = [];
+    for (let element: HTMLElement | null = this.element; element; element = element.parentElement) ancestors.push(element);
+    return ancestors;
+  }
 
   private update(next: PageState) {
     const previous = this.state;
@@ -97,6 +106,17 @@ export class NativePage {
   reload = () => this.pages.tell(this.id, "reload");
   stop = () => this.pages.tell(this.id, "stop");
   focus = () => this.pages.tell(this.id, "focus");
+}
+
+/**
+ * Whether a modal's in the way: what takes touches, since each kind's layer
+ * spans the screen and takes none where nothing is (always there, for
+ * toasts), holding what does (a menu) or taking them all (a dialog's).
+ */
+function covers(element: Element, clip: Box): boolean {
+  if (getComputedStyle(element).pointerEvents === "none") return [...element.children].some((child) => covers(child, clip));
+  const box = element.getBoundingClientRect();
+  return box.left < clip.right && box.right > clip.left && box.top < clip.bottom && box.bottom > clip.top;
 }
 
 type Box = { left: number; top: number; right: number; bottom: number };

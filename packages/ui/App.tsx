@@ -578,7 +578,8 @@ function useAgentNotifications(state: DaemonState | null) {
 
     const before = previous.current;
     previous.current = statuses;
-    if (!before || !notifications) return;
+    // The iOS app's web view has no Notification, and throwing here took the whole page down.
+    if (!before || !notifications || typeof Notification === "undefined") return;
 
     for (const workspace of state.workspaces) {
       for (const tab of workspace.tabs) {
