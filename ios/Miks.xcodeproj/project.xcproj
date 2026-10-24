@@ -34,13 +34,8 @@
           ],
         },
       ],
-    }, {
-      "kind": "folder",
-      "path": "Shared",
-      "target-membership": [
-        "Miks",
-      ],
     },
+    { "kind": "folder", "path": "Shared", "target-membership": [ "Miks" ] },
     {
       "kind": "group",
       "name": "Products",
@@ -69,12 +64,14 @@
       ],
       "build-settings": {
         "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+        "CURRENT_PROJECT_VERSION": "1",
         "INFOPLIST_FILE": "Miks/Info.plist",
         "IPHONEOS_DEPLOYMENT_TARGET": "17.0",
         "LD_RUNPATH_SEARCH_PATHS": [
           "$(inherited)",
           "@executable_path/Frameworks",
         ],
+        "MARKETING_VERSION": "1.0",
         "MIKS_HOST": "miks-app.nfarina.com",
         "PRODUCT_NAME": "Miks",
         "SDKROOT": "iphoneos",

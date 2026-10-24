@@ -17,10 +17,16 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- From the build settings: MARKETING_VERSION by hand, the build number
+	     by Xcode Cloud, which numbers its TestFlight uploads itself. -->
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Only HTTPS and WebSockets over TLS, which are exempt, so no TestFlight
+	     build waits on "Missing Compliance". -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Where the web bundle comes from (MIKS_HOST in the project), without a
 	     scheme, as an xcconfig would need it. -->
 	<key>MiksHost</key>
