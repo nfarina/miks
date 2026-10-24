@@ -99,6 +99,8 @@ export type OpenPage = {
   /** This opening of it: browsing again, even to the same URL, is another. */
   id: string;
   url: string;
+  /** Opened in a tab of its own (a link to localhost, in the iOS app), so its panel fills the tab. */
+  fill?: boolean;
 };
 
 export type FileProblem = "binary" | "large" | "unreadable";
@@ -155,7 +157,7 @@ export type ClientMessage =
   | { type: "closeWorkspace"; workspaceId: string }
   /** An empty title goes back to following the active tab. */
   | { type: "renameWorkspace"; workspaceId: string; title: string }
-  /** After the active tab; with `url`, showing that page (a page's link that opens a new window, in the iOS app). */
+  /** After the active tab; with `url`, showing that page, filling it (a link to localhost, in the iOS app). */
   | { type: "createTab"; workspaceId: string; url?: string }
   /** Closes the tab's page (`miks browse`). */
   | { type: "closePage"; tabId: string }

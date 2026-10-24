@@ -16,6 +16,7 @@ import { trackCommands } from "./commandMarks";
 import { handleClipboardWrites } from "./osc52";
 import { handlePathLinks } from "./pathLinks";
 import { handleWheel } from "./wheel";
+import { openLink } from "./links";
 
 /**
  * One pane's terminal. Every tab's terminal stays mounted (stacked, with only
@@ -65,8 +66,7 @@ export function TerminalView({
     });
     terminal.loadAddon(new Unicode11Addon());
     terminal.unicode.activeVersion = "11";
-    // window.open is routed to the real browser by the app.
-    terminal.loadAddon(new WebLinksAddon((_event, uri) => window.open(uri)));
+    terminal.loadAddon(new WebLinksAddon((_event, uri) => openLink(uri, tabId)));
     const pathLinks = handlePathLinks(terminal, tabId);
     terminal.open(containerRef.current!);
     const wheel = handleWheel(terminal, (data) => daemon.send({ type: "input", tabId, data }));

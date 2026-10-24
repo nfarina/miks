@@ -771,9 +771,9 @@ export class Workspaces extends EventEmitter<{ change: [] }> {
   }
 
   /** Shows a web page in the tab's panel, in place of any it had. */
-  openPage(tabId: string, url: string) {
+  openPage(tabId: string, url: string, { fill }: { fill?: boolean } = {}) {
     if (!this.panes.has(tabId)) return;
-    this.pages.set(tabId, { id: randomUUID().slice(0, 8), url });
+    this.pages.set(tabId, { id: randomUUID().slice(0, 8), url, ...(fill ? { fill } : {}) });
     this.emit("change");
   }
 

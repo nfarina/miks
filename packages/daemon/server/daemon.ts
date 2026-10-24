@@ -216,7 +216,7 @@ export async function serve({
         case "createTab": {
           const url = message.url && browseUrl(message.url);
           // The page after the tab's own broadcast, so it arrives in a tab on screen and opens its panel (ChatPanel).
-          void workspaces.newTab(message.workspaceId).then((tabId) => tabId && url && setImmediate(() => workspaces.openPage(tabId, url)));
+          void workspaces.newTab(message.workspaceId).then((tabId) => tabId && url && setImmediate(() => workspaces.openPage(tabId, url, { fill: true })));
           return;
         }
         case "moveWorkspace":

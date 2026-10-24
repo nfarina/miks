@@ -259,6 +259,8 @@ const StyledTab = styled.div`
       background: transparent;
       color: inherit;
       opacity: 0;
+      /* Hidden, it isn't there: tapping a tab where it would be selects the tab. */
+      pointer-events: none;
 
       > svg {
         width: 13px;
@@ -275,6 +277,7 @@ const StyledTab = styled.div`
     @media (hover: hover) {
       &:hover > .close {
         opacity: 0.7;
+        pointer-events: auto;
       }
     }
   }
@@ -285,6 +288,7 @@ const StyledTab = styled.div`
 
     > .close {
       opacity: 0.7;
+      pointer-events: auto;
     }
   }
 

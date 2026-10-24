@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon } from "./daemon";
 import { NativePage } from "./nativePage";
+import { openLink } from "./links";
 
 /** What of Electron's `<webview>` this uses (its types are Electron's, not the page's). */
 type Webview = HTMLWebViewElement & {
@@ -92,13 +93,7 @@ export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; o
       ["did-navigate-in-page", (event) => event.isMainFrame && update()],
       ["page-title-updated", (event) => onTitle(event.title)],
       // Only in the iOS app (nativePage.ts); Electron's go to a browser (openLink in main).
-      [
-        "new-window",
-        (event) => {
-          const workspace = daemon.getSnapshot().state?.workspaces.find((workspace) => workspace.tabs.some((other) => other.id === tab.id));
-          if (workspace) daemon.send({ type: "createTab", workspaceId: workspace.id, url: event.url });
-        },
-      ],
+      ["new-window", (event) => openLink(event.url, tab.id)],
       [
         "did-fail-load",
         (event) => {

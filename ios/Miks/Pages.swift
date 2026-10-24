@@ -193,9 +193,11 @@ private class Page: UIView, WKNavigationDelegate, WKUIDelegate {
         report(failed: error.localizedDescription)
     }
 
-    // Not Safari, as on a Mac: its localhost is this device's.
+    // A new window: a new tab, for the Mac's localhost (Safari's is this
+    // device's), and Safari for anything else (links.ts, for the app's own links).
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if let url = action.request.url { newTab(url) }
+        guard let url = action.request.url.map(Page.fromMac) else { return nil }
+        if Page.loopback.contains(url.host() ?? "") { newTab(url) } else { UIApplication.shared.open(url) }
         return nil
     }
 

@@ -106,7 +106,7 @@ test("a new tab can open on a page, after the active one", async () => {
   await expect.poll(() => daemon.workspaces.getState().workspaces[0].tabs.length).toBe(2);
   const [first, second] = daemon.workspaces.getState().workspaces[0].tabs;
   expect(first.id).toBe(workspace.activeTabId);
-  expect(second.page?.url).toBe("http://localhost:2727/docs");
+  expect(second.page).toMatchObject({ url: "http://localhost:2727/docs", fill: true });
   socket.close();
 });
 

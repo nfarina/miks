@@ -31,6 +31,7 @@ import { FileView } from "./FileView";
 import { addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
 import { autoFocus, useSettings } from "./settings";
+import { openLink } from "./links";
 import {
   droppedText,
   focusActiveTerminal,
@@ -211,6 +212,7 @@ export function ChatLayout({
     const arrived: PanelView | null = page && page.id !== before.page ? "page" : file ? `file:${file.id}` : null;
     if (arrived) {
       setView(arrived);
+      if (arrived === "page" && page?.fill) expandedTabs.set(tab, true);
       if (!isChatOpen(tab)) {
         openedForContent.current = true;
         setChatOpen(tab, true);
@@ -769,7 +771,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     const link = target.closest("a");
     if (link?.href) {
       event.preventDefault();
-      window.open(link.href);
+      openLink(link.href, tab.id);
     }
   }
 
