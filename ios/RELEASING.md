@@ -37,23 +37,25 @@ and see what a tag started with
 - `Release` (`98DBE289-BBEC-48B5-AE4B-CC3AA31E3156`), the default workflow
   renamed: starts on tags with the prefix `ios-`, or by hand on any branch;
   Archive – iOS of the `Miks` scheme, `APP_STORE_ELIGIBLE`. On "Latest Beta
-  or Release" Xcode and macOS: "Latest Release" was still Xcode 27.1, and
-  the project's JSON format needs 27.2 or later. A PATCH to a workflow
+  or Release" Xcode and macOS, as Phoenix's are (its JSON project failed on
+  27.0). "Latest Release" was Xcode 27.1 then, and the default workflow's
+  first build (run 1) succeeded on it, so 27.1 may do too. A PATCH to a workflow
   clears every start condition it leaves out, so send them all together.
 - TestFlight groups, both "Friends & Family" as in Phoenix, though the
   external one is `Public`: the internal one
   (`2bf2e54d-e469-43ae-b326-7422101041ff`, every build, nfarina@me.com) and
   `Public` (`cfafb174-770b-491a-856f-b20310a87c19`), with the public link
   https://testflight.apple.com/join/CChNubyp, no limit. An external group
-  gets only the builds added to it, each after Beta App Review.
+  gets only the builds added to it, and each goes through Beta App Review:
+  `POST /v1/betaGroups/<id>/relationships/builds`, then
+  `POST /v1/betaAppReviewSubmissions` with the build (how 1.0 (2) went).
 - Test information (en-US) and Beta App Review details: contact, no demo
   account, and notes saying it needs a Mac running Miks on the tester's
   tailnet.
 
 ## Not done or not verified yet
 
-- The first `ios-` tag, and whether Beta App Review takes the app without a
-  way to try it; a short video of it working would answer that, in the
-  review notes.
-- Whether builds reach `Public` on their own or need adding (in App Store
-  Connect, or through the API's `betaGroups/<id>/relationships/builds`).
+- Whether Beta App Review passes 1.0 (2), submitted 2026-10-24, and whether
+  later builds of the same version skip it.
+- Whether a build ever reaches `Public` without being added (Phoenix's
+  shipped ones were added by hand, as far as is known).
