@@ -14,6 +14,8 @@ const AUDIO_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio
 export function useDictation({ onText, onError }: { onText: (text: string) => void; onError: (error: string) => void }) {
   const [state, setState] = useState<DictationState>("idle");
   const recorder = useRef<MediaRecorder | null>(null);
+  // The microphone's, while recording, for the composer's waveform.
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   // Gone mid-recording: the microphone goes off, and nothing's sent.
   useEffect(() => () => cancel(), []);
@@ -35,6 +37,7 @@ export function useDictation({ onText, onError }: { onText: (text: string) => vo
     };
     next.onstop = async () => {
       for (const track of stream.getTracks()) track.stop();
+      setStream(null);
       if (recorder.current !== next) return;
       recorder.current = null;
       const audio = new Blob(chunks, { type: next.mimeType || mimeType || "audio/webm" });
@@ -48,6 +51,7 @@ export function useDictation({ onText, onError }: { onText: (text: string) => vo
     recorder.current = next;
     // With a timeslice, or Safari (the iOS app) hands over nothing (as chatwing found).
     next.start(1000);
+    setStream(stream);
     setState("recording");
   }
 
@@ -67,5 +71,5 @@ export function useDictation({ onText, onError }: { onText: (text: string) => vo
     else if (state === "recording") stop();
   }
 
-  return { state, toggle, cancel };
+  return { state, stream, toggle, cancel };
 }

@@ -28,6 +28,7 @@ import { padSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { daemon } from "./daemon";
 import { useDictation } from "./dictation";
+import { StyledWaveform, Waveform } from "./Waveform";
 import { FileView } from "./FileView";
 import { addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
@@ -935,24 +936,29 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
             event.target.value = "";
           }}
         />
-        <TextArea
-          value={text}
-          onValueChange={changeText}
-          onKeyDown={onKeyDown}
-          onPaste={(event) => {
-            // An image and no text: what Claude takes is the image.
-            const { clipboardData } = event;
-            if (clipboardData.getData("text/plain") || ![...clipboardData.items].some((item) => item.type.startsWith("image/"))) return;
-            event.preventDefault();
-            void pasteImage();
-          }}
-          placeholder={placeholder()}
-          disabled={!session}
-          autoSizing
-          minHeight={20}
-          maxHeight={240}
-          rows={1}
-        />
+        {/* While dictating, the waveform shows over the text, which keeps the
+            focus (and so the on-screen keyboard). */}
+        <div className="field" data-dictating={!!dictation.stream}>
+          <TextArea
+            value={text}
+            onValueChange={changeText}
+            onKeyDown={onKeyDown}
+            onPaste={(event) => {
+              // An image and no text: what Claude takes is the image.
+              const { clipboardData } = event;
+              if (clipboardData.getData("text/plain") || ![...clipboardData.items].some((item) => item.type.startsWith("image/"))) return;
+              event.preventDefault();
+              void pasteImage();
+            }}
+            placeholder={placeholder()}
+            disabled={!session}
+            autoSizing
+            minHeight={20}
+            maxHeight={240}
+            rows={1}
+          />
+          {dictation.stream && <Waveform stream={dictation.stream} />}
+        </div>
         <button
           type="button"
           className="tool dictate"
@@ -1489,11 +1495,24 @@ const StyledChatPanel = styled.div`
       border-color: ${colors.textSecondary({ alpha: 0.5 })};
     }
 
-    > ${StyledTextArea} {
+    > .field {
+      position: relative;
       flex-grow: 1;
       min-width: 0;
       align-self: center;
 
+      &[data-dictating="true"] > ${StyledTextArea} {
+        opacity: 0;
+      }
+
+      > ${StyledWaveform} {
+        position: absolute;
+        inset: 0;
+        height: auto;
+      }
+    }
+
+    > .field > ${StyledTextArea} {
       > textarea {
         display: block;
         width: 100%;
