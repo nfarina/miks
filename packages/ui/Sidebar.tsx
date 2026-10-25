@@ -1,12 +1,13 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { tooltip } from "crosswing/modals/popup";
+import { PanelLayoutContext } from "crosswing/components/PanelLayout";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { ChevronDown, PanelLeft, Plus } from "lucide-react";
 import { describeRunning } from "miks/shared/background";
 import { Workspace } from "miks/shared/protocol";
-import { Fragment, HTMLAttributes, KeyboardEvent, useState } from "react";
+import { Fragment, HTMLAttributes, KeyboardEvent, use, useState } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
@@ -320,6 +321,9 @@ function WorkspaceRow({
   const message = status === "waiting" ? waitingMessage(workspace) : null;
   const background = backgroundSummary(workspace);
   const title = workspaceTitle(workspace);
+  // Over the terminals (a phone held upright), the sidebar goes once you've
+  // picked one, to show it.
+  const { panelMode, setPanelVisible } = use(PanelLayoutContext);
 
   function onRenameKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
@@ -336,7 +340,10 @@ function WorkspaceRow({
       data-draggable-group={DRAG_GROUP}
       data-selected={selected}
       data-status={status ?? undefined}
-      onClick={() => daemon.send({ type: "select", workspaceId: workspace.id })}
+      onClick={() => {
+        daemon.send({ type: "select", workspaceId: workspace.id });
+        if (panelMode === "overlay") setPanelVisible(false);
+      }}
       onDoubleClick={() => setRenaming(true)}
       title="Double-click to rename"
     >

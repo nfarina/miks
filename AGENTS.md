@@ -272,6 +272,9 @@ resizes); keep it passing.
   sidebar (a PanelLayout) or the window edge sends one, not one per frame.
 - With the sidebar hidden (⌘B), the traffic lights sit over the tab bar,
   which is inset to clear them; the sidebar's minimum width does the same.
+  Where the sidebar would leave the terminals under 320px (a phone held
+  upright), it goes over them instead (PanelLayout's `auto`), and picking a
+  workspace hides it.
 - xterm.js sends a full-screen program at most one wheel report (or arrow
   key) per wheel event, and scales trackpads down to 0.3, so scrolling in
   Claude Code crawled next to Ghostty. `ui/wheel.ts` sends one per line's

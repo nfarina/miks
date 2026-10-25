@@ -99,8 +99,10 @@ export function App() {
       <PanelLayout
         className="layout"
         edge="left"
-        // Always beside the terminals, never over them.
-        mode="shrink"
+        // Beside the terminals, unless that leaves them narrower than
+        // contentMinSize (a phone held upright, a narrow window): then over
+        // them, and a tap outside hides it.
+        mode="auto"
         panelVisible={sidebarVisible}
         onPanelVisibleChange={(visible) => updateSettings({ sidebarVisible: visible })}
         panelDefaultSize={230}
