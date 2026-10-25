@@ -1373,9 +1373,11 @@ const StyledChatPanel = styled.div`
         }
       }
 
+      /* On the first line, should the names wrap. */
       .chevron {
         flex-shrink: 0;
-        align-self: center;
+        align-self: flex-start;
+        margin-top: 2.5px;
         transition: transform 0.15s;
       }
 
@@ -1383,13 +1385,18 @@ const StyledChatPanel = styled.div`
         transform: rotate(90deg);
       }
 
+      /* Names wrap, inside one if need be (an MCP tool's has nowhere to
+         break): never wider than the panel, or it scrolls sideways. A
+         summary gets what's left. */
       .names,
       .name {
-        flex-shrink: 0;
+        min-width: 0;
+        overflow-wrap: anywhere;
         font: ${fonts.displayMedium({ size: 12, line: "18px" })};
       }
 
       .summary {
+        flex: 1 1 0;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
