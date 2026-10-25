@@ -4,6 +4,7 @@ import type { OpenFile, Tab } from "miks/shared/protocol";
 import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon, type ImageResult } from "./daemon";
+import { openLink } from "./links";
 import { addCopyButtons, copyCode, markdownCSS, renderMarkdownDocument, resolveLocalPath } from "./markdown";
 import { terminalScrollbarCSS } from "./TerminalView";
 
@@ -196,7 +197,7 @@ export function MarkdownView({
     } else if (/^(https?|mailto):/i.test(href)) {
       // Only the web and mail: the file's markdown, not ours, so no tel:,
       // ftp: and the like that sanitizing lets through, and no `//host`.
-      window.open(href);
+      openLink(href, tab.id);
     }
   }
 
