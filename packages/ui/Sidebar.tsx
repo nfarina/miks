@@ -4,7 +4,7 @@ import { tooltip } from "crosswing/modals/popup";
 import { PanelLayoutContext } from "crosswing/components/PanelLayout";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { usePopup } from "crosswing/modals/popup/usePopup";
-import { ChevronDown, PanelLeft, Plus } from "lucide-react";
+import { ChevronDown, Laptop, PanelLeft, Plus, RotateCw, Settings, Trash2 } from "lucide-react";
 import { describeRunning } from "miks/shared/background";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, use, useState } from "react";
@@ -12,6 +12,7 @@ import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
+import { addMac } from "./MacChooser";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { displayPath, getSettings, updateSettings, useSettings } from "./settings";
 import { backgroundSummary, STATUS_LABELS, URGENCY, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
@@ -151,6 +152,7 @@ function MacSwitcher() {
       {macs.map((mac) => (
         <PopupMenuText
           key={mac.host}
+          icon={<Laptop />}
           checked={mac.active}
           right={mac.status && <StatusDot status={mac.status} />}
           detail={!mac.active && !mac.connected ? "Not connected" : undefined}
@@ -159,10 +161,19 @@ function MacSwitcher() {
         />
       ))}
       <PopupMenuSeparator />
-      <PopupMenuText onClick={() => bridge.select(null)} children="Add a Mac…" />
-      <PopupMenuText onClick={() => daemon.runCommand("settings")} children="Settings…" />
-      {active && <PopupMenuText onClick={() => void restartDaemon(active.name)} children="Restart daemon…" />}
-      {active && <PopupMenuText destructive onClick={() => bridge.remove(active.host)} children={`Remove ${active.name}`} />}
+      <PopupMenuText icon={<Plus />} onClick={addMac} children="Add a Mac…" />
+      <PopupMenuText icon={<Settings />} onClick={() => daemon.runCommand("settings")} children="Settings…" />
+      {active && (
+        <PopupMenuText icon={<RotateCw />} onClick={() => void restartDaemon(active.name)} children="Restart daemon…" />
+      )}
+      {active && (
+        <PopupMenuText
+          destructive
+          icon={<Trash2 />}
+          onClick={() => bridge.remove(active.host)}
+          children={`Remove ${active.name}`}
+        />
+      )}
     </PopupMenu>
   ));
 

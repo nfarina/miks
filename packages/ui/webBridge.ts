@@ -7,7 +7,8 @@
 // their agents are doing. Imported first, before anything reads `window.miks`.
 import type { AgentStatus, DaemonMessage } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS, type Settings } from "miks/shared/settings";
-import type { BridgeStatus, Mac, MiksBridge, PageState } from "./daemon";
+import type { BridgeStatus, Mac, MacWorkspace, MiksBridge, PageState } from "./daemon";
+import { workspaceStatus, workspaceTitle } from "./status";
 
 /** This device's own settings (the sidebar, the text size), kept in the browser, not the Mac's. */
 const SETTINGS_KEY = "miks-settings";
@@ -17,6 +18,9 @@ const MAC_KEY = "miks-mac";
 
 /** Every Mac it's been connected to, the same way. */
 const MACS_KEY = "miks-macs";
+
+/** When each was last connected, by host, for the chooser's "seen 3 hours ago". */
+const SEEN_KEY = "miks-macs-seen";
 
 /** Most urgent first, as the sidebar ranks a workspace's tabs. */
 const URGENCY: AgentStatus[] = ["waiting", "done", "working", "idle"];
@@ -116,6 +120,7 @@ function writeStorage(key: string, value: unknown) {
  */
 class Watcher {
   status: AgentStatus | null = null;
+  workspaces: MacWorkspace[] = [];
   connected = false;
   private socket: WebSocket | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
@@ -145,11 +150,17 @@ class Watcher {
       if (message.type !== "state") return;
       const statuses = message.state.workspaces.flatMap((workspace) => workspace.tabs.map((tab) => tab.agent?.status));
       this.status = URGENCY.find((status) => statuses.includes(status)) ?? null;
+      this.workspaces = message.state.workspaces.map((workspace) => ({
+        title: workspaceTitle(workspace),
+        status: workspaceStatus(workspace),
+      }));
       this.connected = true;
+      sawMac(this.host);
       this.onChange();
     };
     socket.onclose = () => {
       if (this.socket !== socket) return;
+      if (this.connected) sawMac(this.host);
       this.socket = null;
       this.connected = false;
       this.onChange();
@@ -164,6 +175,13 @@ class Watcher {
     this.socket = null;
     socket?.close();
   }
+}
+
+let seen = readStorage<Record<string, number>>(SEEN_KEY, {});
+
+/** Notes a Mac as connected just now. */
+function sawMac(host: string) {
+  writeStorage(SEEN_KEY, (seen = { ...seen, [host]: Date.now() }));
 }
 
 function webBridge(): MiksBridge {
@@ -249,12 +267,14 @@ function webBridge(): MiksBridge {
     socket = next;
     next.onopen = () => {
       connected = true;
+      if (mac) sawMac(mac);
       macsChanged();
       status({ connected: true });
     };
     next.onmessage = (event) => messageListeners.forEach((listener) => listener(String(event.data)));
     next.onclose = () => {
       if (socket !== next) return;
+      if (connected && mac) sawMac(mac);
       socket = null;
       connected = false;
       macsChanged();
@@ -290,6 +310,8 @@ function webBridge(): MiksBridge {
               active: host === mac,
               connected: host === mac ? connected : !!watchers.get(host)?.connected,
               status: host === mac ? null : (watchers.get(host)?.status ?? null),
+              workspaces: host === mac ? [] : (watchers.get(host)?.workspaces ?? []),
+              seen: seen[host] ?? null,
             })),
           active: () => mac,
           select,
@@ -308,6 +330,8 @@ function webBridge(): MiksBridge {
           remove: (host) => {
             macs = macs.filter((other) => other !== host);
             writeStorage(MACS_KEY, macs);
+            const { [host]: _, ...rest } = seen;
+            writeStorage(SEEN_KEY, (seen = rest));
             if (host === mac) select(null);
             else {
               watchOthers();

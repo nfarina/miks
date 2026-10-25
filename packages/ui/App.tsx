@@ -6,10 +6,10 @@ import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
 import { useDialog } from "crosswing/modals/dialog";
 import { type AgentStatus, type DaemonState, PROTOCOL_VERSION } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
-import { TextInput } from "crosswing/components/forms/TextInput";
-import { X } from "lucide-react";
+import { easing } from "crosswing/shared/easing";
+import { ChevronRight, Moon } from "lucide-react";
 import { use, useEffect, useRef, useState } from "react";
-import { styled } from "styled-components";
+import { keyframes, styled } from "styled-components";
 import { HostContext } from "crosswing/host/context";
 import { coarsePointer } from "crosswing/host/pointer";
 import { provideSafeArea, safeArea } from "crosswing/safearea";
@@ -24,6 +24,7 @@ import { StyledTabBar, TabBar } from "./TabBar";
 import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
 import { KeyBar } from "./KeyBar";
+import { MacChooser, Ring, STATUS_LABELS } from "./MacChooser";
 import {
   clearActiveTerminal,
   selectLastCommand,
@@ -41,6 +42,8 @@ export function App() {
   const { state, connected, error, retrying } = useDaemon();
   const { sidebarVisible } = useSettings();
   const target = useTarget();
+  const macs = useMacs();
+  const { stuck, retry } = useStuck(!connected && retrying);
 
   // Above the on-screen keyboard, in the iOS app, which says where its top is.
   const { viewport } = use(HostContext);
@@ -71,23 +74,25 @@ export function App() {
   useAgentNotifications(state);
   useLongReplyOpening(state);
 
-  if (!connected || !state) {
+  // Coming back to a dropped connection (a phone that slept), the last
+  // screen stays up while it reconnects; the terminals attach again then.
+  const reconnecting = !connected && !!state && retrying;
+
+  if (!state || (!connected && !reconnecting)) {
     return (
       <StyledApp style={keyboardStyle}>
-        <div className="message">
-          <div className="titlebar" />
-          {target && <MachineBadge target={target} />}
-          {window.miks?.macs ? (
-            <MacChooser connecting={error ?? "Connecting…"} />
-          ) : (
-            <>
-              <p>{error ?? (target ? `Connecting to ${target.name}…` : "Connecting to the daemon…")}</p>
-              {error && !retrying && (
-                <button onClick={() => daemon.reconnect()}>{target ? "Try again" : "Start the daemon"}</button>
-              )}
-            </>
-          )}
-        </div>
+        {window.miks?.macs ? (
+          <MacChooser />
+        ) : (
+          <div className="message">
+            <div className="titlebar" />
+            {target && <MachineBadge target={target} />}
+            <p>{error ?? (target ? `Connecting to ${target.name}…` : "Connecting to the daemon…")}</p>
+            {error && !retrying && (
+              <button onClick={() => daemon.reconnect()}>{target ? "Try again" : "Start the daemon"}</button>
+            )}
+          </div>
+        )}
       </StyledApp>
     );
   }
@@ -95,7 +100,7 @@ export function App() {
   const activeWorkspace = state.workspaces.find((w) => w.id === state.activeWorkspaceId) ?? null;
 
   return (
-    <StyledApp style={keyboardStyle}>
+    <StyledApp style={keyboardStyle} data-stale={reconnecting && (stuck ? "stuck" : "true")}>
       <PanelLayout
         className="layout"
         edge="left"
@@ -153,6 +158,14 @@ export function App() {
         <Sidebar workspaces={state.workspaces} activeWorkspaceId={state.activeWorkspaceId} home={state.home} />
       </PanelLayout>
       <KeyBar />
+      {reconnecting && (
+        <Reconnecting
+          name={macs.find((mac) => mac.active)?.name ?? target?.name ?? null}
+          error={error}
+          stuck={stuck}
+          onRetry={retry}
+        />
+      )}
     </StyledApp>
   );
 }
@@ -171,6 +184,21 @@ export const StyledApp = styled.div`
     flex-grow: 1;
     min-width: 0;
     min-height: 0;
+    transition:
+      opacity 0.2s,
+      filter 0.2s;
+  }
+
+  /* Reconnecting: the last screen, faded, after a moment (a quick one never shows). */
+  &[data-stale="true"] > .layout {
+    opacity: 0.6;
+    filter: saturate(0.4);
+    transition-delay: 0.5s;
+  }
+
+  &[data-stale="stuck"] > .layout {
+    opacity: 0.35;
+    filter: saturate(0.2);
   }
 
   .main {
@@ -251,66 +279,6 @@ export const StyledApp = styled.div`
       -webkit-app-region: drag;
     }
 
-    > .mac {
-      display: flex;
-      flex-flow: column;
-      gap: 12px;
-      width: min(360px, calc(100% - 32px));
-      text-align: center;
-
-      > p {
-        margin: 0;
-        font: ${fonts.display({ size: 14, line: "20px" })};
-      }
-
-      > .hint {
-        color: ${colors.textSecondary()};
-        font: ${fonts.display({ size: 13, line: "18px" })};
-      }
-
-      > .macs {
-        display: flex;
-        flex-flow: column;
-        gap: 6px;
-
-        > .saved {
-          display: flex;
-          border-radius: 10px;
-          background: ${colors.buttonBackgroundGlow()};
-
-          &[data-active="true"] {
-            box-shadow: inset 0 0 0 1.5px ${colors.primary()};
-          }
-
-          > button {
-            border: none;
-            background: transparent;
-            color: ${colors.text()};
-          }
-
-          > .pick {
-            flex-grow: 1;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            font: ${fonts.display({ size: 15 })};
-          }
-
-          > .remove {
-            display: flex;
-            align-items: center;
-            padding: 0 12px;
-            color: ${colors.textSecondary()};
-
-            > svg {
-              width: 16px;
-              height: 16px;
-            }
-          }
-        }
-      }
-    }
   }
 
   button {
@@ -318,73 +286,253 @@ export const StyledApp = styled.div`
   }
 `;
 
+/** How long reconnecting goes on before it's a Mac that isn't answering. */
+const STUCK_DELAY = 8000;
+
 /**
- * In the iOS app, until one connects: the Macs you've added, to pick from or
- * remove, and one to add, by its name ("air", which the app looks up) or the
- * address its Settings shows (Remotes → Open from your other devices).
+ * Whether reconnecting has gone on past STUCK_DELAY, counting from the page
+ * showing again (a phone's timers stop while the app's away), and a retry
+ * that counts from now.
  */
-function MacChooser({ connecting }: { connecting: string }) {
-  const bridge = window.miks!.macs!;
-  const macs = useMacs();
-  const active = macs.find((mac) => mac.active);
-  const [text, setText] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+function useStuck(reconnecting: boolean) {
+  const [stuck, setStuck] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setStuck(false);
+    if (!reconnecting) return;
+    let timer = setTimeout(() => setStuck(true), STUCK_DELAY);
+    const visible = () => {
+      if (document.visibilityState !== "visible") return;
+      clearTimeout(timer);
+      setStuck(false);
+      timer = setTimeout(() => setStuck(true), STUCK_DELAY);
+    };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [reconnecting, attempt]);
+
+  const retry = () => {
+    setAttempt((count) => count + 1);
+    daemon.reconnect();
+  };
+
+  return { stuck, retry };
+}
+
+/**
+ * Over the last screen while it reconnects: a pill saying so, then, if the
+ * Mac doesn't answer, a sheet to try again or (in the iOS app) open another.
+ * Not for this Mac's own daemon, which a window waits on only while it
+ * restarts.
+ */
+function Reconnecting({
+  name,
+  error,
+  stuck,
+  onRetry,
+}: {
+  name: string | null;
+  error: string | null;
+  stuck: boolean;
+  onRetry: () => void;
+}) {
+  const bridge = window.miks?.macs;
+  const others = useMacs().filter((mac) => !mac.active);
+
+  if (!stuck || !name) {
+    return (
+      <StyledReconnecting>
+        <div className="pill">
+          <Ring />
+          {name ? `Reconnecting to ${name}` : (error ?? "Reconnecting…")}
+        </div>
+      </StyledReconnecting>
+    );
+  }
 
   return (
-    <form
-      className="mac"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setAdding(true);
-        setProblem(await bridge.add(text));
-        setAdding(false);
-      }}
-    >
-      {active ? (
-        <p>{connecting}</p>
-      ) : macs.length > 0 ? (
-        <p>Pick a Mac, or add another.</p>
-      ) : (
-        <p>
-          On your Mac, turn on Miks → Settings → Remotes → Open from your other devices, then enter its name here.
-        </p>
-      )}
-      {macs.length > 0 && (
-        <div className="macs">
-          {macs.map((mac) => (
-            <div className="saved" key={mac.host} data-active={mac.active}>
-              {/* Again with the one already chosen is a retry. */}
-              <button type="button" className="pick" onClick={() => bridge.select(mac.host)}>
-                {mac.status && <StatusDot status={mac.status} />}
-                <span>{mac.name}</span>
-              </button>
-              <button
-                type="button"
-                className="remove"
-                onClick={() => bridge.remove(mac.host)}
-                aria-label={`Remove ${mac.name}`}
-              >
-                <X />
-              </button>
-            </div>
-          ))}
+    <StyledReconnecting>
+      <div className="sheet">
+        <div className="icon">
+          <Moon />
         </div>
-      )}
-      <TextInput
-        newStyle
-        value={text}
-        onValueChange={(value) => (setText(value), setProblem(null))}
-        placeholder="air"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck={false}
-      />
-      {problem && <p className="hint">{problem}</p>}
-      <Button newStyle primary type="submit" working={adding} disabled={!text.trim()} children="Add Mac" />
-    </form>
+        <h2>{name} isn't answering</h2>
+        <p>
+          It may be asleep, or off {bridge ? "Tailscale" : "the network"}. Miks keeps trying, and picks up where you
+          left off.
+        </p>
+        <Button newStyle primary onClick={onRetry} children="Try again" />
+        {bridge && others.length > 0 && (
+          <div className="others">
+            <div className="heading">Or open</div>
+            {others.map((mac) => (
+              <button key={mac.host} onClick={() => bridge.select(mac.host)}>
+                {mac.status ? <StatusDot status={mac.status} /> : <span className="dot" />}
+                <span className="name">{mac.name}</span>
+                <span className="detail">
+                  {mac.status ? STATUS_LABELS[mac.status] : mac.connected ? "" : "Not answering"}
+                </span>
+                <ChevronRight />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </StyledReconnecting>
   );
 }
+
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+`;
+
+const rise = keyframes`
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+`;
+
+const StyledReconnecting = styled.div`
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+
+  > .pill {
+    position: absolute;
+    top: calc(${safeArea.top()} + 56px);
+    left: 50%;
+    transform: translateX(-50%);
+    height: 40px;
+    padding: 0 16px 0 12px;
+    border-radius: 20px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+    background: ${colors.textBackground()};
+    box-shadow:
+      0 6px 24px rgba(0, 0, 0, 0.25),
+      inset 0 0 0 1px ${colors.separator()};
+    font: ${fonts.displayMedium({ size: 14 })};
+    animation: ${fadeIn} 0.2s 0.5s both;
+
+    > ${Ring} {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  > .sheet {
+    pointer-events: auto;
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: calc(${safeArea.bottom()} + 12px);
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 24px 20px 20px;
+    border-radius: 28px;
+    box-sizing: border-box;
+    display: flex;
+    flex-flow: column;
+    gap: 10px;
+    text-align: center;
+    background: ${colors.textBackground()};
+    box-shadow:
+      0 -10px 40px rgba(0, 0, 0, 0.3),
+      inset 0 0 0 1px ${colors.separator()};
+    animation: ${rise} 0.3s ${easing.outQuint};
+
+    > .icon {
+      align-self: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 26px;
+      background: ${colors.buttonBackgroundHover()};
+      color: ${colors.textSecondary()};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      > svg {
+        width: 26px;
+        height: 26px;
+      }
+    }
+
+    > h2 {
+      margin: 0;
+      font: ${fonts.displayBold({ size: 20, line: "26px" })};
+    }
+
+    > p {
+      margin: 0 0 8px;
+      color: ${colors.textSecondary()};
+      font: ${fonts.display({ size: 15, line: "21px" })};
+    }
+
+    > .others {
+      margin-top: 8px;
+      padding-top: 12px;
+      border-top: 1px solid ${colors.separator()};
+      display: flex;
+      flex-flow: column;
+      text-align: left;
+
+      > .heading {
+        color: ${colors.textSecondary()};
+        font: ${fonts.displayBold({ size: 12 })};
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+
+      > button {
+        min-height: 48px;
+        padding: 0 4px;
+        border: none;
+        background: transparent;
+        color: ${colors.text()};
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        > .dot {
+          flex-shrink: 0;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          box-shadow: inset 0 0 0 1.5px ${colors.textSecondary()};
+        }
+
+        > .name {
+          flex-grow: 1;
+          text-align: left;
+          font: ${fonts.display({ size: 17 })};
+        }
+
+        > .detail {
+          color: ${colors.textSecondary()};
+          font: ${fonts.display({ size: 14 })};
+        }
+
+        > svg {
+          width: 16px;
+          height: 16px;
+          color: ${colors.textSecondary()};
+        }
+      }
+    }
+  }
+`;
 
 /**
  * Which Mac this window's terminals are on, top right, in the color you gave

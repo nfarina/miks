@@ -152,7 +152,13 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   full name only, so the app (`ios/Miks/MiksPlugin.swift`) turns "air" into
   it: `getaddrinfo` by Tailscale's search domain, then `getnameinfo`. The
   others it watches over sockets of their own, which only `hello`, for what
-  their agents are doing. WebKit throws from `new WebSocket` for an address
+  their agents are doing, which the chooser (`ui/MacChooser.tsx`, shown
+  until one connects) lists on each Mac's card, with when it was last
+  connected (`miks-macs-seen`). A connection that drops (a phone that
+  slept) keeps the last screen up, faded, with a pill, while it retries;
+  after 8s, a sheet to try again or open another Mac. Verified in headless
+  Chrome at phone size with `WebSocket` swapped for a fake (CDP's
+  `Page.addScriptToEvaluateOnNewDocument`). WebKit throws from `new WebSocket` for an address
   the page's CSP refuses (a short name), where Chrome only fails the
   socket; uncaught, that left the app white. The page's console and errors
   go to the app's log (`devicectl device process launch --console`).
@@ -385,7 +391,10 @@ resizes); keep it passing.
   (`server/Dictation.ts`, `whisper-large-v3-turbo`), with the key as
   `groq` in `keys.json` in Miks's home, never in a page: the iOS app's
   bundle is public. The iOS app needs the microphone and camera usage
-  strings (the picker offers Take Photo).
+  strings (the picker offers Take Photo). While it records, a waveform
+  (`ui/Waveform.tsx`) covers the text, which stays (invisible) and keeps
+  the focus, so the on-screen keyboard stays up. Headless Chrome tests it
+  with `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream`.
   A tab's draft is every window's: each sends its own (`draft`, once
   typing pauses 300ms), and the daemon keeps it with the tab (saved in
   `state.json`), hands it to the others and, every tab's, empty ones too (a window that was away missed the emptying), to each window's `hello`; never

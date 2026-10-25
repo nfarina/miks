@@ -67,7 +67,19 @@ export type BridgeStatus = {
 };
 
 /** One of the Macs a device connects to, and what its agents are doing, if it isn't the one shown. */
-export type Mac = { host: string; name: string; active: boolean; connected: boolean; status: AgentStatus | null };
+export type Mac = {
+  host: string;
+  name: string;
+  active: boolean;
+  connected: boolean;
+  status: AgentStatus | null;
+  /** Its workspaces, for the chooser; empty for the one shown. */
+  workspaces: MacWorkspace[];
+  /** When it was last connected (ms), if ever. */
+  seen: number | null;
+};
+
+export type MacWorkspace = { title: string; status: AgentStatus | null };
 
 /** Another Mac a window's daemon is on. */
 export type Target = { name: string; color: string; host: string };
