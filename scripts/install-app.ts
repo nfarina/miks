@@ -6,12 +6,24 @@
 //
 // Only the UI app is quit. The daemon keeps running from the old bundle, so
 // no terminal is touched; it picks up new daemon code whenever it next starts.
+//
+// `yarn install:app --to <host>` does the same on another Mac, over ssh
+// (`installOn`), instead of this one.
 import { execFileSync, spawnSync } from "child_process";
 import { socketPath } from "miks/shared/paths";
 import { buildApp, bundleId, output, run } from "./build-app.ts";
 
 const installPath = "/Applications/Miks.app";
+const toIndex = process.argv.indexOf("--to");
+const host = toIndex >= 0 ? process.argv[toIndex + 1] : null;
+if (toIndex >= 0 && !host) throw new Error("Usage: yarn install:app [--to <host>]");
+
 const builtApp = await buildApp();
+
+if (host) {
+  installOn(host);
+  process.exit(0);
+}
 
 //
 // Swap it into /Applications.
@@ -87,4 +99,59 @@ const signature = spawnSync("codesign", ["-dv", "--verbose=4", installPath], { e
 console.log("Installed:");
 for (const line of signature.split("\n").filter((line) => /^(Identifier|Authority)=/.test(line)).slice(0, 3)) {
   console.log(`  ${line}`);
+}
+
+/**
+ * The same install on another Mac: quit its UI, swap the bundle in place,
+ * relaunch. Copied over without quitting it (rsync alone), that Mac's
+ * permissions went red once its daemon restarted, until Miks was quit and
+ * opened again there: LaunchServices learns of a bundle's new contents when
+ * it's launched (or registered, which this does too).
+ */
+function installOn(host: string) {
+  // As above, by pid, leaving out the daemon. Its bash is macOS's 3.2.
+  const remote = (step: string, ...args: string[]) =>
+    execFileSync("ssh", [host, "bash", "-s", "--", step, ...args], {
+      input: remoteSteps(),
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "inherit"],
+    }).trim();
+
+  console.log(`Quitting Miks on ${host}…`);
+  const wasRunning = remote("quit") === "running";
+
+  console.log(`Installing ${host}:${installPath}…`);
+  run("rsync", ["-a", "--delete", `${builtApp}/`, `${host}:${installPath}/`]);
+  remote("finish", wasRunning ? "relaunch" : "");
+  console.log(wasRunning ? `Relaunched Miks on ${host}.` : `Installed on ${host} (Miks wasn't running there).`);
+  console.log("Its daemon runs the new code once restarted: Restart daemon… in a window on it.");
+}
+
+function remoteSteps() {
+  return String.raw`
+set -euo pipefail
+app=${installPath}
+case "$1" in
+quit)
+  daemon=$(curl -sf -m 2 --unix-socket "$HOME/Library/Application Support/Miks/miks.sock" http://miks/api/ping | sed -nE 's/.*"pid":([0-9]+).*/\1/p' || true)
+  pids=""
+  while IFS= read -r asn; do
+    [ -n "$asn" ] || continue
+    pid=$(lsappinfo info -only pid "$asn" | sed -nE 's/.*pid = ([0-9]+).*/\1/p')
+    if [ -n "$pid" ] && [ "$pid" != "$daemon" ] && [ "$(ps -p "$pid" -o comm=)" != miks-daemon ]; then pids="$pids $pid"; fi
+  done < <(lsappinfo find bundleid=${bundleId})
+  [ -n "$pids" ] || { echo "not running"; exit 0; }
+  kill -USR2 $pids
+  for i in $(seq 50); do kill -0 $pids 2>/dev/null || { echo "running"; exit 0; }; sleep 0.1; done
+  echo "Miks didn't quit; quit it and run this again." >&2
+  exit 1
+  ;;
+finish)
+  codesign --verify --deep --strict "$app"
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
+  # As above: none of this ssh session's environment.
+  if [ "$2" = relaunch ]; then env -i /usr/bin/open "$app"; fi
+  ;;
+esac
+`;
 }

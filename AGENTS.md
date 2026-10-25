@@ -55,7 +55,10 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   bundle is: a bundle moved to the Trash turned permission prompts into
   "Miks 11-23-24-642". It quits only the UI (SIGUSR2), found by pid,
   excluding the daemon: never `pkill -x Miks`. The running daemon keeps its old code until
-  it next starts.
+  it next starts. `--to <host>` installs it on another Mac over ssh, the
+  same way (`installOn`). Only rsynced over a running Miks, that Mac's
+  permissions went red once its daemon restarted, until Miks was quit and
+  opened there again.
 - Real state lives in `~/Library/Application Support/Miks` (socket,
   `daemon.log`, `state.json`, and Electron's profile in `UI/`). The daemon
   saves its layout to `state.json` (each tab's cwd, via `lsof`, and its Claude
