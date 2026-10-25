@@ -111,7 +111,9 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   while another Mac's window is on its daemon sends `stopWhenIdle`, so the
   daemon stops when that window goes (which then asks, if programs run);
   its windows connecting send it false. Restart daemon… follows the focused
-  window; a remote's restarts itself (`POST /api/restart`, through launchd). Test without another Mac:
+  window; a remote's restarts itself (`POST /api/restart`, through launchd),
+  telling every window first (`restarting`), so a window on its own Mac waits
+  for the new one (about 6s) to reconnect, rather than showing it stopped. Test without another Mac:
   `MIKS_SSH=scripts/fake-ssh.ts FAKE_SSH_HOME=/tmp/fh`, with a second daemon
   at `MIKS_HOME="/tmp/fh/Library/Application Support/Miks"`.
 - Your other devices on Tailscale (Settings → Remotes → Open from your other
@@ -320,7 +322,13 @@ resizes); keep it passing.
   are never answered). Claude Code copies a selection with plain `pbcopy`.
   Tests set `MIKS_REAL_PBCOPY` so they never touch the real clipboard.
 - Only attached clients answer terminal queries (the headless emulator's
-  replies are dropped, as in VS Code), so each query gets one answer.
+  replies are dropped, as in VS Code), and every one does: with a tab open
+  on its Mac and in another Mac's window, gh's background-color query was
+  answered twice, and the second landed at the prompt
+  (`11;rgb:ffff/ffff/ffff1R`). So windows send answers as `input` with
+  `reply` (xterm.js's internal `coreService.onUserInput` fires just before
+  `onData` for keys, pastes and clicks, never for answers), and the pane
+  passes them on only from the viewer last to size it or type into it.
 - Panes strip `CMUX_*`, `GHOSTTY_*`, `TERM_PROGRAM*`, `CLAUDE*`,
   `ELECTRON_*` and inherited `MIKS_*` from the daemon's environment, or
   programs inside think they're in cmux, Electron apps start as plain Node, a

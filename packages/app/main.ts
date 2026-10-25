@@ -215,13 +215,18 @@ async function linkWindow(contents: WebContents) {
   if (contents.isDestroyed()) return socket.close();
   links.set(contents, socket);
 
+  // Told so before a restart, from any window: another Mac's, or the iOS app.
+  let restarting = false;
   socket.on("message", (data) => {
-    if (!contents.isDestroyed()) contents.send("miks:message", data.toString());
+    const message = data.toString();
+    if (message === '{"type":"restarting"}') restarting = true;
+    if (!contents.isDestroyed()) contents.send("miks:message", message);
   });
   socket.on("close", () => {
     if (links.get(contents) !== socket) return;
     links.delete(contents);
     if (remote) retry(`Lost the connection to ${remote.name}. Reconnecting…`);
+    else if (restarting) awaitRestart(contents);
     else if (!contents.isDestroyed()) contents.send("miks:status", { connected: false });
   });
 
@@ -231,6 +236,20 @@ async function linkWindow(contents: WebContents) {
     socket.send(JSON.stringify({ type: "stopWhenIdle", value: false }));
     openPendingFolders();
   }
+}
+
+/**
+ * Reconnects a window on this Mac once its daemon is back from a restart.
+ * launchd starts the new one (the old one's `kickstart`), so this only waits
+ * for it: starting one too would replace the job mid-start. If none answers
+ * in 15s, connecting starts one, as usual.
+ */
+async function awaitRestart(contents: WebContents) {
+  contents.send("miks:status", { connected: false, error: "The daemon is restarting…", retrying: true });
+  for (let i = 0; i < 75 && !(await daemonGet("/api/ping")); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  if (!contents.isDestroyed() && !links.has(contents)) linkWindow(contents);
 }
 
 ipcMain.on("miks:send", (event, message: string) => {

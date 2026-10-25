@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -294,6 +294,12 @@ export type ClientMessage =
 
 export type DaemonMessage =
   | { type: "state"; state: DaemonState }
+  /**
+   * It's about to restart (`/api/restart` or `restart`, from any window), so
+   * a window on its Mac waits for the new one rather than taking it for a
+   * stop. Since protocol 12.
+   */
+  | { type: "restarting" }
   /** The pane's screen and scrollback as VT sequences, to write into a fresh terminal. */
   | { type: "snapshot"; tabId: string; data: string; cols: number; rows: number }
   | { type: "output"; tabId: string; data: string }

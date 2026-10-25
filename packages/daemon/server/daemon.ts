@@ -75,6 +75,14 @@ export async function serve({
 
   // Connected UIs.
   const sockets = new Set<WebSocket>();
+
+  /** Tells every window first, so the ones on this Mac wait for the new daemon. */
+  const restart = () => {
+    if (!onStop) return;
+    const out = JSON.stringify({ type: "restarting" } satisfies DaemonMessage);
+    for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(out);
+    setImmediate(() => onStop(true));
+  };
   let stopWhenIdle = false;
 
   const server = http.createServer((req, res) => {
@@ -98,7 +106,7 @@ export async function serve({
     if (req.method === "POST" && url.pathname === "/api/restart") {
       if (!onStop) return json(res, 501, { message: "This daemon can't restart itself." });
       json(res, 200, { ok: true });
-      setImmediate(() => onStop(true));
+      restart();
       return;
     }
 
@@ -221,7 +229,7 @@ export async function serve({
         case "running":
           return send({ type: "running", requestId: message.requestId, running: workspaces.running() });
         case "restart":
-          if (onStop) setImmediate(() => onStop(true));
+          restart();
           return;
         case "machineSettings":
           return workspaces.setMachineSettings(message.changes);
