@@ -6,6 +6,7 @@ import { daemon } from "./daemon";
 // it asks first when that's more than a shell.
 
 export async function closeTab(tab: Tab) {
+  if (busy(tab)) tab = await settled(tab);
   const background = describeBackground(tab.background);
   const detail = background
     ? `${tab.running ?? "Claude Code"} is running in it, with ${background} in the background, and closing stops them.`
@@ -23,6 +24,29 @@ export async function closeWorkspace(workspace: Workspace) {
     if (!(await confirmClose("Close this workspace?", `Closing it closes ${tabs}, stopping ${what}.`))) return;
   }
   daemon.send({ type: "closeWorkspace", workspaceId: workspace.id });
+}
+
+const busy = (tab: Tab) => !!tab.running || !!describeBackground(tab.background);
+
+/**
+ * The tab once what's running in it has had a moment to quit: a Claude Code
+ * just sent ⌃D a few times takes a second or two, and asking about it then
+ * was a question with no point. The daemon looks at what's in front every
+ * 500ms, so this waits for that to come through, for up to 2s.
+ */
+function settled(tab: Tab): Promise<Tab> {
+  const current = () => daemon.getSnapshot().state?.workspaces.flatMap((workspace) => workspace.tabs).find((each) => each.id === tab.id) ?? tab;
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(current());
+    };
+    const timer = setTimeout(done, 2000);
+    const unsubscribe = daemon.subscribe(() => {
+      if (!busy(current())) done();
+    });
+  });
 }
 
 function confirmClose(message: string, detail: string): Promise<boolean> {
