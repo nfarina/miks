@@ -764,6 +764,49 @@ class WebAppViewController:
             reloadWebView()
             webViewWasTerminated = false
         }
+        else {
+            checkWebViewResponds()
+        }
+    }
+
+    /// Bumped on each check, so a check that's been superseded can't reload.
+    private var responsivenessCheck = 0
+
+    /// Reloads the page if it doesn't answer a trivial script. A content
+    /// process killed in the background doesn't always reach
+    /// webViewWebContentProcessDidTerminate: one jetsammed overnight along
+    /// with its GPU and network processes (and SpringBoard) never did, and
+    /// left a white page that every later foregrounding found as it was.
+    func checkWebViewResponds() {
+        // A page still loading has its own process on the way.
+        guard !webView.isLoading else { return }
+
+        responsivenessCheck += 1
+        let check = responsivenessCheck
+        var answered = false
+
+        let fail = { (reason: String) in
+            guard !answered, check == self.responsivenessCheck else { return }
+            answered = true
+            self.log.warn("Web view \(reason); reloading.")
+            self.reloadWebView()
+        }
+
+        webView.evaluateJavaScript("1") { (_, error) in
+            if let error {
+                fail("failed a responsiveness check: \(error.localizedDescription)")
+            }
+            else {
+                answered = true
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            // Only while we're still in front: in the background the page is
+            // suspended and can't answer.
+            guard UIApplication.shared.applicationState == .active else { return }
+            fail("didn't answer a responsiveness check within 3s")
+        }
     }
     
     @objc func applicationWillResignActive() {
