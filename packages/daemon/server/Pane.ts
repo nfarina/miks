@@ -55,7 +55,9 @@ const INHERITED_ENV_BLOCKLIST = [
  *
  * Only viewers answer terminal queries (cursor position, device attributes):
  * the headless emulator's replies are dropped, the same way VS Code's pty
- * host does it, so each query gets exactly one answer while a UI is attached.
+ * host does it. With several attached (another Mac's window, a phone), only
+ * the one in use's answer reaches the program (`reply`): a second answer
+ * came after the program had stopped reading, and landed in the shell.
  */
 export class Pane extends EventEmitter<{
   /** The new title, then the one it replaced. */
@@ -86,6 +88,8 @@ export class Pane extends EventEmitter<{
   private readonly viewers = new Set<PaneViewer>();
   /** Viewers whose snapshot is being taken, and the output they'll need after it. */
   private readonly attaching = new Map<PaneViewer, string[]>();
+  /** The viewer last to size the pane or type into it: the screen in use. */
+  private inUse: PaneViewer | null = null;
 
   constructor({
     id,
@@ -175,6 +179,7 @@ export class Pane extends EventEmitter<{
     this.pty.onExit(({ exitCode }) => {
       this.viewers.clear();
       this.attaching.clear();
+      this.inUse = null;
       this.terminal.dispose();
       this.emit("exit", exitCode);
     });
@@ -206,10 +211,23 @@ export class Pane extends EventEmitter<{
   detach(viewer: PaneViewer) {
     this.viewers.delete(viewer);
     this.attaching.delete(viewer);
+    if (this.inUse === viewer) this.inUse = null;
   }
 
-  write(data: string) {
+  /** Typing, or anything else sent as if typed; `from` is then in use. */
+  write(data: string, from?: PaneViewer) {
+    if (from) this.inUse = from;
     this.pty.write(data);
+  }
+
+  /**
+   * A viewer's terminal answering a query, passed on only from the one in
+   * use, or with none in use, the first attached: every viewer answers, and
+   * the program reads one answer.
+   */
+  reply(data: string, from: PaneViewer) {
+    const inUse = this.inUse && this.viewers.has(this.inUse) ? this.inUse : this.viewers.values().next().value;
+    if (from === inUse) this.pty.write(data);
   }
 
   /**
@@ -218,6 +236,7 @@ export class Pane extends EventEmitter<{
    * which may already have moved on (a window edge being dragged).
    */
   resize(cols: number, rows: number, by?: PaneViewer) {
+    if (by) this.inUse = by;
     cols = Math.max(2, Math.floor(cols));
     rows = Math.max(1, Math.floor(rows));
     if (cols === this.terminal.cols && rows === this.terminal.rows) return;

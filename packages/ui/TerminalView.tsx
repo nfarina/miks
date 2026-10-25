@@ -106,8 +106,21 @@ export function TerminalView({
     };
     const unconnect = daemon.onConnect(attach);
 
-    // With the key bar's Ctrl, if it's on (keys.ts).
-    const input = terminal.onData((data) => daemon.send({ type: "input", tabId, data: withModifiers(data) }));
+    // xterm.js fires its (internal) onUserInput just before onData for keys,
+    // pastes, clicks and compositions, but not for its answers to queries
+    // (and focus reports), which the daemon passes on from one window only.
+    // Without it, everything goes as typing.
+    let typed = false;
+    const userInput = (terminal as any)._core?.coreService?.onUserInput?.(() => (typed = true));
+    const input = terminal.onData((data) => {
+      if (typed || !userInput) {
+        // With the key bar's Ctrl, if it's on (keys.ts).
+        daemon.send({ type: "input", tabId, data: withModifiers(data) });
+      } else {
+        daemon.send({ type: "input", tabId, data, reply: true });
+      }
+      typed = false;
+    });
     const binary = terminal.onBinary((data) => daemon.send({ type: "input", tabId, data }));
 
     if (activeRef.current) prepareActive(terminal, fit);
@@ -132,6 +145,7 @@ export function TerminalView({
     return () => {
       observer.disconnect();
       input.dispose();
+      userInput?.dispose();
       binary.dispose();
       resize.dispose();
       pathLinks.dispose();

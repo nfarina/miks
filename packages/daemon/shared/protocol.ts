@@ -202,7 +202,12 @@ export type ClientMessage =
   | { type: "stopWhenIdle"; value: boolean }
   /** The UI cleared its terminal (⌘K); the daemon's copy follows. */
   | { type: "clear"; tabId: string }
-  | { type: "input"; tabId: string; data: string }
+  /**
+   * `reply` when it's the terminal answering a query (cursor position,
+   * colors), which the daemon passes on from only one window. Older windows
+   * send replies as typing.
+   */
+  | { type: "input"; tabId: string; data: string; reply?: boolean }
   | { type: "resize"; tabId: string; cols: number; rows: number }
   /** Asks how the permissions stand; the daemon answers with `permissions`. Since protocol 7. */
   | { type: "permissions" }

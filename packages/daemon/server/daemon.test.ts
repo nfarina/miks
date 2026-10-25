@@ -381,6 +381,44 @@ test("a window hears the size another window gave its pane, and the one that gav
   ipad.close();
 });
 
+test("with two windows on a pane, a query's answer reaches the program from the one in use only", async () => {
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const tabId = activeTab(daemon.workspaces.getState());
+  const mac = await connect();
+  const ipad = await connect();
+  mac.send({ type: "attach", tabId, cols: 80, rows: 24 });
+  await mac.snapshotMessage(tabId);
+  ipad.send({ type: "attach", tabId });
+  await ipad.snapshotMessage(tabId);
+
+  // Everything the program reads, shown as it comes.
+  mac.send({ type: "input", tabId, data: "stty -icanon -echo; echo reading-$((1+1)); cat -v\n" });
+  await mac.waitForOutput(tabId, "reading-2\r\n");
+
+  // Each window's messages arrive in order, but not with the other's: each
+  // step waits for what it sent to show.
+  const step = async (client: Awaited<ReturnType<typeof connect>>, data: string, reply: boolean) => {
+    client.send({ type: "input", tabId, data: `${data}\n`, reply });
+    await client.waitForOutput(tabId, `${data}\r\n`);
+  };
+
+  // The Mac sized the pane last (and typed), so its answer is the one.
+  ipad.send({ type: "input", tabId, data: "ipad-answer\n", reply: true });
+  await step(mac, "mac-answer", true);
+  // The iPad types: now it's in use.
+  await step(ipad, "ipad-typed", false);
+  mac.send({ type: "input", tabId, data: "mac-again\n", reply: true });
+  await step(ipad, "ipad-again", true);
+  await step(mac, "mac-typed", false);
+
+  const text = await paneText(tabId);
+  expect(text).toContain("mac-answer\nipad-typed\nipad-again\nmac-typed");
+  expect(text).not.toContain("ipad-answer");
+  expect(text).not.toContain("mac-again");
+  mac.close();
+  ipad.close();
+});
+
 test("panes don't inherit Claude Code's own variables", async () => {
   process.env.CLAUDE_CODE_CHILD_SESSION = "1";
   process.env.CLAUDECODE = "1";

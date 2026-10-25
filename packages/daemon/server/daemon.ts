@@ -369,8 +369,12 @@ export async function serve({
           return workspaces.closePage(message.tabId);
         case "pageNavigated":
           return workspaces.pageNavigated(message.tabId, message.url);
-        case "input":
-          return workspaces.getPane(message.tabId)?.write(message.data);
+        case "input": {
+          const pane = workspaces.getPane(message.tabId);
+          const viewer = viewers.get(message.tabId);
+          if (message.reply && viewer) return pane?.reply(message.data, viewer);
+          return pane?.write(message.data, viewer);
+        }
         case "clear":
           return workspaces.getPane(message.tabId)?.clear();
         case "resize":
