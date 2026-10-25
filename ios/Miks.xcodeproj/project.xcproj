@@ -48,7 +48,7 @@
     {
       "name": "Miks",
       "id": "5B2E7D1F0C3A4B6E8F907A1B",
-      "product": "id:3A1F6C0E9B2D4E5F60718293",
+      "product": "Products/Miks.app",
       "product-type": "application",
       "build-phases": [
         "compile-sources",
