@@ -55,7 +55,9 @@ and see what a tag started with
 
 ## Not done or not verified yet
 
-- Whether Beta App Review passes 1.0 (2), submitted 2026-10-24, and whether
+- Whether Beta App Review passes 1.0 (2), submitted 2026-10-24 (on 2026-10-26 it
+  asked for a video of the app on a physical device: a screen recording, on
+  iCloud Drive, linked at the top of the Review Notes), and whether
   later builds of the same version skip it. Only one build of a version can
   be in review: 1.0 (3) (push notifications, tag `ios-1.0-push`), added to
   `Public` on 2026-10-26, was refused ("Another build in the same train is
