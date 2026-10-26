@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Push notifications (server/Push.ts, through push/worker.js). "development"
+  is right for every build made here, signed with a development profile; an
+  archive for TestFlight gets "production", which Xcode substitutes when it
+  signs with a distribution profile.
+-->
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

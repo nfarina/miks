@@ -19,12 +19,12 @@ import { daemon, type Target, useDaemon, useMacs, useTarget } from "./daemon";
 import { renderMarkdown } from "./markdown";
 import { getSettings, setFontSize, updateSettings, useSettings } from "./settings";
 import { Sidebar } from "./Sidebar";
-import { workspaceTitle } from "./status";
+import { STATUS_LABELS, workspaceTitle } from "./status";
 import { StyledTabBar, TabBar } from "./TabBar";
 import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
 import { KeyBar } from "./KeyBar";
-import { MacChooser, Ring, STATUS_LABELS } from "./MacChooser";
+import { MacChooser, Ring } from "./MacChooser";
 import {
   clearActiveTerminal,
   selectLastCommand,
@@ -652,22 +652,48 @@ function runCommand(command: string) {
  * An agent's `done` means "finished, and you haven't looked yet". Selecting
  * the tab clears it in the daemon; this covers the other way of looking: the
  * tab was already on screen, in a focused window, when the agent finished.
+ * Waiting too, though that stays until it's answered: its push to your
+ * devices (server/Push.ts) is no longer news.
  */
 function useSeenTracking(state: DaemonState | null) {
   const workspace = state?.workspaces.find((w) => w.id === state.activeWorkspaceId);
   const tab = workspace?.tabs.find((t) => t.id === workspace.activeTabId);
-  const doneTabId = tab?.agent?.status === "done" ? tab.id : null;
+  const status = tab?.agent?.status;
+  const seenTabId = status === "done" || status === "waiting" ? tab!.id : null;
 
   useEffect(() => {
-    if (!doneTabId) return;
+    if (!seenTabId) return;
 
-    const markSeen = () => daemon.send({ type: "seen", tabId: doneTabId });
+    const markSeen = () => daemon.send({ type: "seen", tabId: seenTabId });
     if (document.hasFocus()) markSeen();
 
     window.addEventListener("focus", markSeen);
     return () => window.removeEventListener("focus", markSeen);
-  }, [doneTabId]);
+  }, [seenTabId, status]);
+
+  // And coming back to a window left on the tab, which says nothing new by
+  // itself: using it (at most every few seconds) is looking at its tab, so a
+  // push of it to your devices goes (server/Push.ts, which ignores the rest).
+  const tabId = tab?.id ?? null;
+  useEffect(() => {
+    if (!tabId) return;
+    let last = 0;
+    const using = () => {
+      const now = Date.now();
+      if (now - last < USING_INTERVAL || !document.hasFocus()) return;
+      last = now;
+      daemon.send({ type: "seen", tabId });
+    };
+    const events = ["keydown", "pointerdown", "pointermove", "wheel"] as const;
+    for (const event of events) window.addEventListener(event, using, { capture: true, passive: true });
+    return () => {
+      for (const event of events) window.removeEventListener(event, using, { capture: true });
+    };
+  }, [tabId]);
 }
+
+/** How often using a window says its tab's been seen. */
+const USING_INTERVAL = 5000;
 
 /**
  * Opens the chat panel when the tab you're looking at finishes a long reply,

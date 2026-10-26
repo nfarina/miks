@@ -28,6 +28,15 @@ const URGENCY: AgentStatus[] = ["waiting", "done", "working", "idle"];
 /** Where a Mac's gateway listens. */
 const GATEWAY_PORT = 2741;
 
+/** This install's own id, for each Mac's list of devices to push to (server/Push.ts). */
+const DEVICE_KEY = "miks-device";
+
+/** The relay's id for this device's push token, and the token it's for. */
+const PUSH_KEY = "miks-push";
+
+/** Holds the APNs key, and turns a device's token into an id (push/worker.js). */
+const PUSH_RELAY = "https://miks-push.nfarina.com";
+
 /** How long a dropped connection waits before trying again. */
 const RETRY_DELAY = 2000;
 
@@ -118,6 +127,62 @@ function writeStorage(key: string, value: unknown) {
  * A Mac in the background: connected, with nothing attached, for what its
  * agents are doing, so the switcher can say one needs you.
  */
+//
+// Push notifications, in the iOS app: it hands over its device token, the
+// relay seals it into an id, and every Mac gets that (`device`), with
+// whether this device is showing it right now, which it never pushes to.
+//
+
+const inApp = !fromGateway && !!(window as any).webkit?.messageHandlers?.default;
+
+const deviceId: string = (() => {
+  let id = readStorage<string | null>(DEVICE_KEY, null);
+  if (!id) writeStorage(DEVICE_KEY, (id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`));
+  return id;
+})();
+
+let pushId = readStorage<{ token: string; id: string } | null>(PUSH_KEY, null)?.id ?? null;
+const pushListeners = new Set<() => void>();
+
+/** What a socket to the Mac at `host` tells it about this device. */
+function deviceMessage(host: string, visible: boolean): string | null {
+  if (!inApp) return null;
+  // An iPad says it's a Mac; one with a touch screen isn't.
+  const ua = navigator.userAgent;
+  const name = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "iPad" : "iPhone";
+  return JSON.stringify({
+    type: "device",
+    deviceId,
+    device: pushId && { id: pushId, deviceId, name, host },
+    visible,
+  });
+}
+
+/** The app's token (from the start, or once it has one), registered with the relay if it's new. */
+async function takePushToken(info: { token?: string; environment?: string } | null) {
+  if (!info?.token || !info.environment) return;
+  const known = readStorage<{ token: string; id: string } | null>(PUSH_KEY, null);
+  if (known?.token === info.token) return;
+  try {
+    const response = await fetch(`${PUSH_RELAY}/register`, {
+      method: "POST",
+      body: JSON.stringify({ token: info.token, environment: info.environment }),
+    });
+    const { id } = await response.json();
+    if (typeof id !== "string") return;
+    writeStorage(PUSH_KEY, { token: info.token, id });
+    pushId = id;
+    pushListeners.forEach((listener) => listener());
+  } catch (error) {
+    console.error("Couldn't register for notifications:", error);
+  }
+}
+
+if (inApp) {
+  (window as any).miks_pushToken = (info: { token?: string; environment?: string }) => void takePushToken(info);
+  void askApp<{ token?: string; environment?: string }>("pushToken").then(takePushToken);
+}
+
 class Watcher {
   status: AgentStatus | null = null;
   workspaces: MacWorkspace[] = [];
@@ -144,7 +209,10 @@ class Watcher {
       return;
     }
     this.socket = socket;
-    socket.onopen = () => socket.send(JSON.stringify({ type: "hello" }));
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ type: "hello" }));
+      this.announce();
+    };
     socket.onmessage = (event) => {
       const message = JSON.parse(String(event.data)) as DaemonMessage;
       if (message.type !== "state") return;
@@ -166,6 +234,12 @@ class Watcher {
       this.onChange();
       if (!this.closed) this.retry = setTimeout(() => this.connect(), RETRY_DELAY * 5);
     };
+  }
+
+  /** Tells the Mac about this device (it isn't showing it: this is a watcher). */
+  announce() {
+    const message = deviceMessage(this.host, false);
+    if (message && this.socket?.readyState === WebSocket.OPEN) this.socket.send(message);
   }
 
   close() {
@@ -226,6 +300,35 @@ function webBridge(): MiksBridge {
   };
   let connected = false;
 
+  // Tells the Mac on screen about this device, and that it's showing it (or not, once the app's away).
+  const announce = () => {
+    const message = mac && deviceMessage(mac, document.visibilityState === "visible");
+    if (message && socket?.readyState === WebSocket.OPEN) socket.send(message);
+  };
+  pushListeners.add(() => {
+    announce();
+    for (const watcher of watchers.values()) watcher.announce();
+  });
+
+  // A tapped notification's tab, opened once its Mac's state says where it is.
+  let openingTab: string | null = null;
+  const openTab = (state: { workspaces: { id: string; tabs: { id: string }[] }[] }) => {
+    const workspace = state.workspaces.find((w) => w.tabs.some((tab) => tab.id === openingTab));
+    if (workspace) socket?.send(JSON.stringify({ type: "select", workspaceId: workspace.id, tabId: openingTab }));
+    openingTab = null;
+  };
+  const openNotification = (info: { mac?: string; tabId?: string } | null) => {
+    if (!info?.mac || !info.tabId || !macs.includes(info.mac)) return;
+    openingTab = info.tabId;
+    if (info.mac !== mac) select(info.mac);
+    else if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "hello" }));
+  };
+  if (inApp) {
+    (window as any).miks_openNotification = openNotification;
+    void askApp<{ mac?: string; tabId?: string }>("pendingNotification").then(openNotification);
+  }
+  let askedForNotifications = false;
+
   function select(host: string | null) {
     if (host === mac) return connect();
     mac = host;
@@ -267,11 +370,21 @@ function webBridge(): MiksBridge {
     socket = next;
     next.onopen = () => {
       connected = true;
+      announce();
+      // Once, in the app, with a Mac to hear from: iOS asks only the first time.
+      if (inApp && !askedForNotifications) {
+        askedForNotifications = true;
+        (window as any).webkit.messageHandlers.default.postMessage({ name: "requestNotificationAuthorization" });
+      }
       if (mac) sawMac(mac);
       macsChanged();
       status({ connected: true });
     };
-    next.onmessage = (event) => messageListeners.forEach((listener) => listener(String(event.data)));
+    next.onmessage = (event) => {
+      const data = String(event.data);
+      if (openingTab && data.startsWith('{"type":"state"')) openTab(JSON.parse(data).state);
+      messageListeners.forEach((listener) => listener(data));
+    };
     next.onclose = () => {
       if (socket !== next) return;
       if (connected && mac) sawMac(mac);
@@ -285,6 +398,7 @@ function webBridge(): MiksBridge {
 
   // A phone puts a page to sleep; on coming back, don't wait out the retry.
   document.addEventListener("visibilitychange", () => {
+    announce();
     if (document.visibilityState !== "visible") return;
     if (!socket) connect();
     for (const watcher of watchers.values()) watcher.connect();

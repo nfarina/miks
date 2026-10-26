@@ -50,6 +50,10 @@
 	     network when it's on the same Wi-Fi. -->
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Miks connects to the Macs whose terminals you open in it.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

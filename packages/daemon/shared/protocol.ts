@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -157,6 +157,18 @@ export type PermissionStatus = "granted" | "denied" | "notAsked" | "unknown";
 // Client → daemon.
 //
 
+/** A device the iOS app registered for pushes (server/Push.ts). */
+export type PushDevice = {
+  /** The relay's id for it (push/worker.js): its token, sealed. */
+  id: string;
+  /** The same device across registrations, each install's own. */
+  deviceId: string;
+  /** What it is ("iPhone"), for the log. */
+  name: string;
+  /** How that device reaches this Mac, so tapping a push opens it there. */
+  host: string;
+};
+
 export type ClientMessage =
   /** Asks for the full state; the daemon answers with `state`. */
   | { type: "hello" }
@@ -179,8 +191,17 @@ export type ClientMessage =
   | { type: "closeTab"; tabId: string }
   /** Selecting a tab also marks its agent's `done` as seen. */
   | { type: "select"; workspaceId: string; tabId?: string }
-  /** The tab is on screen in a focused window, so its `done` has been seen. */
+  /**
+   * The tab is on screen in a focused window, so its `done` has been seen,
+   * and its push (waiting too) is no longer news.
+   */
   | { type: "seen"; tabId: string }
+  /**
+   * From the iOS app, to every Mac it has: where to push to (none, without
+   * permission), and whether it's showing this Mac right now (never pushed
+   * to then). Since protocol 13.
+   */
+  | { type: "device"; deviceId: string; device: PushDevice | null; visible: boolean }
   /**
    * Starts streaming a pane: one `snapshot`, then `output` from exactly where
    * it left off. With a size, the pane is resized first; without one (a tab

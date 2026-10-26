@@ -1,0 +1,12 @@
+// Miks's push relay, at https://miks-push.nfarina.com (worker.js). Secrets,
+// set with `wrangler secret put`: APNS_KEY (the .p8's text) and ID_SECRET
+// (32 random bytes, base64, sealing device tokens into ids; changing it
+// orphans every registered device until its app registers again).
+{
+  "name": "miks-push",
+  "account_id": "0a607a0daae512c38bb66f68e5ed5f0b",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  "vars": { "APNS_KEY_ID": "B2ZPFV7BH3", "APNS_TEAM_ID": "RCRD96UZHN" },
+  "routes": [{ "pattern": "miks-push.nfarina.com", "custom_domain": true }]
+}

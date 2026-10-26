@@ -406,6 +406,31 @@ resizes); keep it passing.
   by `build-app.ts`) or, in the repo, its version and checked-out commit;
   and, read again then, what's installed now if that differs, which it runs
   only once restarted.
+- Push notifications to the iOS app (`server/Push.ts`): the daemon decides,
+  as Messages does. A tab's agent waiting or done goes to devices at once
+  if this Mac's been idle a minute (`HIDIdleTime`, from `ioreg`), else
+  after a minute unless the tab's been seen meanwhile; never to a device
+  showing this Mac (`device` messages say so, `visible`). Seen anywhere
+  (`seen`, `select`, answered, closed), its notification goes from every
+  device: a background push with `clear_threads` (the shell's
+  `AppNotifications`), the thread being the tab's `key`. A window here
+  left on the tab says `seen` at once, so the daemon believes this Mac's
+  windows only when it isn't idle. Pushes go through a relay
+  (`push/worker.js`, https://miks-push.nfarina.com, `wrangler deploy` in
+  `push/`) holding the APNs key as a secret: key B2ZPFV7BH3, the team's,
+  shared with Phoenix and Sage (the team is at Apple's limit of keys). It
+  seals a device's token and environment into the opaque id daemons keep
+  (`devices.json` in Miks's home). Workers reach APNs over HTTP/2 on the
+  edge, but local `wrangler dev` can't ("Network connection lost"): test
+  with `--remote`. A made-up token answering `BadDeviceToken` (relay:
+  `gone`) means the key and topic were accepted. The app says its
+  environment from `embedded.mobileprovision` (development builds carry
+  one; TestFlight's don't), and asks for permission once it's connected to
+  a Mac. Building for a device after a capability change needs a new
+  profile, which `xcodebuild` (with "No Accounts") makes with the App Store
+  Connect key: `-allowProvisioningUpdates -authenticationKeyPath` (the
+  key from the keychain, as `asc-api.mjs` reads it) `-authenticationKeyID
+  -authenticationKeyIssuerID`.
 - The iOS app restarts its Mac's daemon from the Mac switcher (Restart
   daemon…): `running`, to ask about what a restart loses (`describeRunning`,
   shared with the Mac app's), then `restart`, over the socket, since the

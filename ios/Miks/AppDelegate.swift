@@ -1,4 +1,5 @@
 import UIKit
+import UserNotifications
 
 /// Where the web bundle comes from (`MIKS_HOST` in the project, through
 /// Info.plist), unless Settings → Miks points it at a development server.
@@ -18,7 +19,7 @@ var usingCachedWebBundle = true
 /// The composition root, and the only native code that's Miks's own: the web
 /// view, the bridge and the bundle are chatwing's shared shell (`ios/Shared`).
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate, WebAppViewControllerDelegate, WebBundleDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate, WebAppViewControllerDelegate, WebBundleDelegate {
     private let log = Logger(prefix: "appdelegate")
 
     var webAppController: WebAppViewController!
@@ -30,6 +31,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, WebAppViewControllerDeleg
     ) -> Bool {
         log.info("Application is launching.")
         setupSettings()
+        setupNotifications()
         setupWebViewController()
         return true
     }
@@ -73,13 +75,88 @@ class AppDelegate: UIResponder, UIApplicationDelegate, WebAppViewControllerDeleg
     func handleEnterBackground() {}
 
     //
-    // What the shell asks of an app that has accounts and push; Miks has neither yet.
+    // What the shell asks of an app that has accounts; Miks hasn't.
     //
 
     func webAppViewController(_ controller: WebAppViewController, didLoginWithToken token: String) {}
     func webAppViewControllerDidLogout(_ controller: WebAppViewController) {}
-    func webAppViewControllerDidRequestNotificationAuthorization(_ controller: WebAppViewController) {}
     func webAppViewControllerDidRequestMicrophoneAuthorization(_ controller: WebAppViewController) {}
+
+    //
+    // Notifications: a Mac's daemon pushes (packages/daemon/server/Push.ts),
+    // through the relay that holds the key (push/worker.js). The page
+    // registers this device's token there and with every Mac, and asks for
+    // permission once it has a Mac to hear from.
+    //
+
+    func setupNotifications() {
+        // Push doesn't work on the simulator at all.
+        if Platform.isSimulator { return }
+        UNUserNotificationCenter.current().delegate = self
+        registerIfAllowed()
+    }
+
+    private func registerIfAllowed() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
+            DispatchQueue.main.async { UIApplication.shared.registerForRemoteNotifications() }
+        }
+    }
+
+    func webAppViewControllerDidRequestNotificationAuthorization(_ controller: WebAppViewController) {
+        if Platform.isSimulator { return }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            self.log.info("Notifications granted? \(granted) \(String(describing: error))")
+            self.registerIfAllowed()
+        }
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        log.info("Remote notification registration succeeded.")
+        MiksPlugin.pushToken = deviceToken.apnsToken
+        webAppController?.sendToWindowListener("miks_pushToken", args: MiksPlugin.pushInfoJSON)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        log.error("Remote notification registration failed.", error)
+    }
+
+    // With the app in front, a push is from a Mac other than the one on
+    // screen (the daemon never pushes to the device showing it): show it.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.list, .banner, .sound])
+    }
+
+    // The tab was looked at somewhere: its notification goes.
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        if AppNotifications.handleRemoteNotification(userInfo, completion: { completionHandler(.noData) }) { return }
+        completionHandler(.noData)
+    }
+
+    // Tapped: open its tab, now or once the page asks (launched by the tap).
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+           let mac = userInfo["mac"] as? String, let tabId = userInfo["tabId"] as? String {
+            MiksPlugin.pendingNotification = ["mac": mac, "tabId": tabId]
+            if webAppController?.isLoaded() == true, let json = MiksPlugin.takePendingNotificationJSON() {
+                webAppController.sendToWindowListener("miks_openNotification", args: json)
+            }
+        }
+        completionHandler()
+    }
 
     //
     // Web view

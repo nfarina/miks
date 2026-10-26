@@ -13,7 +13,11 @@ import { browseUrl } from "../shared/browse.ts";
 import { transcribe } from "./Dictation.ts";
 import { versionReport } from "./Version.ts";
 import { isProxyRequest, proxyConnect, proxyRequest } from "./Proxy.ts";
+import { Push } from "./Push.ts";
 import { type SavedState, Workspaces } from "./Workspaces.ts";
+
+/** How often the iOS app's sockets are pinged; one that misses a ping is gone. */
+const DEVICE_PING = 15_000;
 
 export type Daemon = {
   workspaces: Workspaces;
@@ -75,6 +79,26 @@ export async function serve({
 
   // Connected UIs.
   const sockets = new Set<WebSocket>();
+  // The iOS app's, by the device each is on, and whether it's showing this Mac.
+  const devices = new Map<WebSocket, { deviceId: string; visible: boolean }>();
+  const push = new Push({
+    home: path.dirname(socketPath),
+    onScreen: (deviceId) => [...devices.values()].some((device) => device.deviceId === deviceId && device.visible),
+  });
+  // A phone that locks with the app open suspends it without a word, and its
+  // socket stays open here, showing this Mac, for minutes: one that doesn't
+  // answer a ping by the next goes.
+  const answered = new Set<WebSocket>();
+  const devicePing = setInterval(() => {
+    for (const socket of devices.keys()) {
+      if (!answered.delete(socket)) {
+        socket.terminate();
+        continue;
+      }
+      socket.ping();
+    }
+  }, DEVICE_PING);
+  devicePing.unref();
 
   /** Tells every window first, so the ones on this Mac wait for the new daemon. */
   const restart = () => {
@@ -190,7 +214,9 @@ export async function serve({
     broadcastPending = true;
     setImmediate(() => {
       broadcastPending = false;
-      const message = JSON.stringify({ type: "state", state: workspaces.getState() } satisfies DaemonMessage);
+      const state = workspaces.getState();
+      push.update(state);
+      const message = JSON.stringify({ type: "state", state } satisfies DaemonMessage);
       for (const socket of sockets) socket.send(message);
     });
   });
@@ -265,10 +291,26 @@ export async function serve({
           return workspaces.setDark(message.dark);
         case "closeTab":
           return workspaces.closeTab(message.tabId);
-        case "select":
-          return workspaces.select(message.workspaceId, message.tabId);
+        case "select": {
+          workspaces.select(message.workspaceId, message.tabId);
+          const workspace = workspaces.getState().workspaces.find((w) => w.id === message.workspaceId);
+          const tabId = message.tabId ?? workspace?.activeTabId;
+          if (tabId) push.seen(tabId);
+          return;
+        }
         case "seen":
+          // On a device, someone's looking; a window here may just be left on it.
+          if (devices.has(socket)) push.seen(message.tabId);
+          else void push.seenAtMac(message.tabId);
           return workspaces.markSeen(message.tabId);
+        case "device":
+          if (message.device) push.register({ ...message.device, deviceId: message.deviceId });
+          if (!devices.has(socket)) {
+            answered.add(socket);
+            socket.on("pong", () => answered.add(socket));
+          }
+          devices.set(socket, { deviceId: message.deviceId, visible: message.visible });
+          return;
         case "attach": {
           const pane = workspaces.getPane(message.tabId);
           if (!pane) return;
@@ -396,6 +438,8 @@ export async function serve({
 
     socket.on("close", () => {
       sockets.delete(socket);
+      devices.delete(socket);
+      answered.delete(socket);
       for (const [tabId, viewer] of viewers) workspaces.getPane(tabId)?.detach(viewer);
       for (const unwatch of chats.values()) unwatch();
       for (const watch of files.values()) watch.stop();
@@ -417,6 +461,8 @@ export async function serve({
       // that layout, emptied, is not the one to come back to.
       clearInterval(cwdPoll);
       clearInterval(foregroundPoll);
+      push.close();
+      clearInterval(devicePing);
       await persistence?.final();
       await workspaces.killAll();
       for (const socket of sockets) socket.terminate();
