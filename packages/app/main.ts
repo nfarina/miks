@@ -297,25 +297,25 @@ async function restartDaemon(window: BrowserWindow | undefined) {
   const ping = await daemonGet("/api/ping", socketFile);
 
   // A restart brings every tab back, in its folder with its history, along
-  // with its kept command or Claude session; it asks only about what won't
-  // come back, or would be cut off mid-task.
+  // with its kept command or Claude session; it always asks (the menu's "…"),
+  // naming what won't come back, or would be cut off mid-task.
   const lost = await runningPrograms(socketFile, { restored: true });
-  if (lost.length > 0) {
-    const shown = lost.slice(0, 8);
-    const more = lost.length - shown.length;
-    const { response } = await show(window, {
-      type: "warning",
-      message: remote ? `Restart ${remote.name}'s daemon?` : "Restart the daemon?",
-      detail:
-        `Every tab comes back, but restarting stops what's running in these${remote ? ` on ${remote.name}` : ""}:\n\n` +
-        shown.join("\n") +
-        (more ? `\nand ${more} more` : ""),
-      buttons: ["Restart", "Cancel"],
-      defaultId: 1,
-      cancelId: 1,
-    });
-    if (response !== 0) return;
-  }
+  const shown = lost.slice(0, 8);
+  const more = lost.length - shown.length;
+  const { response } = await show(window, {
+    type: lost.length > 0 ? "warning" : "question",
+    message: remote ? `Restart ${remote.name}'s daemon?` : "Restart the daemon?",
+    detail:
+      lost.length > 0
+        ? `Every tab comes back, but restarting stops what's running in these${remote ? ` on ${remote.name}` : ""}:\n\n` +
+          shown.join("\n") +
+          (more ? `\nand ${more} more` : "")
+        : "Every tab comes back as it was, with its history and Claude session.",
+    buttons: ["Restart", "Cancel"],
+    defaultId: lost.length > 0 ? 1 : 0,
+    cancelId: 1,
+  });
+  if (response !== 0) return;
 
   if (remote) {
     const answer = await daemonGet("/api/restart", socketFile, "POST");

@@ -3,6 +3,7 @@ import { fonts } from "crosswing/fonts";
 import { tooltip } from "crosswing/modals/popup";
 import { PanelLayoutContext } from "crosswing/components/PanelLayout";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
+import { useConfirm } from "crosswing/modals/confirm";
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { ChevronDown, Laptop, PanelLeft, Plus, RotateCw, Settings, Trash2 } from "lucide-react";
 import { describeRunning } from "miks/shared/background";
@@ -12,7 +13,7 @@ import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
-import { addMac } from "./MacChooser";
+import { addMac, useRemoveMac } from "./MacChooser";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { displayPath, getSettings, updateSettings, useSettings } from "./settings";
 import { backgroundSummary, STATUS_LABELS, URGENCY, waitingMessage, workspaceStatus, workspaceTitle } from "./status";
@@ -146,6 +147,24 @@ function MacSwitcher() {
   const active = macs.find((mac) => mac.active);
   const others = macs.filter((mac) => !mac.active);
   const status = URGENCY.find((status) => others.some((mac) => mac.status === status && status !== "idle"));
+  const removing = useRemoveMac();
+  const restarting = useConfirm((name: string, lost: string[]) => ({
+    title: `Restart ${name}'s daemon?`,
+    message:
+      lost.length > 0
+        ? "Every tab comes back, but restarting stops what's running in these:"
+        : "Every tab comes back as it was, with its history and Claude session.",
+    children: lost.length > 0 && (
+      <StyledLost>
+        {lost.slice(0, 8).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+        {lost.length > 8 && <li>and {lost.length - 8} more</li>}
+      </StyledLost>
+    ),
+    destructiveText: "Restart",
+    onConfirm: () => daemon.send({ type: "restart" }),
+  }));
 
   const menu = usePopup(() => (
     <PopupMenu>
@@ -164,14 +183,18 @@ function MacSwitcher() {
       <PopupMenuText icon={<Plus />} onClick={addMac} children="Add a Mac…" />
       <PopupMenuText icon={<Settings />} onClick={() => daemon.runCommand("settings")} children="Settings…" />
       {active && (
-        <PopupMenuText icon={<RotateCw />} onClick={() => void restartDaemon(active.name)} children="Restart daemon…" />
+        <PopupMenuText
+          icon={<RotateCw />}
+          onClick={() => void restartDaemon(active.name, restarting.show)}
+          children="Restart daemon…"
+        />
       )}
       {active && (
         <PopupMenuText
           destructive
           icon={<Trash2 />}
-          onClick={() => bridge.remove(active.host)}
-          children={`Remove ${active.name}`}
+          onClick={() => removing.show(active)}
+          children={`Remove ${active.name}…`}
         />
       )}
     </PopupMenu>
@@ -188,27 +211,25 @@ function MacSwitcher() {
 
 /**
  * The Mac app's Restart daemon…, over the socket (the app has nothing else):
- * every tab comes back, so it asks only about what won't, or would be cut
- * off mid-task.
+ * every tab comes back, so it always asks (the "…"), naming what won't, or
+ * would be cut off mid-task.
  */
-async function restartDaemon(name: string) {
+async function restartDaemon(name: string, confirm: (name: string, lost: string[]) => void) {
   if (!daemon.speaks(11)) {
     return window.miks?.confirm({ message: `${name}'s Miks can't restart from here`, detail: "Update Miks there and restart its daemon there once.", button: "OK" });
   }
   const running = await daemon.running();
-  const lost = describeRunning(running ?? [], { restored: true, prefix: getSettings().hidePathPrefix, home: daemon.getSnapshot().state?.home ?? null });
-  if (lost.length > 0) {
-    const shown = lost.slice(0, 8);
-    const more = lost.length - shown.length;
-    const restart = await window.miks?.confirm({
-      message: `Restart ${name}'s daemon?`,
-      detail: `Every tab comes back, but restarting stops what's running in these:\n\n${shown.join("\n")}${more ? `\nand ${more} more` : ""}`,
-      button: "Restart",
-    });
-    if (!restart) return;
-  }
-  daemon.send({ type: "restart" });
+  confirm(name, describeRunning(running ?? [], { restored: true, prefix: getSettings().hidePathPrefix, home: daemon.getSnapshot().state?.home ?? null }));
 }
+
+/** What a restart would stop, in its dialog. */
+const StyledLost = styled.ul`
+  margin: 0;
+  padding: 12px 16px 12px 32px;
+  color: ${colors.textSecondary()};
+  font: ${fonts.display({ size: 13, line: "18px" })};
+  overflow-wrap: anywhere;
+`;
 
 const StyledMacSwitcher = styled.button`
   display: flex;

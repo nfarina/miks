@@ -3,26 +3,18 @@ import { Button } from "crosswing/components/Button";
 import { TextInput } from "crosswing/components/forms/TextInput";
 import { PopupMenu, PopupMenuText } from "crosswing/components/PopupMenu";
 import { fonts } from "crosswing/fonts";
+import { useConfirm } from "crosswing/modals/confirm";
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { safeArea } from "crosswing/safearea";
-import type { AgentStatus } from "miks/shared/protocol";
 import { Ellipsis, Laptop, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { keyframes, styled } from "styled-components";
 import { type Mac, useMacs } from "./daemon";
-import { statusColors, URGENCY } from "./status";
+import { STATUS_LABELS, statusColors, URGENCY } from "./status";
 import { StatusDot } from "./StatusDot";
 
 /** How many of a Mac's workspaces its card lists. */
 const CARD_WORKSPACES = 4;
-
-/** What a workspace's status says, beside it. */
-export const STATUS_LABELS: Record<AgentStatus, string> = {
-  waiting: "Needs you",
-  working: "Working",
-  done: "Done",
-  idle: "Idle",
-};
 
 let addingNext = false;
 
@@ -67,13 +59,14 @@ export function MacChooser() {
 
 function MacCard({ mac }: { mac: Mac }) {
   const bridge = window.miks!.macs!;
+  const removing = useRemoveMac();
   const menu = usePopup(() => (
     <PopupMenu>
       <PopupMenuText
         destructive
         icon={<Trash2 />}
-        onClick={() => bridge.remove(mac.host)}
-        children={`Remove ${mac.name}`}
+        onClick={() => removing.show(mac)}
+        children={`Remove ${mac.name}…`}
       />
     </PopupMenu>
   ));
@@ -124,6 +117,16 @@ function MacCard({ mac }: { mac: Mac }) {
       )}
     </StyledMacCard>
   );
+}
+
+/** Asks before removing a Mac (its … menu's, or the sidebar's). */
+export function useRemoveMac() {
+  return useConfirm((mac: Mac) => ({
+    title: `Remove ${mac.name}?`,
+    message: "Its terminals keep running there. To open them here again, add it again.",
+    destructiveText: "Remove",
+    onConfirm: () => window.miks?.macs?.remove(mac.host),
+  }));
 }
 
 function AddMac({ onCancel }: { onCancel?: () => void }) {
