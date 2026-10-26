@@ -56,6 +56,10 @@ and see what a tag started with
 ## Not done or not verified yet
 
 - Whether Beta App Review passes 1.0 (2), submitted 2026-10-24, and whether
-  later builds of the same version skip it.
+  later builds of the same version skip it. Only one build of a version can
+  be in review: 1.0 (3) (push notifications, tag `ios-1.0-push`), added to
+  `Public` on 2026-10-26, was refused ("Another build in the same train is
+  already in beta review") and needs submitting once 1.0 (2)'s review is
+  done: build `1fcc6408-3def-4af5-9385-30730ff7e6b2`.
 - Whether a build ever reaches `Public` without being added (Phoenix's
   shipped ones were added by hand, as far as is known).
