@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" translate="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover" />
+    <title>Miks</title>
+    <script>
+      // For the iOS app (see README.md): demo.js's pretend Macs, set up by ?demo= and ?storage=.
+      const params = new URLSearchParams(location.search);
+      if (params.has("storage")) {
+        localStorage.clear();
+        for (const [k, v] of Object.entries(JSON.parse(params.get("storage")))) localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v));
+      }
+      window.__demo = JSON.parse(params.get("demo") || '{"bridge":"web"}');
+    </script>
+    <script src="/@fs/Users/nick/Code/miks/site/screenshots/demo.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

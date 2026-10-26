@@ -207,6 +207,12 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   real Claude Code.
 - The icon: `packages/app/icon/make-icon.sh` turns `source.png` (full-bleed
   square) into `icon.png` (dev Dock icon) and `Miks.icns`.
+- The website (`site/`, one page, published to GitHub Pages by
+  `.github/workflows/pages.yml` on pushes to main): its screenshots are the
+  real UI on a made-up daemon (`site/screenshots/demo.js`, made-up projects
+  only), taken by `site/screenshots/capture.mjs` in headless Chrome; the
+  iPhone Duo's in the simulator (`site/screenshots/README.md`). Retake them
+  when the UI changes visibly.
 - `node scripts/devtools.ts screenshot out.png` / `eval '<js>'` drive the
   running dev app over its DevTools port (2739): how to check UI work without
   screen-recording permission. `curl --unix-socket <sock> http://miks/api/state`

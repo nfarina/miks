@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- The made-up app at localhost:3000 that `miks browse` shows in the screenshots. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color: #1d1d1f; background: #fafaf7; }
+      header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: #fff; border-bottom: 1px solid #ececec; }
+      header b { font-size: 17px; letter-spacing: -0.02em; }
+      header .cart { margin-left: auto; font-size: 13px; color: #666; }
+      .logo { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, #f59e0b, #ef4444); }
+      main { padding: 20px; }
+      .search { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #fff; border: 2px solid #3b82f6; border-radius: 10px; box-shadow: 0 0 0 4px #3b82f633; font-size: 15px; }
+      .search span { color: #999; }
+      .count { margin: 14px 2px 10px; color: #777; font-size: 13px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; }
+      .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px #0001; }
+      .card .img { height: 104px; }
+      .card div:last-child { padding: 10px 12px; }
+      .card small { display: block; color: #888; }
+      mark { background: #fde68a; border-radius: 3px; padding: 0 1px; }
+    </style>
+  </head>
+  <body>
+    <header><div class="logo"></div><b>Fernwood Goods</b><span class="cart">Cart (2)</span></header>
+    <main>
+      <div class="search"><span>⌕</span> mug<span style="color: #3b82f6; margin-left: -6px">|</span></div>
+      <div class="count">4 of 128 products</div>
+      <div class="grid">
+        <div class="card"><div class="img" style="background: linear-gradient(160deg, #c7d2fe, #818cf8)"></div><div>Stoneware <mark>mug</mark><small>$24</small></div></div>
+        <div class="card"><div class="img" style="background: linear-gradient(160deg, #fecaca, #f87171)"></div><div>Camp <mark>mug</mark>, enamel<small>$18</small></div></div>
+        <div class="card"><div class="img" style="background: linear-gradient(160deg, #bbf7d0, #4ade80)"></div><div>Travel <mark>mug</mark><small>$32</small></div></div>
+        <div class="card"><div class="img" style="background: linear-gradient(160deg, #fde68a, #f59e0b)"></div><div><mark>Mug</mark> rack, oak<small>$45</small></div></div>
+      </div>
+    </main>
+  </body>
+</html>

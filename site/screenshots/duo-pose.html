@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- The iPhone Duo in laptop pose, from its screenshot (../img/duo.png): capture.mjs renders it to
+     ../img/duo-laptop.png, so the page shows an image, the same in every browser. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html, body { margin: 0; background: transparent; }
+      body { display: inline-block; }
+      /* The screen's top half upright, its bottom half laid flat, each half's screen placed by insets. */
+      .duo { perspective: 1400px; display: grid; justify-items: center; width: 380px; padding: 20px 70px 60px; }
+      .duo .half { position: relative; width: min(100%, 380px); aspect-ratio: 669 / 475; background: #050506; }
+      .duo .screen { position: absolute; background: url(../img/duo.png) no-repeat; background-size: 100% auto; }
+      .duo .top { border-radius: 32px 32px 0 0; transform-origin: bottom; transform: rotateX(6deg); box-shadow: inset 0 0 0 1.5px #3a3b40; }
+      .duo .top .screen { inset: 10px 10px 0; background-position: top; border-radius: 22px 22px 0 0; }
+      /* Laid back 62°, it's drawn at about half its height: twice the bezel and corners, to look even. */
+      .duo .bottom { border-radius: 0 0 32px 32px / 0 0 64px 64px; transform-origin: top; transform: rotateX(62deg); margin-bottom: -110px; /* What the tilt leaves of its height. */ box-shadow: inset 0 0 0 1.5px #3a3b40, 0 40px 50px -20px rgb(0 0 0 / 0.45); }
+      .duo .bottom .screen { inset: 0 10px 20px; background-position: bottom; border-radius: 0 0 22px 22px / 0 0 44px 44px; }
+      .duo .hinge { width: min(100%, 380px); height: 6px; background: linear-gradient(#2a2b2f, #0c0c0d); }
+    </style>
+  </head>
+  <body>
+    <div class="duo">
+      <div class="half top"><div class="screen"></div></div>
+      <div class="hinge"></div>
+      <div class="half bottom"><div class="screen"></div></div>
+    </div>
+  </body>
+</html>

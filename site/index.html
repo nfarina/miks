@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Miks</title>
+    <meta name="description" content="A terminal for running a bunch of coding agents at once, on your Mac, and from your iPhone and iPad when you walk away." />
+    <meta property="og:title" content="Miks" />
+    <meta property="og:description" content="A terminal for running a bunch of coding agents at once." />
+    <meta property="og:image" content="https://nfarina.github.io/miks/img/mac-chat.png" />
+    <link rel="icon" href="img/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+    />
+    <style>
+      /* Layout: one column of left-set sections, each a short argument beside the
+         screen that proves it. Color comes only from Miks's own status dots. */
+      :root {
+        --paper: #f6f7f8;
+        --surface: #ffffff;
+        --ink: #131417;
+        --muted: #5d6270;
+        --rule: #e1e3e8;
+        --code: #eceef2;
+        --working: #2f8fd4;
+        --waiting: #e8541c;
+        --done: #2fb45a;
+        --button: #131417;
+        --button-ink: #ffffff;
+        --shadow: 0 30px 80px -30px rgb(20 22 30 / 0.35), 0 8px 24px -12px rgb(20 22 30 / 0.2);
+
+        --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+        --body: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+        --step-0: 1.0625rem;
+        --step-1: 1.25rem;
+        --step-2: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem);
+        --step-3: clamp(2.4rem, 1.4rem + 4vw, 4.6rem);
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #111215;
+          --surface: #1a1b1e;
+          --ink: #eceef2;
+          --muted: #9aa0ad;
+          --rule: #2a2c31;
+          --code: #1f2125;
+          --working: #4aa8ea;
+          --waiting: #ff6a33;
+          --done: #47c96e;
+          --button: #eceef2;
+          --button-ink: #131417;
+          --shadow: 0 30px 80px -30px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(255 255 255 / 0.06);
+          color-scheme: dark;
+        }
+      }
+
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 400 var(--step-0) / 1.6 var(--body);
+        -webkit-font-smoothing: antialiased;
+      }
+      img { max-width: 100%; height: auto; display: block; }
+      a { color: inherit; }
+      :focus-visible { outline: 2px solid var(--working); outline-offset: 3px; border-radius: 4px; }
+
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding-left: max(20px, env(safe-area-inset-left, 0px));
+        padding-right: max(20px, env(safe-area-inset-right, 0px));
+      }
+
+      /* Header. */
+      header .wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-block: 20px;
+      }
+      header .name { display: flex; align-items: center; gap: 10px; font: 700 1.3rem var(--display); text-decoration: none; }
+      header .name img { width: 34px; height: 34px; border-radius: 8px; }
+      header nav { margin-left: auto; display: flex; gap: 22px; align-items: center; font-size: 0.95rem; }
+      header nav a { text-decoration: none; color: var(--muted); }
+      header nav a:hover { color: var(--ink); }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 13px 22px;
+        border-radius: 999px;
+        background: var(--button);
+        color: var(--button-ink);
+        font: 600 1rem var(--body);
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .button.small { padding: 8px 16px; font-size: 0.9rem; }
+      .button:hover { opacity: 0.88; }
+      .button.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--rule); }
+
+      /* Hero. */
+      .hero { padding-block: 48px 0; }
+      .hero h1 {
+        font: 800 var(--step-3) / 1.02 var(--display);
+        letter-spacing: -0.035em;
+        max-width: 14ch;
+        margin: 0;
+        text-wrap: balance;
+      }
+      .hero h1 .cursor {
+        display: inline-block;
+        width: 0.5em;
+        height: 0.82em;
+        margin-left: 0.08em;
+        background: var(--ink);
+        vertical-align: -0.06em;
+        animation: blink 1.1s steps(1) infinite;
+      }
+      @keyframes blink { 50% { opacity: 0; } }
+      @media (prefers-reduced-motion: reduce) { .hero h1 .cursor { animation: none; } }
+      .hero .lede { font-size: var(--step-1); color: var(--muted); max-width: 40ch; margin: 24px 0 32px; }
+      .hero .lede strong { color: var(--ink); font-weight: 500; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      .actions .note { color: var(--muted); font-size: 0.9rem; }
+
+      .stage { position: relative; margin-top: 56px; padding-bottom: 40px; }
+      .window { border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); background: var(--surface); }
+      .stage .phone { position: absolute; right: -8px; bottom: 0; width: min(25%, 250px); }
+
+      /* Padding in px: a percentage would be of the parent's width, not the phone's. */
+      .phone {
+        border-radius: 15% / 7%;
+        padding: 9px;
+        background: #050506;
+        box-shadow: var(--shadow), inset 0 0 0 1.5px #3a3b40;
+      }
+      .phone img { border-radius: 12.5% / 5.8%; }
+      .tablet { border-radius: 4.2% / 5.6%; padding: 1.6%; background: #050506; box-shadow: var(--shadow), inset 0 0 0 1.5px #3a3b40; }
+      .tablet img { border-radius: 2.8% / 3.8%; }
+
+      /* Sections. */
+      section { padding-block: 112px 0; }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font: 500 0.8rem var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex: none; }
+      h2 {
+        font: 700 var(--step-2) / 1.1 var(--display);
+        letter-spacing: -0.025em;
+        margin: 14px 0 18px;
+        max-width: 22ch;
+        text-wrap: balance;
+      }
+      .copy { max-width: 62ch; }
+      .copy p { margin: 0 0 14px; color: var(--muted); }
+      .copy p strong { color: var(--ink); font-weight: 500; }
+
+      .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+      .split.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+      .split.flip > :first-child { order: 2; }
+      .split > * { min-width: 0; }
+
+      /* The sidebar's own language, as a legend. */
+      .statuses { list-style: none; padding: 0; margin: 26px 0 0; display: grid; gap: 14px; }
+      .statuses li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px 10px; align-items: baseline; }
+      .statuses .dot { transform: translateY(-1px); }
+      .statuses b { font-weight: 600; }
+      .statuses span { color: var(--muted); }
+      .statuses .working .dot { color: var(--working); }
+      .statuses .waiting .dot { color: var(--waiting); box-shadow: 0 0 0 4px color-mix(in srgb, var(--waiting) 25%, transparent); }
+      .statuses .done .dot { color: var(--done); }
+
+      .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 40px; margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--rule); }
+      .facts h3 { font: 600 1rem var(--body); margin: 0 0 6px; }
+      .facts p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+      .facts > * { min-width: 0; }
+
+      /* Away from the Mac. */
+      .devices { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: end; max-width: 560px; margin-left: auto; }
+      .devices figure { margin: 0; position: relative; }
+      .banner {
+        position: absolute;
+        left: 6%;
+        right: 6%;
+        top: 9%;
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr) auto;
+        gap: 2px 10px;
+        padding: 11px 13px;
+        border-radius: 18px;
+        background: rgb(60 62 68 / 0.72);
+        -webkit-backdrop-filter: blur(20px) saturate(1.6);
+        backdrop-filter: blur(20px) saturate(1.6);
+        color: #fff;
+        font: 400 0.78rem / 1.3 -apple-system, system-ui, sans-serif;
+        box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+      }
+      .banner img { grid-row: span 3; width: 30px; height: 30px; border-radius: 7px; align-self: start; }
+      .banner b { font-weight: 600; }
+      .banner time { color: rgb(255 255 255 / 0.6); font-size: 0.72rem; }
+      .banner .sub, .banner .body { grid-column: 2 / 4; }
+      .banner .sub { color: rgb(255 255 255 / 0.75); }
+      .caption { margin-top: 14px; font-size: 0.85rem; color: var(--muted); text-align: center; }
+      .ipad { margin-top: 72px; }
+
+      /* Commands. */
+      .commands { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
+      .command { padding: 20px 22px; border-radius: 14px; background: var(--surface); border: 1px solid var(--rule); min-width: 0; }
+      .command > code { display: block; font: 500 0.95rem var(--mono); margin-bottom: 8px; white-space: nowrap; overflow-x: auto; }
+      .command > code::before { content: "❯ "; color: var(--done); }
+      .command p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+      .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin-top: 40px; }
+      .pair figure { margin: 0; min-width: 0; }
+      .pair figcaption { margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
+      .pair figcaption code, .copy code, .facts code, .command p code { font: 0.88em var(--mono); background: var(--code); padding: 1px 5px; border-radius: 4px; }
+
+      .duo-wrap { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 56px; align-items: center; }
+      .duo { margin: 0 auto; width: min(100%, 520px); }
+
+      /* Install. */
+      .install { margin-top: 112px; padding-block: 64px; border-top: 1px solid var(--rule); }
+      .install .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; }
+      .install h3 { font: 700 1.25rem var(--display); margin: 0 0 10px; letter-spacing: -0.01em; }
+      .install p { color: var(--muted); margin: 0 0 18px; font-size: 0.95rem; }
+      .install > .wrap > * { min-width: 0; }
+      footer { padding-block: 32px 48px; color: var(--muted); font-size: 0.85rem; }
+      footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+      @media (max-width: 900px) {
+        .split, .split.flip, .duo-wrap { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+        .split.flip > :first-child { order: 0; }
+        .facts, .commands, .install .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .devices { margin: 0 auto; }
+      }
+      @media (max-width: 600px) {
+        header nav a:not(.button) { display: none; }
+        .facts, .commands, .install .grid, .pair { grid-template-columns: minmax(0, 1fr); }
+        .stage .phone { width: 34%; right: 0; bottom: -8px; padding: 4px; }
+        section { padding-block: 80px 0; }
+        .banner { font-size: 0.62rem; padding: 8px 9px; gap: 1px 7px; grid-template-columns: 22px minmax(0, 1fr) auto; border-radius: 13px; }
+        .banner img { width: 22px; height: 22px; border-radius: 5px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <a class="name" href="./"><img src="img/icon.png" alt="" />Miks</a>
+        <nav>
+          <a href="#away">iPhone &amp; iPad</a>
+          <a href="#remote">Remote Macs</a>
+          <a href="#commands">Commands</a>
+          <a href="https://github.com/nfarina/miks">GitHub</a>
+          <a class="button small" href="https://github.com/nfarina/miks/releases/latest/download/Miks-macos.zip">Download</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap hero">
+        <h1>A terminal for a bunch of agents at once<span class="cursor" aria-hidden="true"></span></h1>
+        <p class="lede">
+          Miks replaces Terminal.app with <strong>workspaces, tabs, and every Claude Code session's status at a glance.</strong>
+          Walk away from your Mac and keep going on your iPhone or iPad. Open the Mac Studio in the basement from your laptop.
+        </p>
+        <div class="actions">
+          <a class="button" href="https://github.com/nfarina/miks/releases/latest/download/Miks-macos.zip">
+            <svg width="16" height="19" viewBox="0 0 16 19" aria-hidden="true"><path fill="currentColor" d="M13.2 10.1c0-2.4 2-3.6 2.1-3.7-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9C2.9 4.5 1.3 5.5.5 7c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.6-1-2.6-3.9ZM10.8 2.9c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.6 2.8-1.4Z"/></svg>
+            Download for Mac
+          </a>
+          <a class="button quiet" href="https://testflight.apple.com/join/CChNubyp">iPhone &amp; iPad beta</a>
+          <span class="note">Free and open source · macOS 13+ on Apple Silicon</span>
+        </div>
+
+        <div class="stage">
+          <div class="window">
+            <picture>
+              <source srcset="img/mac-chat.png" media="(prefers-color-scheme: dark)" />
+              <img src="img/mac-chat-light.png" width="2880" height="1800" alt="Miks on a Mac: five workspaces in the sidebar, one done, one needing input, one working, with a Claude Code session in the terminal and its conversation in a chat panel beside it." />
+            </picture>
+          </div>
+          <div class="phone">
+            <img src="img/phone-chat.png" width="1170" height="2532" alt="The same conversation in the Miks app on an iPhone." />
+          </div>
+        </div>
+      </div>
+
+      <section class="wrap" id="status">
+        <div class="split">
+          <div class="copy">
+            <span class="eyebrow">On your Mac</span>
+            <h2>See which agent needs you without looking at each one</h2>
+            <p>
+              Every workspace in the sidebar says what its agent is doing, from Claude Code's own hooks. Start five sessions, switch to
+              something else, and come back to the one that's ready.
+            </p>
+            <ul class="statuses">
+              <li class="working"><i class="dot"></i><div><b>Working</b> <span>with what it has running in the background: “1 shell, 1 monitor”.</span></div></li>
+              <li class="waiting"><i class="dot"></i><div><b>Needs you</b> <span>in its own words: “Wants to run psql”.</span></div></li>
+              <li class="done"><i class="dot"></i><div><b>Done</b> <span>with a notification, unless you're already looking at it.</span></div></li>
+            </ul>
+          </div>
+          <div class="window">
+            <img src="img/mac-open.png" width="2880" height="1800" loading="lazy" alt="Miks in light mode with a markdown launch checklist open in the panel beside a Claude Code session." />
+          </div>
+        </div>
+
+        <div class="facts">
+          <div>
+            <h3>Comes back where you left it</h3>
+            <p>Quit and relaunch: the layout, each tab's folder and shell history, and its Claude session, resumed.</p>
+          </div>
+          <div>
+            <h3>A chat panel beside the terminal</h3>
+            <p>The tab's conversation in readable type with real markdown, and a box for the next message. Long replies open it on their own.</p>
+          </div>
+          <div>
+            <h3>Terminals that outlive the window</h3>
+            <p>A background daemon owns every shell, so reloading or updating the app never touches a session.</p>
+          </div>
+          <div>
+            <h3>Workspaces and tabs</h3>
+            <p>Drag to reorder. <code>⌘1</code>–<code>9</code> to jump, <code>⌘⇧[ ]</code> to walk through every tab in order.</p>
+          </div>
+          <div>
+            <h3>Drop files in</h3>
+            <p>Their paths are typed for you. Hold <code>⌥</code> to copy them into the tab's folder instead.</p>
+          </div>
+          <div>
+            <h3>Follows light and dark</h3>
+            <p>And tells Claude Code when the appearance changes, so its colors switch too.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap" id="away">
+        <div class="split">
+          <div class="copy">
+            <span class="eyebrow"><i class="dot" style="color: var(--waiting)"></i>Away from your Mac</span>
+            <h2>Walk away. Keep going on your phone.</h2>
+            <p>
+              The Miks app for iPhone and iPad opens your Mac's terminals over <a href="https://tailscale.com">Tailscale</a>. Only your own
+              devices can connect, and only once you turn it on. Nothing is exposed to the internet.
+            </p>
+            <p>
+              <strong>It notifies you the way Messages does.</strong> When a turn ends and you're away from the Mac, your phone hears about
+              it right away. If you're sitting at the Mac, it waits a minute in case you see it there first. Once you've seen it anywhere,
+              the notification disappears from every device.
+            </p>
+            <p>Every Mac's agents are on one screen, and you can reply in the chat panel by typing or dictating.</p>
+          </div>
+          <div class="devices">
+            <figure>
+              <div class="phone"><img src="img/phone-macs.png" width="1170" height="2532" loading="lazy" alt="The Miks app listing two Macs and what each one's agents are doing." /></div>
+              <div class="banner" aria-hidden="true">
+                <img src="img/icon.png" alt="" />
+                <b>Product search box</b>
+                <time>now</time>
+                <span class="sub">air</span>
+                <span class="body">Done. There's a search box above the product list now.</span>
+              </div>
+            </figure>
+            <figure>
+              <div class="phone"><img src="img/phone-sidebar.png" width="1170" height="2532" loading="lazy" alt="Workspaces on an iPhone, with the same status dots as on the Mac." /></div>
+            </figure>
+          </div>
+        </div>
+        <div class="tablet ipad">
+          <img src="img/ipad-chat.png" width="2752" height="2064" loading="lazy" alt="Miks on an iPad: the sidebar, a terminal, and the chat panel side by side." />
+        </div>
+        <p class="caption">On an iPad, it's the whole thing: sidebar, terminal, and chat, with two-finger scrolling and a key bar for Esc, Tab, Ctrl, and the arrows.</p>
+      </section>
+
+      <section class="wrap" id="remote">
+        <div class="split flip">
+          <div class="copy">
+            <span class="eyebrow"><i class="dot" style="color: var(--working)"></i>Your other Macs</span>
+            <h2>The Mac Studio in the basement, on your laptop</h2>
+            <p>
+              A remote window shows another Mac's terminals over SSH. No server listens on the network. Each window is labeled with the Mac it's on.
+            </p>
+            <p>
+              <strong>It behaves as if that Mac were in front of you.</strong> Copying lands on the Mac you're actually using. Dropped files and
+              pasted screenshots are sent over, so Claude Code there can see them. <code>miks browse localhost:3000</code> opens that Mac's dev
+              server with no tunnel to set up.
+            </p>
+            <p>Run <code>miks update</code> in a remote window to update Miks on that Mac.</p>
+          </div>
+          <div class="window">
+            <img src="img/mac-remote.png" width="2880" height="1800" loading="lazy" alt="A Miks window on a Mac named studio, training a model, labeled with a purple studio badge." />
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap" id="commands">
+        <div class="copy">
+          <span class="eyebrow"><i class="dot" style="color: var(--done)"></i>In every tab</span>
+          <h2>A few commands of its own</h2>
+          <p>Miks's shell adds a <code>miks</code> command. You can use it, and so can Claude.</p>
+        </div>
+        <div class="commands">
+          <div class="command">
+            <code>miks open PLAN.md</code>
+            <p>Shows a file in the panel beside the terminal. Markdown is rendered, and code is syntax highlighted.</p>
+          </div>
+          <div class="command">
+            <code>miks edit notes.txt</code>
+            <p>Opens it in a real editor. It's also <code>$EDITOR</code>, so git's commit messages and Claude Code's <code>⌃G</code> open there.</p>
+          </div>
+          <div class="command">
+            <code>miks browse localhost:3000</code>
+            <p>Shows a web page in the panel, loaded from the Mac the terminal is on.</p>
+          </div>
+          <div class="command">
+            <code>miks keep npm run dev</code>
+            <p>Runs it, and runs it again when Miks restores the tab, just as Claude sessions are resumed.</p>
+          </div>
+          <div class="command">
+            <code>miks update</code>
+            <p>Updates Miks on this Mac, and says what it did. Handy from a remote window.</p>
+          </div>
+          <div class="command">
+            <code>miks version</code>
+            <p>What's running, and what's installed if it's newer and waiting for a restart.</p>
+          </div>
+        </div>
+        <div class="pair">
+          <figure>
+            <div class="window"><img src="img/mac-browse.png" width="2880" height="1800" loading="lazy" alt="A dev server's page shown in the panel beside the terminal running it." /></div>
+            <figcaption><code>miks browse localhost:3000</code> beside the dev server it's serving.</figcaption>
+          </figure>
+          <figure>
+            <div class="window"><img src="img/mac-edit.png" width="2880" height="1800" loading="lazy" alt="A git commit message being written in the editor beside the terminal." /></div>
+            <figcaption><code>git commit</code>, with Miks as <code>$EDITOR</code>.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="wrap" id="duo">
+        <div class="duo-wrap">
+          <img class="duo" src="img/duo-laptop.png" width="1040" height="1030" loading="lazy" alt="Miks on an iPhone Duo in laptop pose: a terminal and key bar on the upper half, the keyboard on the lower half." />
+          <div class="copy">
+            <span class="eyebrow">iPhone Duo</span>
+            <h2>The tiniest terminal ever</h2>
+            <p>
+              Half-fold an iPhone Duo and it's a laptop: the terminal on top, the keyboard below, with a key bar for Esc, Tab, Ctrl, and
+              arrow keys that repeat while you hold them.
+            </p>
+            <p>It's the same terminal that's running on your Mac, at the size of a pocket.</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="install" id="install">
+        <div class="wrap grid">
+          <div>
+            <h3>Mac</h3>
+            <p>macOS 13 or later on Apple Silicon. Miks updates itself.</p>
+            <a class="button" href="https://github.com/nfarina/miks/releases/latest/download/Miks-macos.zip">Download Miks</a>
+          </div>
+          <div>
+            <h3>iPhone &amp; iPad</h3>
+            <p>A public beta on TestFlight. It needs a Mac running Miks on your tailnet, with “Open from your other devices” turned on.</p>
+            <a class="button quiet" href="https://testflight.apple.com/join/CChNubyp">Join the beta</a>
+          </div>
+          <div>
+            <h3>Open source</h3>
+            <p>MIT licensed. Agent status comes from hooks Miks adds to Claude Code's settings, and turning them off takes them back out.</p>
+            <a class="button quiet" href="https://github.com/nfarina/miks">Source on GitHub</a>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <span>Miks, by <a href="https://github.com/nfarina">Nick Farina</a></span>
+        <a href="https://github.com/nfarina/miks/releases">Releases</a>
+        <a href="https://github.com/nfarina/miks/blob/main/LICENSE.txt">MIT License</a>
+        <span>Screenshots use made-up projects.</span>
+      </div>
+    </footer>
+  </body>
+</html>
