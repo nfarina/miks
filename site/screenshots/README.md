@@ -5,8 +5,8 @@ Every screenshot in `site/img` is the real UI running against a made-up daemon (
 ## Mac, iPhone and iPad
 
 ```bash
-(cd packages/ui && npx vite --port 4810)
-node site/screenshots/capture.mjs            # every scene
+yarn ui      # the UI alone, at localhost:4810
+node site/screenshots/capture.mjs            # every scene (yarn site to look)
 node site/screenshots/capture.mjs mac-chat   # or some
 ```
 

@@ -29,7 +29,9 @@
     "build:linters": "tsc -p .eslint/tsconfig.json",
     "install:app": "node scripts/install-app.ts",
     "release": "node scripts/release.ts",
-    "deploy:web": "node scripts/deploy-web.ts"
+    "deploy:web": "node scripts/deploy-web.ts",
+    "ui": "yarn workspace ui vite --port 4810 --strictPort",
+    "site": "python3 -m http.server 4820 --directory site"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",

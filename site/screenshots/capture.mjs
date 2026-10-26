@@ -1,7 +1,7 @@
 // Takes the website's screenshots: the real UI, in headless Chrome, on the
 // pretend daemon in demo.js. With the UI's Vite running:
 //
-//   (cd packages/ui && npx vite --port 4810)
+//   yarn ui
 //   node site/screenshots/capture.mjs [scene...]
 //
 // Each scene is a window size, what demo.js shows, and what's clicked.

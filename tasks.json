@@ -6,5 +6,21 @@
       "script": "dev"
     },
     "link": "http://localhost:2738"
+  },
+  "ui": {
+    "title": "UI",
+    "description": "The UI alone in a browser, for the website's screenshots (site/screenshots)",
+    "run": {
+      "script": "ui"
+    },
+    "link": "http://localhost:4810"
+  },
+  "site": {
+    "title": "Website",
+    "description": "The website (site/) as GitHub Pages serves it",
+    "run": {
+      "script": "site"
+    },
+    "link": "http://localhost:4820"
   }
 }
