@@ -78,6 +78,8 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   private readonly agents = new Map<string, AgentState>();
   /** The Claude Code session in each tab, from its hooks, for resuming it. */
   private readonly claudeSessions = new Map<string, { id: string; transcriptPath?: string }>();
+  /** Tabs a restore started a session in (resumed, or a kept command's), until it ends. */
+  private readonly restoredSessions = new Set<string>();
   /**
    * Commands run with `miks keep`, to run again if the tab is restored while
    * they still are. One stops being kept once its shell is back in front,
@@ -256,6 +258,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
     this.panes.set(id, pane);
     this.historyIds.set(id, historyId);
     if (keep) this.keeps.set(id, { command: keep, seenRunning: false });
+    if (keep || resumeClaudeSession) this.restoredSessions.add(id);
     // After the tab named, or at the end.
     const index = after ? workspace.tabIds.indexOf(after) : -1;
     workspace.tabIds.splice(index === -1 ? workspace.tabIds.length : index + 1, 0, id);
@@ -428,6 +431,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
         this.backgrounds.delete(tabId);
         this.agents.delete(tabId);
         this.claudeSessions.delete(tabId);
+        this.restoredSessions.delete(tabId);
         this.updateChat(tabId);
         break;
       default:
@@ -852,13 +856,14 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   }
 
   private getTab(id: string): Tab {
+    const agent = this.agents.get(id);
     return {
       id,
       // Its history file's name, which a restore gives back to it.
       key: this.historyIds.get(id),
       title: this.panes.get(id)?.displayTitle ?? "",
       cwd: this.cwds.get(id) ?? null,
-      agent: this.agents.get(id) ?? null,
+      agent: agent && this.restoredSessions.has(id) ? { ...agent, restored: true } : (agent ?? null),
       running: this.panes.get(id)?.running() ?? null,
       kept: this.keeps.has(id) || !!this.resumableSession(id),
       file: this.files.get(id)?.at(-1)?.file,
@@ -879,6 +884,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
     this.panes.delete(tabId);
     this.agents.delete(tabId);
     this.claudeSessions.delete(tabId);
+    this.restoredSessions.delete(tabId);
     this.chats.get(tabId)?.transcript?.close();
     this.chats.delete(tabId);
     this.closeFiles(tabId);

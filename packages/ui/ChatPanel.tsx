@@ -151,6 +151,7 @@ const openTabs = tabFlags("ChatPanel:open");
 const expandedTabs = tabFlags("ChatPanel:expanded");
 
 export const isChatOpen = openTabs.has;
+/** Opens or closes a tab's panel for you (a long reply, a file arriving), not as your choice. */
 export const setChatOpen = openTabs.set;
 export const useChatOpen = openTabs.useFlag;
 export const useExpanded = expandedTabs.useFlag;
@@ -169,6 +170,34 @@ export function toggleChat(tab: Tab) {
   const open = !isChatOpen(tab);
   if (open) focusOnShow = true;
   else focusActiveTerminal();
+  choosePanel(tab, open);
+}
+
+/**
+ * Whether a Claude session you start opens its tab's panel: until you close
+ * one it opened right away, and again once you open one yourself.
+ */
+const AUTO_OPEN_KEY = "ChatPanel:autoOpen";
+const AUTO_OPEN_CHANGED_MIND = 20_000;
+let autoOpened: { key: string; time: number } | null = null;
+
+function autoOpens(): boolean {
+  try {
+    return localStorage.getItem(AUTO_OPEN_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+/** Opens or closes a tab's panel as you chose, which says whether you want it when sessions start. */
+function choosePanel(tab: Tab, open: boolean) {
+  const closedRightAway = !open && autoOpened?.key === keyOf(tab) && Date.now() - autoOpened.time < AUTO_OPEN_CHANGED_MIND;
+  if (closedRightAway || (open && tab.agent)) {
+    try {
+      localStorage.setItem(AUTO_OPEN_KEY, String(open));
+    } catch {}
+  }
+  autoOpened = null;
   setChatOpen(tab, open);
 }
 
@@ -234,6 +263,17 @@ export function ChatLayout({
     }
   }, [files.map((file) => `${file.id}.${file.opened ?? 0}`).join(), page?.id]);
 
+  // A Claude session you start here opens the panel (one a restore brought
+  // back was left as it was), leaving the keyboard in the terminal.
+  const hadAgent = useRef(!!tab.agent);
+  useEffect(() => {
+    const had = hadAgent.current;
+    hadAgent.current = !!tab.agent;
+    if (had || !tab.agent || tab.agent.restored || isChatOpen(tab) || !autoOpens()) return;
+    autoOpened = { key: keyOf(tab), time: Date.now() };
+    setChatOpen(tab, true);
+  }, [!!tab.agent]);
+
   // Coming back to the tab, the keyboard goes back where it was: into the
   // panel, if it was there. And always into the panel when it covers the
   // terminal. Where it was is read first (layout effects run before the
@@ -285,7 +325,7 @@ export function ChatLayout({
         panelVisible={visible}
         // A click on the shaded terminal (overlay mode) hides it.
         onPanelVisibleChange={(open) => {
-          setChatOpen(tab, open);
+          choosePanel(tab, open);
           if (!open) focusActiveTerminal();
         }}
         panelDefaultSize={420}
@@ -307,7 +347,7 @@ export function ChatLayout({
           showing={showing}
           onShow={setView}
           onHide={() => {
-            setChatOpen(tab, false);
+            choosePanel(tab, false);
             focusActiveTerminal();
           }}
           focusFile={active}
@@ -627,9 +667,29 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     scroller.scrollTop = target;
   }, [chat, pending, status]);
 
+  // Its bottom stays put as it changes height (the on-screen keyboard coming
+  // up, the composer growing), as in Messages: what you were reading at the
+  // bottom stays in view.
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    // Measured only while shown: hidden, it has no height to go back to.
+    let height: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (!scroller.offsetParent) return;
+      const change = height === null ? 0 : height - scroller.clientHeight;
+      height = scroller.clientHeight;
+      if (change === 0) return;
+      if (pinnedAt.current !== null) pinnedAt.current += change;
+      scroller.scrollTop += change;
+    });
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
+
   // ⌃D hides the panel for the terminal, where two more quit Claude Code.
   function hide() {
-    setChatOpen(tab, false);
+    choosePanel(tab, false);
     focusActiveTerminal();
   }
 
@@ -637,7 +697,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   // by closing the panel.
   const { panelMode } = use(PanelLayoutContext);
   function leave() {
-    if (panelMode === "overlay" || expandedTabs.has(tab)) setChatOpen(tab, false);
+    if (panelMode === "overlay" || expandedTabs.has(tab)) choosePanel(tab, false);
     else focusActiveTerminal();
   }
 
@@ -1017,10 +1077,38 @@ function replyStart(scroller: HTMLElement): HTMLElement | null {
   return start;
 }
 
-/** One of your messages, in markdown too, its line breaks as you typed them. */
+/** One of your messages, in markdown too, its line breaks as you typed them. A long one (a paste) shows its start, until you ask for more. */
 function Bubble({ text }: { text: string }) {
-  return <div className="bubble" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, { breaks: true }) }} />;
+  const ref = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  // Measured as laid out, and again as the panel's width changes.
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => element.offsetParent && setLong(element.scrollHeight > BUBBLE_LONG);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return (
+    <div className="bubble" data-clamped={long && !expanded}>
+      <div ref={ref} className="text" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, { breaks: true }) }} />
+      {long && (
+        <button type="button" className="more" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
 }
+
+/** How tall a message of yours shows (about 10 lines), and how tall it can be before it's cut to that. */
+const BUBBLE_CLAMPED = 210;
+const BUBBLE_LONG = 320;
 
 function Reply({ text }: { text: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -1187,11 +1275,32 @@ const StyledChatPanel = styled.div`
           background: ${colors.white({ alpha: 0.35 })};
         }
 
-        > *:first-child {
+        > .text > *:first-child {
           margin-top: 0;
         }
-        > *:last-child {
+        > .text > *:last-child {
           margin-bottom: 0;
+        }
+
+        &[data-clamped="true"] > .text {
+          max-height: ${BUBBLE_CLAMPED}px;
+          overflow: hidden;
+          mask-image: linear-gradient(to bottom, black 60%, transparent);
+        }
+
+        > .more {
+          display: block;
+          margin: 4px 0 0 auto;
+          padding: 0;
+          border: none;
+          background: none;
+          font: ${fonts.displayBold({ size: 13, line: "20px" })};
+          color: ${colors.white({ alpha: 0.85 })};
+          cursor: pointer;
+
+          &:hover {
+            color: ${colors.white()};
+          }
         }
 
         p,

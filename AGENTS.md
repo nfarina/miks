@@ -385,6 +385,10 @@ resizes); keep it passing.
   (it wouldn't clear after sending), so the composer keeps the default.
   Each tab has its own panel, in its own area (`ChatLayout`), open or not
   per tab (window storage), and shown only while `tab.agent` is set.
+  A session starting opens it, unless a restore brought it back
+  (`AgentState.restored`, since protocol 14: the hook can't tell a restore's
+  `--resume` from yours); closing one it opened within 20s stops that, and
+  opening one yourself starts it again (`ChatPanel:autoOpen`).
   Focus the composer with `preventScroll`: focusing it while the panel
   slides in scrolls the whole tab sideways, which looks like the terminal
   narrowing. A tab remembers whether the keyboard was in its panel and
@@ -517,7 +521,8 @@ resizes); keep it passing.
   fetch to another port both came from the remote daemon (by `lsof`).
   In the iOS app a page is the app's own `WKWebView` (`ios/Miks/Pages.swift`),
   over the app's at where `BrowseView` leaves room (`ui/nativePage.ts`
-  follows it each frame, and hides it while hidden or under a modal):
+  follows it each frame, and hides it while hidden, under a modal, or under
+  a PanelLayout's panel, by its shade, as the sidebar is on a phone):
   not under it, since every ancestor's background there would have to be
   clear. It loads through the gateway, which is the proxy too
   (`proxyConfigurations`, CONNECT over TLS to port 2741, even for plain

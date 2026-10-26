@@ -33,6 +33,7 @@ const DEFINITIONS: Definition[] = [
   { id: "appManagement", name: "App management", detail: "Updating or deleting other apps.", kind: "settings", pane: "AppBundles" },
   { id: "systemEvents", name: "Automation: System Events", detail: "AppleScript that drives the system UI.", kind: "ask", pane: "Automation" },
   { id: "finder", name: "Automation: Finder", detail: "AppleScript that drives the Finder.", kind: "ask", pane: "Automation" },
+  { id: "notes", name: "Automation: Notes", detail: "AppleScript that reads and writes your notes.", kind: "ask", pane: "Automation" },
   { id: "camera", name: "Camera", detail: "", kind: "ask", pane: "Camera" },
   { id: "microphone", name: "Microphone", detail: "Voice input, as in Claude Code's.", kind: "ask", pane: "Microphone" },
   { id: "contacts", name: "Contacts", detail: "", kind: "ask", pane: "Contacts" },

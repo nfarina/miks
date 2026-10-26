@@ -6,7 +6,8 @@ type Listener = (event: any) => void;
  * In the iOS app, a `miks browse` page is a web view of the app's own, over
  * this one (ios/Miks/Pages.swift), kept wherever an element here is, clipped
  * as it is (a panel sliding in), and hidden while it's hidden or something
- * modal (a menu, a dialog) is over it, since it would be drawn over that. It
+ * modal (a menu, a dialog, the sidebar over the terminals) is over it, since
+ * it would be drawn over that. It
  * stands in for BrowseView's `<webview>`, by the same methods and events.
  */
 export class NativePage {
@@ -14,6 +15,9 @@ export class NativePage {
   private readonly listeners = new Map<string, Set<Listener>>();
   private readonly unsubscribe: () => void;
   private readonly clippers: HTMLElement[] = [];
+  // The shade of each PanelLayout it's in the content of, shown while that
+  // layout's panel is over it (the sidebar, on a phone).
+  private readonly shades: HTMLElement[] = [];
   private frame = "";
   private raf = 0;
 
@@ -27,6 +31,8 @@ export class NativePage {
     this.unsubscribe = pages.onState((state) => state.id === id && this.update(state));
     for (let parent = element.parentElement; parent; parent = parent.parentElement) {
       if (getComputedStyle(parent).overflow !== "visible") this.clippers.push(parent);
+      const shade = parent.matches(".content") && parent.parentElement?.querySelector<HTMLElement>(":scope > .overlay");
+      if (shade) this.shades.push(shade);
     }
     pages.tell(id, "open", { url });
     this.follow();
@@ -46,7 +52,9 @@ export class NativePage {
     let clip = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     for (const parent of this.clippers) clip = intersect(clip, parent.getBoundingClientRect());
     clip = intersect(clip, rect);
-    const covered = [...document.querySelectorAll("[data-is-modal-root] > *")].some((modal) => covers(modal, clip));
+    const covered =
+      this.shades.some((shade) => getComputedStyle(shade).opacity !== "0") ||
+      [...document.querySelectorAll("[data-is-modal-root] > *")].some((modal) => covers(modal, clip));
     const visible = !covered && clip.right > clip.left && clip.bottom > clip.top && this.shown();
     const frame = JSON.stringify({
       visible,

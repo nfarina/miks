@@ -33,6 +33,7 @@ const TCC_SERVICES = {
 const AUTOMATION_TARGETS = {
   systemEvents: "com.apple.systemevents",
   finder: "com.apple.finder",
+  notes: "com.apple.Notes",
 };
 
 function run(argv) {
@@ -114,7 +115,8 @@ function request(id) {
       $.IOHIDRequestAccess(1);
       return true;
     case "systemEvents":
-    case "finder": {
+    case "finder":
+    case "notes": {
       // Launching the app first, since asking needs it running. This one
       // waits for the answer itself.
       const bundleId = AUTOMATION_TARGETS[id];

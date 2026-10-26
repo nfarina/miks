@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -31,6 +31,8 @@ export type AgentState = {
   replyLines?: number;
   /** The start of that reply, as written (markdown), for a notification. */
   reply?: string;
+  /** A session a restore brought back, rather than one you started. Since protocol 14. */
+  restored?: boolean;
 };
 
 /**
