@@ -51,7 +51,7 @@ import { useWindowListener } from "../util/useWindowListener.js";
 import { useMatchMedia } from "../../hooks/useMatchMedia.js";
 import { getFoldStyle } from "../util/fold.js";
 import { COARSE_POINTER_QUERY, getPointerStyle } from "../util/pointer.js";
-import { getBarStripStyle, getSafeAreaCornersStyle, reserveSafeArea } from "../util/barStrip.js";
+import { getBarStripStyle, getSafeAreaCornersStyle, getTopBarStyle, reserveSafeArea } from "../util/barStrip.js";
 import { BarEdgeContext } from "./BarEdgeContext.js";
 import { HostContext } from "./HostContext.js";
 
@@ -179,6 +179,7 @@ export function HostProvider({
             ...getBarStripStyle(layout),
             ...getFoldStyle(layout),
             ...getSafeAreaCornersStyle(layout),
+            ...getTopBarStyle(layout),
             ...rest.style,
           }}
         />

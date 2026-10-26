@@ -33,6 +33,26 @@ export const safeAreaCorners = {
     withPlus("var(--safe-area-corner-left, var(--safe-area-left, 0px))", plus),
 };
 
+/**
+ * For a bar along the top edge (a header, a tab strip): where the system would
+ * put it, which can be higher than the safe area, beside the cameras and the
+ * status bar (the iPhone Duo's inner display), with sides kept clear of them.
+ * Elsewhere, the plain safe area. Pad the bar's bottom by `below(height)` so
+ * what's under it still starts below the safe area, as it would under a bar
+ * at the safe area's top.
+ */
+export const safeAreaTopBar = {
+  top: (plus?: string) =>
+    withPlus("var(--safe-area-top-bar-top, var(--safe-area-top, 0px))", plus),
+  right: (plus?: string) =>
+    withPlus("var(--safe-area-top-bar-right, var(--safe-area-right, 0px))", plus),
+  left: (plus?: string) =>
+    withPlus("var(--safe-area-top-bar-left, var(--safe-area-left, 0px))", plus),
+  /** How far a bar of this height, placed by `top()`, must pad its bottom to reach the safe area's. */
+  below: (height: string) =>
+    `max(0px, calc(var(--safe-area-top, 0px) - var(--safe-area-top-bar-top, var(--safe-area-top, 0px)) - ${height}))`,
+};
+
 function withPlus(inset: string, plus?: string) {
   return plus ? `calc(${inset} + ${plus})` : inset;
 }
@@ -60,10 +80,14 @@ export function getSafeAreaCSS(safeArea: SafeArea) {
  *     }
  */
 export function provideSafeArea(edges: Partial<SafeArea>) {
-  // The corner-aware insets (see safeAreaCorners) change along with the plain
-  // ones, so clearing an edge clears both.
+  // The corner-aware insets (see safeAreaCorners) and the top bar's (see
+  // safeAreaTopBar) change along with the plain ones, so clearing an edge
+  // clears them all.
   return Object.entries(edges)
-    .map(([edge, value]) => `--safe-area-${edge}: ${value}; --safe-area-corner-${edge}: ${value};`)
+    .map(
+      ([edge, value]) =>
+        `--safe-area-${edge}: ${value}; --safe-area-corner-${edge}: ${value}; --safe-area-top-bar-${edge}: ${value};`,
+    )
     .join("\n");
 }
 

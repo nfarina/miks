@@ -165,7 +165,11 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   crosswing's `HostProvider` (in `main.tsx`) gives the screen's insets as
   `--safe-area-*` (the iPhone Duo's strip and fold included, as in sage);
   each region pads the edges it touches (`crosswing/safearea`), and
-  `PanelLayout` clears the ones a panel beside it already has. The shell
+  `PanelLayout` clears the ones a panel beside it already has. On the Duo's
+  inner screen, whose status and camera take the top-right corner (82pt of
+  safe area), the tab bar and the sidebar's title row go up beside them, where
+  the shell's `bars.top` says (crosswing's `safeAreaTopBar`, set only when
+  that's above the safe area: an iPhone 18 Pro's is at it). The shell
   reports the on-screen keyboard's top (`viewport` in `HostContext`), and the
   app's root takes the height above it. On a touch screen nothing takes the
   keyboard on its own (`autoFocus()` in `ui/settings.ts`: focusing brings the

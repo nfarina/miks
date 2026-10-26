@@ -8,6 +8,10 @@ import { ActionItem, ActionMenu } from "./ActionMenu.js";
 
 export * from "./ActionMenu.js";
 
+/**
+ * @deprecated Use a popup menu instead (`usePopup` with `PopupMenu`), from a
+ * button: an action sheet is an old iOS idiom that apps here no longer use.
+ */
 export function useActions<T extends any[]>(actions: (...args: T) => ActionItem[]): Modal<T> {
   const modal = useModal((...args: T) => {
     const items = actions(...args);

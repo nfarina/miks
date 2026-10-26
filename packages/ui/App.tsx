@@ -12,7 +12,7 @@ import { use, useEffect, useRef, useState } from "react";
 import { keyframes, styled } from "styled-components";
 import { HostContext } from "crosswing/host/context";
 import { coarsePointer } from "crosswing/host/pointer";
-import { provideSafeArea, safeArea } from "crosswing/safearea";
+import { provideSafeArea, safeArea, safeAreaTopBar } from "crosswing/safearea";
 import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
 import { daemon, type Target, useDaemon, useMacs, useTarget } from "./daemon";
@@ -235,8 +235,9 @@ export const StyledApp = styled.div`
 
     > .empty-bar {
       height: 38px;
-      padding-top: ${safeArea.top()};
-      ${coarsePointer(`height: 48px;`)}
+      padding-top: ${safeAreaTopBar.top()};
+      padding-bottom: ${safeAreaTopBar.below("38px")};
+      ${coarsePointer(`height: 48px; padding-bottom: ${safeAreaTopBar.below("48px")};`)}
       -webkit-app-region: drag;
     }
 

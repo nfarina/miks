@@ -59,6 +59,24 @@ export function getBarStripStyle(layout: HostLayout | undefined): CSSProperties 
 }
 
 /**
+ * CSS custom properties for a bar along the top, for safeAreaTopBar, where the
+ * system would put one higher than the safe area: beside the cameras and the
+ * status bar rather than under them, as on the iPhone Duo's inner display, whose
+ * status sits in the top-right corner. Nothing anywhere else, where the
+ * properties fall back to the safe area.
+ */
+export function getTopBarStyle(layout: HostLayout | undefined): CSSProperties {
+  const bar = layout?.bars?.top;
+  if (!bar || bar.y >= layout.safeArea.top) return {};
+
+  return {
+    "--safe-area-top-bar-top": `${bar.y}px`,
+    "--safe-area-top-bar-left": `${bar.x}px`,
+    "--safe-area-top-bar-right": `${layout.width - bar.x - bar.width}px`,
+  } as CSSProperties;
+}
+
+/**
  * CSS custom properties for the safe area plus the screen's rounded corners,
  * along each edge, for safeAreaCorners. The host reports two corner
  * adaptations (clearing the corners horizontally or vertically); we take the

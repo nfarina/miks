@@ -11,7 +11,7 @@ import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, use, useState } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
-import { padSafeArea } from "crosswing/safearea";
+import { padSafeArea, provideSafeArea, safeAreaTopBar } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
 import { addMac, useRemoveMac } from "./MacChooser";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
@@ -77,7 +77,13 @@ export const StyledSidebar = styled.div`
   background: ${colors.textBackgroundPanel()};
   height: 100%;
   user-select: none;
-  ${padSafeArea("top", "left", "bottom")}
+  ${padSafeArea("left", "bottom")}
+  /* Its title row is a bar along the top, beside the status bar where the
+     system puts bars there (the iPhone Duo's inner display). */
+  padding-top: ${safeAreaTopBar.top()};
+  > * {
+    ${provideSafeArea({ top: "0px" })}
+  }
 
   > .titlebar {
     /* Room for the traffic lights, and something to drag the window by. */

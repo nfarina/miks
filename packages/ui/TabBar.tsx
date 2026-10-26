@@ -5,7 +5,7 @@ import type { Tab, Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
-import { safeArea } from "crosswing/safearea";
+import { safeAreaTopBar } from "crosswing/safearea";
 import { hasPanel, toggleChat, toggleExpanded, useChatOpen, useExpanded } from "./ChatPanel";
 import { closeTab } from "./closing";
 import { daemon } from "./daemon";
@@ -88,8 +88,10 @@ export const StyledTabBar = styled.div`
   align-items: center;
   height: 38px;
   flex-shrink: 0;
-  /* Under the status bar, with the screen's edges kept clear. */
-  padding: ${safeArea.top()} ${safeArea.right("6px")} 0 ${safeArea.left("6px")};
+  /* Under the status bar, or beside it where the system puts bars there (the
+     iPhone Duo's inner display), with the screen's edges kept clear. */
+  padding: ${safeAreaTopBar.top()} ${safeAreaTopBar.right("6px")} ${safeAreaTopBar.below("38px")}
+    ${safeAreaTopBar.left("6px")};
   border-bottom: 1px solid ${colors.separator()};
   user-select: none;
   -webkit-app-region: drag;
@@ -147,6 +149,7 @@ export const StyledTabBar = styled.div`
   /* Finger-sized, on a touch screen. */
   ${coarsePointer(`
     height: 48px;
+    padding-bottom: ${safeAreaTopBar.below("48px")};
 
     > .new-tab,
     > .expand-toggle,
