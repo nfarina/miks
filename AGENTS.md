@@ -388,7 +388,8 @@ resizes); keep it passing.
   A session starting opens it, unless a restore brought it back
   (`AgentState.restored`, since protocol 14: the hook can't tell a restore's
   `--resume` from yours); closing one it opened within 20s stops that, and
-  opening one yourself starts it again (`ChatPanel:autoOpen`).
+  opening one yourself starts it again (`ChatPanel:autoOpen`). Opened so in
+  the tab on screen, its composer takes the keyboard (as `autoFocus()` allows).
   Focus the composer with `preventScroll`: focusing it while the panel
   slides in scrolls the whole tab sideways, which looks like the terminal
   narrowing. A tab remembers whether the keyboard was in its panel and

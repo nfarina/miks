@@ -264,13 +264,15 @@ export function ChatLayout({
   }, [files.map((file) => `${file.id}.${file.opened ?? 0}`).join(), page?.id]);
 
   // A Claude session you start here opens the panel (one a restore brought
-  // back was left as it was), leaving the keyboard in the terminal.
+  // back was left as it was), its composer taking the keyboard if it's on
+  // screen, unless that would bring up an on-screen one (autoFocus()).
   const hadAgent = useRef(!!tab.agent);
   useEffect(() => {
     const had = hadAgent.current;
     hadAgent.current = !!tab.agent;
     if (had || !tab.agent || tab.agent.restored || isChatOpen(tab) || !autoOpens()) return;
     autoOpened = { key: keyOf(tab), time: Date.now() };
+    if (active) focusOnShow = true;
     setChatOpen(tab, true);
   }, [!!tab.agent]);
 
