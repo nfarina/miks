@@ -116,7 +116,7 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   for the new one (about 6s) to reconnect, rather than showing it stopped. Test without another Mac:
   `MIKS_SSH=scripts/fake-ssh.ts FAKE_SSH_HOME=/tmp/fh`, with a second daemon
   at `MIKS_HOME="/tmp/fh/Library/Application Support/Miks"`.
-- Your other devices on Tailscale (Settings → Remotes → Open from your other
+- Your other devices on Tailscale (Settings → Remotes → Access from your other
   devices, `tailnetAccess`): the daemon's gateway (`server/Gateway.ts`, started
   in `server/main.ts`, which follows the Mac's `machine.json`) serves the built UI
   (`packages/ui/dist`) and pipes `/ws` to the socket, on port 2741 of this
@@ -145,7 +145,7 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   and locks as usual. Behind the lock screen, with the display off, the
   daemon, terminals and Claude in Chrome all still work (it loaded, clicked
   and screenshotted pages), but screen captures are black, so not computer
-  use. `unlocked` is the keeper (`daemon/keeper/Keeper.swift`, kiosk's
+  use. `unlocked` ("Stay awake, soft-locked") is the keeper (`daemon/keeper/Keeper.swift`, kiosk's
   approach, ~/Code/kiosk), a daemon child that never lets the Mac lock
   (power assertions, and a mouse move in place for the screen saver's HID
   idle clock) and instead, after the AC display-sleep time without a person

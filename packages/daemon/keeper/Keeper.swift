@@ -1,5 +1,5 @@
 // miks-keeper: keeps this Mac available while you're away from it, unlocked
-// ("Awake, unlocked" in Settings → Remotes), so agents can use its screen
+// ("Stay awake, soft-locked" in Settings → Remotes), so agents can use its screen
 // (computer use) as well as its terminals and Chrome. The daemon starts it
 // and reads what it says (a JSON line per change) from its stdout.
 //

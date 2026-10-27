@@ -28,7 +28,7 @@ export function addMac() {
  * In the iOS app, until one connects: the Macs you've added, as cards
  * saying what each one's agents are doing, or, with none yet (or from +),
  * how to add one, by its name ("air", which the app looks up) or the
- * address its Settings shows (Remotes → Open from your other devices).
+ * address its Settings shows (Remotes → Access from your other devices).
  */
 export function MacChooser() {
   const macs = useMacs();
@@ -161,7 +161,7 @@ function AddMac({ onCancel }: { onCancel?: () => void }) {
         <li>
           <span className="number">2</span>
           <span>
-            On the Mac, turn on Miks → Settings → Remotes → <b>Open from your other devices</b>.
+            On the Mac, turn on Miks → Settings → Remotes → <b>Access from your other devices</b>.
           </span>
         </li>
         <li>

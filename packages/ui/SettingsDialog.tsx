@@ -342,10 +342,10 @@ function TailnetAccess() {
 
   return (
     <>
-      <h3 className="heading">{target ? `Open ${target.name} from elsewhere` : "Open this Mac from elsewhere"}</h3>
+      <h3 className="heading">{target ? `Access ${target.name} from elsewhere` : "Access this Mac from elsewhere"}</h3>
       <SeparatorLayout bordered>
         <LabeledToggle
-          label="Open from your other devices"
+          label="Access from your other devices"
           detail="Your iPad or phone can use Miks in the app or a browser, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
           on={tailnetAccess}
           onClick={() => updateSettings({ tailnetAccess: !tailnetAccess })}
@@ -375,7 +375,7 @@ function TailnetAccess() {
               items={[
                 { value: "off", children: "Sleep" },
                 { value: "locked", children: "Stay awake, locked" },
-                { value: "unlocked", children: "Stay awake, unlocked" },
+                { value: "unlocked", children: "Stay awake, soft-locked" },
               ]}
             />
           </div>
@@ -383,9 +383,9 @@ function TailnetAccess() {
       </SeparatorLayout>
       {keepAvailable === "unlocked" && (
         <TipView icon={<ShieldAlert />} title="Miks guards it, not the lock screen">
-          Agents can use anything on it, the screen too, because it never really locks: the session stays open, and
-          anything that reaches Miks can use it as you. The screen goes dark and its keyboard and trackpad do nothing
-          until you use Touch ID or your password. Unplugged, it locks for real; with the lid closed, it sleeps.
+          The screen goes dark and its keyboard and trackpad do nothing until you use Touch ID or your password. But
+          macOS never locks it, which is how agents can use the screen: the session stays open, so anything that
+          reaches Miks can use it as you. Unplugged, it locks for real; with the lid closed, it sleeps.
         </TipView>
       )}
       {keepAvailable === "unlocked" && keeper && !keeper.accessibility && (
@@ -401,7 +401,7 @@ function TailnetAccess() {
 const KEEP_AVAILABLE_DETAIL: Record<KeepAvailable, string> = {
   off: "It sleeps as usual, out of reach until it wakes.",
   locked: "Plugged in with the lid open, it stays awake, and locks as usual. Agents can still use terminals and Chrome.",
-  unlocked: "Plugged in with the lid open, it stays awake and unlocked, so agents can use its screen too.",
+  unlocked: "Plugged in with the lid open, it stays awake, locked by Miks instead of macOS, so agents can use its screen too.",
 };
 
 function RemoteSettings() {
@@ -423,7 +423,7 @@ function RemoteSettings() {
 
   return (
     <StyledRemotes>
-      <h3 className="heading">Open other Macs</h3>
+      <h3 className="heading">Access other Macs</h3>
       <p className="intro">
         A window on another Mac's terminals, as if you were there. It connects over SSH, so <code>ssh host</code> has to
         work from here without a password, and that Mac needs Remote Login on and Miks running. Open one here, or from

@@ -132,7 +132,7 @@ export type DaemonState = {
   gateway?: GatewayState;
   /** Its Mac's settings for every window on it (`machine.json`). Since protocol 11. */
   machine?: MachineSettings;
-  /** How "Awake, unlocked" is going, while it's chosen. Since protocol 17. */
+  /** How "Stay awake, soft-locked" is going, while it's chosen. Since protocol 17. */
   keeper?: KeeperState;
 };
 
