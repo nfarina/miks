@@ -55,13 +55,14 @@ and see what a tag started with
 
 ## Not done or not verified yet
 
-- Whether Beta App Review passes 1.0 (2), submitted 2026-10-24 (on 2026-10-26 it
+- 1.0 (2) passed Beta App Review (submitted 2026-10-24; on 2026-10-26 it
   asked for a video of the app on a physical device: a screen recording, on
-  iCloud Drive, linked at the top of the Review Notes), and whether
-  later builds of the same version skip it. Only one build of a version can
-  be in review: 1.0 (3) (push notifications, tag `ios-1.0-push`), added to
-  `Public` on 2026-10-26, was refused ("Another build in the same train is
-  already in beta review") and needs submitting once 1.0 (2)'s review is
-  done: build `1fcc6408-3def-4af5-9385-30730ff7e6b2`.
+  iCloud Drive, linked at the top of the Review Notes). 1.0 (3) was never
+  submitted. 1.0 (4) (tag `ios-1.0-tailscale`, build
+  `3a49dc24-92ed-4db4-9b0a-ff49ac164f53`) was added to `Public` and
+  submitted on 2026-10-27, and is waiting for review: whether a later build
+  of an approved version clears faster is still to be seen. Only one build
+  of a version can be in review at a time ("Another build in the same train
+  is already in beta review").
 - Whether a build ever reaches `Public` without being added (Phoenix's
   shipped ones were added by hand, as far as is known).
