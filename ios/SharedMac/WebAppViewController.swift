@@ -132,6 +132,7 @@ class WebAppViewController:
         // @chatwing:plugins:end
 
         NotificationCenter.default.addObserver(self, selector: #selector(applicationDidBecomeActive), name: NSApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidResignActive), name: NSApplication.didResignActiveNotification, object: nil)
     }
 
     override func viewDidAppear() {
@@ -576,11 +577,22 @@ class WebAppViewController:
     // Wake lock
     //
 
-    /// Held while the web app wants the display kept on.
+    /// Whether the web app wants the display kept on.
+    private var wakeLockRequested = false
+
+    /// Held while the web app wants the display kept on and we're the active
+    /// app. Unlike iOS, a Mac app keeps running behind other apps, and an
+    /// assertion held there would keep the display on for whatever is in front.
     private var wakeLockActivity: NSObjectProtocol?
 
     private func setWakeLock(_ on: Bool) {
         log.info("Setting wake lock to \(on)")
+        wakeLockRequested = on
+        updateWakeLockActivity()
+    }
+
+    private func updateWakeLockActivity() {
+        let on = wakeLockRequested && NSApp.isActive
         if on, wakeLockActivity == nil {
             wakeLockActivity = ProcessInfo.processInfo.beginActivity(
                 options: [.idleDisplaySleepDisabled, .userInitiated],
@@ -633,6 +645,12 @@ class WebAppViewController:
             reloadWebView()
             webViewWasTerminated = false
         }
+
+        updateWakeLockActivity()
+    }
+
+    @objc func applicationDidResignActive() {
+        updateWakeLockActivity()
     }
 
     func reloadWebView() {
