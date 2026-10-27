@@ -356,8 +356,9 @@
             <span class="eyebrow"><i class="dot" style="color: var(--waiting)"></i>Away from your Mac</span>
             <h2>Walk away. Keep going on your phone.</h2>
             <p>
-              The Miks app for iPhone and iPad opens your Mac's terminals over <a href="https://tailscale.com">Tailscale</a>. Only your own
-              devices can connect, and only once you turn it on. Nothing is exposed to the internet.
+              The Miks app for iPhone and iPad opens your Mac's terminals over <a href="https://tailscale.com">Tailscale</a>. Turn on one
+              switch on the Mac and your phone, your iPad and your other Macs can all reach it. Only devices signed in as you get in, and
+              nothing is exposed to the internet.
             </p>
             <p>
               <strong>It notifies you the way Messages does.</strong> When a turn ends and you're away from the Mac, your phone hears about
@@ -365,6 +366,11 @@
               the notification disappears from every device.
             </p>
             <p>Every Mac's agents are on one screen, and you can reply in the chat panel by typing or dictating.</p>
+            <p>
+              <strong>It stays awake while you're away.</strong> Plugged in, Miks keeps your Mac on the network. Lock it as usual and your
+              agents keep their terminals and Chrome. Or let Miks lock it: the screen goes dark until Touch ID or your password, and agents
+              can still use the screen. Press <code>⌃⌘Q</code> on your way out.
+            </p>
           </div>
           <div class="devices">
             <figure>
@@ -394,7 +400,8 @@
             <span class="eyebrow"><i class="dot" style="color: var(--working)"></i>Your other Macs</span>
             <h2>The Mac Studio in the basement, on your laptop</h2>
             <p>
-              A remote window shows another Mac's terminals over Tailscale, which lets in only your own devices. Each window is labeled with the Mac it's on.
+              A remote window shows another Mac's terminals over Tailscale. There are no SSH keys or ports to set up: <b>Add a Mac</b> lists
+              your Macs on Tailscale, and you pick one. Each window is labeled with the Mac it's on.
             </p>
             <p>
               <strong>It behaves as if that Mac were in front of you.</strong> Copying lands on the Mac you're actually using. Dropped files and
@@ -472,12 +479,12 @@
         <div class="wrap grid">
           <div>
             <h3>Mac</h3>
-            <p>macOS 13 or later on Apple Silicon. Miks updates itself.</p>
+            <p>macOS 13 or later on Apple Silicon. Miks updates itself. Add <a href="https://tailscale.com">Tailscale</a> for everything away from the Mac.</p>
             <a class="button" href="https://github.com/nfarina/miks/releases/latest/download/Miks-macos.zip">Download Miks</a>
           </div>
           <div>
             <h3>iPhone &amp; iPad</h3>
-            <p>A public beta on TestFlight. It needs a Mac running Miks on your tailnet, with “Open from your other devices” turned on.</p>
+            <p>A public beta on TestFlight. It needs a Mac running Miks on your tailnet, with “Access from your other devices” turned on.</p>
             <a class="button quiet" href="https://testflight.apple.com/join/CChNubyp">Join the beta</a>
           </div>
           <div>
