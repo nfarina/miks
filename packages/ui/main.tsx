@@ -11,6 +11,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createGlobalStyle } from "styled-components";
 import { App } from "./App";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 const RootStyle = createGlobalStyle`
   body {
@@ -46,16 +47,18 @@ window.addEventListener("drop", (event) => event.preventDefault());
 const root = createRoot(document.getElementById("root")!);
 root.render(
   <StrictMode>
-    <CrosswingDesktopRootStyle />
-    <RootStyle />
-    <CrosswingApp faces={[systemUI]} fonts={miksFonts}>
-      {/* The screen's safe area (the status bar, the iPhone Duo's strip and
-          fold) as --safe-area-* properties, in the iOS app and a browser. */}
-      <HostProvider>
-        <ModalRootProvider allowDesktopPresentation>
-          <App />
-        </ModalRootProvider>
-      </HostProvider>
-    </CrosswingApp>
+    <ErrorBoundary>
+      <CrosswingDesktopRootStyle />
+      <RootStyle />
+      <CrosswingApp faces={[systemUI]} fonts={miksFonts}>
+        {/* The screen's safe area (the status bar, the iPhone Duo's strip and
+            fold) as --safe-area-* properties, in the iOS app and a browser. */}
+        <HostProvider>
+          <ModalRootProvider allowDesktopPresentation>
+            <App />
+          </ModalRootProvider>
+        </HostProvider>
+      </CrosswingApp>
+    </ErrorBoundary>
   </StrictMode>,
 );

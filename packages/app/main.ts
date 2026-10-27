@@ -410,6 +410,15 @@ function createWindow(remoteId: string | null = null) {
   // The page would title the window after itself.
   window.on("page-title-updated", (event) => event.preventDefault());
 
+  // What went wrong in the page, kept: its console's errors (uncaught ones
+  // and what ErrorBoundary catches go there too) and its renderer going. A
+  // window once went white with nothing anywhere to say why.
+  contents.on("console-message", (event) => {
+    if (event.level === "error") logRenderer(key, `${event.message} (${event.sourceId}:${event.lineNumber})`);
+  });
+  contents.on("render-process-gone", (_event, details) => logRenderer(key, `Renderer gone: ${details.reason}, exit ${details.exitCode}`));
+  contents.on("unresponsive", () => logRenderer(key, "Unresponsive."));
+
   // ⌃⌘← and ⌃⌘→ go through workspaces too, a second way to the menu's
   // ⌃⌘[ and ⌃⌘] (a menu item takes one shortcut).
   contents.on("before-input-event", (event, input) => {
@@ -524,6 +533,15 @@ function confirmRemoteClose(window: BrowserWindow) {
 //
 
 const openRemotesPath = () => path.join(app.getPath("userData"), "remote-windows.json");
+
+/** Appends to UI/renderer.log, which starts over (keeping the last as .old) past 1 MB. */
+function logRenderer(key: string, message: string) {
+  const file = path.join(app.getPath("userData"), "renderer.log");
+  try {
+    if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) > 1 << 20) fs.renameSync(file, `${file}.old`);
+    fs.appendFileSync(file, `${new Date().toISOString()} [${key}] ${message}\n`);
+  } catch {}
+}
 
 function rememberOpenRemotes() {
   const ids = [...windows.keys()].filter((key) => key !== LOCAL);

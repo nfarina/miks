@@ -60,7 +60,10 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   permissions went red once its daemon restarted, until Miks was quit and
   opened there again.
 - Real state lives in `~/Library/Application Support/Miks` (socket,
-  `daemon.log`, `state.json`, and Electron's profile in `UI/`). The daemon
+  `daemon.log`, `state.json`, and Electron's profile in `UI/`). A window's
+  page errors (console errors, uncaught ones, what `ui/ErrorBoundary.tsx`
+  catches instead of the window going white) and its renderer dying go to
+  `UI/renderer.log` (main's `logRenderer`); nothing else keeps them. The daemon
   saves its layout to `state.json` (each tab's cwd, via `lsof`, and its Claude
   session ID from the hooks) and restores it on start, resuming those
   sessions with `claude --resume`. The dev build and Miks.app
