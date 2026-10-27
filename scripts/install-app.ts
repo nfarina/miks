@@ -10,6 +10,7 @@
 // `yarn install:app --to <host>` does the same on another Mac, over ssh
 // (`installOn`), instead of this one.
 import { execFileSync, spawnSync } from "child_process";
+import fs from "fs";
 import { socketPath } from "miks/shared/paths";
 import { buildApp, bundleId, output, run } from "./build-app.ts";
 
@@ -22,6 +23,7 @@ const builtApp = await buildApp();
 
 if (host) {
   installOn(host);
+  removeBuiltApp();
   process.exit(0);
 }
 
@@ -83,6 +85,7 @@ if (wasRunning) {
 console.log(`Installing ${installPath}…`);
 run("rsync", ["-a", "--delete", `${builtApp}/`, `${installPath}/`]);
 run("codesign", ["--verify", "--deep", "--strict", installPath]);
+removeBuiltApp();
 
 if (wasRunning) {
   console.log("Relaunching Miks…");
@@ -99,6 +102,19 @@ const signature = spawnSync("codesign", ["-dv", "--verbose=4", installPath], { e
 console.log("Installed:");
 for (const line of signature.split("\n").filter((line) => /^(Identifier|Authority)=/.test(line)).slice(0, 3)) {
   console.log(`  ${line}`);
+}
+
+/**
+ * The build product is a second registered copy of Miks, and LaunchServices
+ * can launch it in place of the installed one (Spotlight, Open With, app
+ * launchers). Unregistered and deleted once it's installed.
+ */
+function removeBuiltApp() {
+  spawnSync("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister", [
+    "-u",
+    builtApp,
+  ]);
+  fs.rmSync(builtApp, { recursive: true, force: true });
 }
 
 /**
