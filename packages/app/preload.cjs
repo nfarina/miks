@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld("miks", {
   client: () => ipcRenderer.sendSync("miks:client"),
   /** Opens (or brings forward) the window on a remote from Settings. */
   openRemote: (id) => ipcRenderer.send("miks:openRemote", id),
+  /** The other Macs on this Mac's tailnet, for adding one: `{ macs }`, or `{ error }` saying why there are none. */
+  tailnetMacs: () => ipcRenderer.invoke("miks:tailnetMacs"),
   /** A native confirmation on this window; resolves true for its button. */
   confirm: (options) => ipcRenderer.invoke("miks:confirm", options),
   /** Puts text on this Mac's clipboard (a program asked, by OSC 52). */

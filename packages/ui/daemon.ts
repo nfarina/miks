@@ -4,6 +4,7 @@
 // subscribe to their pane's stream with `daemon.stream`.
 import { AgentStatus, ChatEntry, ClientInfo, ClientMessage, DaemonMessage, DaemonState, Permission, RunningProgram, VersionInfo } from "miks/shared/protocol";
 import type { Settings } from "miks/shared/settings";
+import type { TailnetMac } from "miks/shared/tailscale";
 import { useSyncExternalStore } from "react";
 import { clientInfo } from "./client";
 
@@ -34,6 +35,8 @@ export type MiksBridge = {
   getTarget(): Target | null;
   onTarget(listener: (target: Target | null) => void): Unsubscribe;
   openRemote(id: string): void;
+  /** The other Macs on this Mac's tailnet, for adding one, or why there are none; missing from an older preload. */
+  tailnetMacs?(): Promise<{ macs?: TailnetMac[]; error?: string }>;
   /** What this window is and where, for `miks version`; missing from an older preload. */
   client?(): Omit<ClientInfo, "ui">;
   confirm(options: { message: string; detail: string; button: string }): Promise<boolean>;

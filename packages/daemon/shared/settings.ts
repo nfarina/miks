@@ -1,12 +1,12 @@
 // The app's preferences, kept by the Electron main process in settings.json
 // and shared by every window (packages/app/main.ts).
 
-/** Another Mac whose daemon Miks can open a window on, over SSH. */
+/** Another Mac whose daemon Miks can open a window on, through its gateway on Tailscale. */
 export type Remote = {
   id: string;
   /** What the window's badge says. */
   name: string;
-  /** What `ssh` connects to: a host, or a Host from ~/.ssh/config. */
+  /** Its name on Tailscale (`neo`), or a full name or address; with `:port` for another port than the gateway's. */
   host: string;
   /** The badge's color, as CSS. */
   color: string;

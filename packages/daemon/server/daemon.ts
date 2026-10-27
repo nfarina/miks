@@ -531,7 +531,7 @@ function persist(workspaces: Workspaces, statePath: string) {
 
 /**
  * Unpacks a file or folder dropped on a window on another Mac (a tar of it,
- * streamed through the SSH tunnel) into `folder`, under its own name, or
+ * streamed through the gateway) into `folder`, under its own name, or
  * Finder's "name 2" when that's taken: never over anything. Returns where.
  */
 async function receiveDrop(body: NodeJS.ReadableStream, folder: string): Promise<string> {

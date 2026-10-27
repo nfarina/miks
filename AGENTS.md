@@ -88,8 +88,19 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   environment, so on the real Miks home; catch it and SIGUSR2 it. And
   `lsregister -u` test copies, or `miks://` may go to them.
 - Remote windows (Settings → Remotes; the Remotes menu, ⌃⌥⌘1–9): a window on
-  another Mac's daemon through `ssh -N -L <local sock>:<remote sock>`
-  (`packages/app/tunnels.ts`), so no daemon ever listens on the network. One
+  another Mac's daemon through that Mac's gateway on Tailscale (below; Access
+  from your other devices on there), as the iOS app reaches it. SSH tunnels
+  came first, and went: passwordless SSH was a chore to set up, and one way
+  in is less to keep working. `packages/app/remotes.ts` gives each remote a
+  local Unix socket that pipes every connection to the gateway (TLS to its
+  full name when it has a certificate, which it finds out by trying; else
+  plain TCP), so the rest of main talks to it as to this Mac's socket:
+  WebSocket, HTTP API (sent with `API_HEADER`, which the gateway requires,
+  with no Origin, for `/api/`), and the page proxy. A remote's host is its
+  Tailscale name (`neo`, looked up in `tailscale status`), or a full name or
+  address, with `:port` for testing. `checkRemote` pings it first and says
+  what's wrong in terms of what to do (`/api/ping`'s 404 means a Miks too old
+  for this). Settings' Add a Mac lists the tailnet's Macs of yours. One
   window per daemon; each window's machine is in `windowRemotes`, and every
   daemon call must go to it. A remote window never starts, stops or restarts
   a daemon: quitting stops only this Mac's. It retries every 3s on its own.
@@ -97,7 +108,7 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   Code attaches images as it does a local drop; with ⌥ held (any window),
   into the tab's folder instead ("name 2" if taken), with a toast, typing
   nothing. Both are `miks:sendFiles` in main: a tar stream per file to
-  `POST /api/drop` (through the tunnel, for a remote). ⌥ because it's
+  `POST /api/drop` (through the gateway, for a remote). ⌥ because it's
   Finder's copy modifier; ⌘ (move, to Finder) didn't work from Finder.
   `scripts/devtools.ts drop [--alt] <file>...` drops real files, as from Finder.
   ⌃V, Claude Code's paste of a clipboard image, reads the clipboard of the
@@ -116,9 +127,11 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   its windows connecting send it false. Restart daemon… follows the focused
   window; a remote's restarts itself (`POST /api/restart`, through launchd),
   telling every window first (`restarting`), so a window on its own Mac waits
-  for the new one (about 6s) to reconnect, rather than showing it stopped. Test without another Mac:
-  `MIKS_SSH=scripts/fake-ssh.ts FAKE_SSH_HOME=/tmp/fh`, with a second daemon
-  at `MIKS_HOME="/tmp/fh/Library/Application Support/Miks"`.
+  for the new one (about 6s) to reconnect, rather than showing it stopped. Test
+  without another Mac: a second daemon, `env -i HOME=$HOME PATH=… MIKS_HOME=/tmp/mkb
+  MIKS_GATEWAY_PORT=2742 MIKS_GATEWAY_ALLOW_SELF=1 node packages/daemon/server/main.ts serve`
+  with `{"tailnetAccess":true}` in its `machine.json`, and a remote whose host
+  is this Mac's full name with `:2742` (verified so: typing, a drop, a page).
 - Your other devices on Tailscale (Settings → Remotes → Access from your other
   devices, `tailnetAccess`): the daemon's gateway (`server/Gateway.ts`, started
   in `server/main.ts`, which follows the Mac's `machine.json`) serves the built UI
@@ -128,7 +141,9 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   `Self.UserID`), never this Mac itself (its own address would let any page
   in a browser here in, as localhost would; `whois` gives `Node.StableID`,
   `status` gives the same as `Self.ID`), and `/ws` only from its own page's
-  origin. The CLI (`/Applications/Tailscale.app/Contents/MacOS/Tailscale`)
+  origin or none (a program: browsers always send one), `/api/` only with
+  `API_HEADER` and no origin (a page can't send that header elsewhere
+  without a preflight, which it never answers). The CLI (`/Applications/Tailscale.app/Contents/MacOS/Tailscale`)
   is the Mac app's own executable, and acts as the CLI only with `TERM`,
   `TERM_PROGRAM` or `SHLVL` set; the daemon (a launchd job) has none, so it
   passes `TERM=dumb` (without: "The Tailscale GUI failed to start"). Test a
@@ -148,7 +163,7 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   and locks as usual. Behind the lock screen, with the display off, the
   daemon, terminals and Claude in Chrome all still work (it loaded, clicked
   and screenshotted pages), but screen captures are black, so not computer
-  use. `unlocked` ("Stay awake, soft-locked") is the keeper (`daemon/keeper/Keeper.swift`, kiosk's
+  use. `unlocked` ("Stay awake, self-locked") is the keeper (`daemon/keeper/Keeper.swift`, kiosk's
   approach, ~/Code/kiosk), a daemon child that never lets the Mac lock
   (power assertions, and a mouse move in place for the screen saver's HID
   idle clock) and instead, after the AC display-sleep time without a person

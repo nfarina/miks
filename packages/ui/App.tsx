@@ -558,7 +558,7 @@ const StyledReconnecting = styled.div`
  */
 function MachineBadge({ target }: { target: Target }) {
   return (
-    <StyledMachineBadge style={{ background: target.color }} title={`Terminals on ${target.host}, over SSH`}>
+    <StyledMachineBadge style={{ background: target.color }} title={`Terminals on ${target.host}, over Tailscale`}>
       {target.name}
     </StyledMachineBadge>
   );

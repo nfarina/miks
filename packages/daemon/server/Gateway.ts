@@ -1,4 +1,3 @@
-import { execFile } from "child_process";
 import { EventEmitter } from "events";
 import fs from "fs";
 import http from "http";
@@ -8,10 +7,14 @@ import path from "path";
 import { WebSocketServer } from "ws";
 import { connectDaemon } from "../shared/connect.ts";
 import type { GatewayState } from "../shared/protocol.ts";
+import { API_HEADER, GATEWAY_PORT, tailscaleJson, tailscaleText } from "../shared/tailscale.ts";
 import { isProxyRequest, proxyConnect, proxyRequest } from "./Proxy.ts";
 
-/** The port on each of this Mac's Tailscale addresses. */
-export const GATEWAY_PORT = 2741;
+/**
+ * For testing only: let this Mac in (`tailscale whois` says it's its own
+ * node), which, for real, would let in any page in a browser here.
+ */
+const ALLOW_SELF = process.env.MIKS_GATEWAY_ALLOW_SELF === "1";
 
 /** How often a listening gateway checks its addresses (and one that failed tries again). */
 const CHECK_INTERVAL = 30_000;
@@ -130,7 +133,7 @@ export class Gateway extends EventEmitter<{ change: [] }> {
 
     this.stop();
     this.self = self;
-    const port = this.options.port ?? GATEWAY_PORT;
+    const port = this.options.port ?? (Number(process.env.MIKS_GATEWAY_PORT) || GATEWAY_PORT);
     try {
       this.servers = await Promise.all(self.addresses.map((address) => this.listen(address, port)));
       this.update({ url: this.tls ? `https://${this.tls.domain}:${port}/` : `http://${self.name}:${port}/` });
@@ -201,7 +204,7 @@ export class Gateway extends EventEmitter<{ change: [] }> {
       known = { device: await tailscale.whois(address).catch(() => null), until: Date.now() + OWNER_TTL };
       this.devices.set(address, known);
     }
-    return !!known.device && known.device.owner === self.owner && known.device.node !== self.node;
+    return !!known.device && known.device.owner === self.owner && (known.device.node !== self.node || ALLOW_SELF);
   }
 
   private async request(req: http.IncomingMessage, res: http.ServerResponse) {
@@ -212,6 +215,7 @@ export class Gateway extends EventEmitter<{ change: [] }> {
     // The panel's browser on a device, going out from this Mac, as `miks
     // browse` does in a Mac's window (Proxy.ts): plain HTTP for a full URL.
     if (isProxyRequest(req)) return proxyRequest(req, res);
+    if (req.url?.startsWith("/api/")) return this.api(req, res);
     if (req.method !== "GET" && req.method !== "HEAD") return void res.writeHead(405).end();
 
     const { uiDir } = this.options;
@@ -235,18 +239,43 @@ export class Gateway extends EventEmitter<{ change: [] }> {
     fs.createReadStream(file).pipe(res);
   }
 
+  /**
+   * The daemon's HTTP API, for another Mac's Miks with a window on this one
+   * (dropped files, Restart daemon…): passed to its socket as it is, but only
+   * from a program, never a page (`API_HEADER`, and no Origin).
+   */
+  private api(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (req.headers.origin || !req.headers[API_HEADER]) return void res.writeHead(403).end();
+    const upstream = http.request(
+      { socketPath: this.options.socketPath, method: req.method, path: req.url, headers: req.headers },
+      (response) => {
+        res.writeHead(response.statusCode ?? 502, response.headers);
+        response.pipe(res);
+      },
+    );
+    upstream.on("error", () => {
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    });
+    req.pipe(upstream);
+  }
+
   /** And HTTPS and WebSockets, as CONNECT tunnels made from this Mac. */
   private async connect(req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     if (!(await this.allowed(req))) return void socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
     proxyConnect(req, socket, head);
   }
 
-  /** `/ws`, from the gateway's own page or the app's only, piped to the daemon's socket. */
+  /**
+   * `/ws`, from the gateway's own page, the app's, or a program (another
+   * Mac's Miks: a browser always sends a page's Origin), piped to the
+   * daemon's socket.
+   */
   private async upgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     const origin = req.headers.origin;
     const ownPage = origin === `http://${req.headers.host}` || origin === `https://${req.headers.host}`;
     const appPage = !!origin && APP_ORIGINS.includes(origin);
-    if (req.url !== "/ws" || !(ownPage || appPage) || !(await this.allowed(req))) {
+    if (req.url !== "/ws" || !(ownPage || appPage || !origin) || !(await this.allowed(req))) {
       socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
       return;
     }
@@ -277,25 +306,6 @@ const TYPES: Record<string, string> = {
   ".wasm": "application/wasm",
   ".json": "application/json",
 };
-
-/** Where the Tailscale CLI may be: inside the Mac app, or on its own (Homebrew, the standalone install). */
-const CLI_PATHS = ["/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/opt/homebrew/bin/tailscale", "/usr/local/bin/tailscale"];
-
-function tailscaleText(args: string[], timeout = 90_000): Promise<string> {
-  const cli = CLI_PATHS.find((file) => fs.existsSync(file));
-  if (!cli) return Promise.reject(new Error("Tailscale isn't installed."));
-  return new Promise((resolve, reject) => {
-    // The same executable is the Mac app: without a terminal's TERM (or
-    // TERM_PROGRAM, or SHLVL), it tries to start as the app ("The Tailscale
-    // GUI failed to start"). The daemon, a launchd job, has none of them.
-    const env = { ...process.env, TERM: process.env.TERM || "dumb" };
-    execFile(cli, args, { env, timeout }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
-  });
-}
-
-async function tailscaleJson(args: string[]): Promise<any> {
-  return JSON.parse(await tailscaleText(args, 5000));
-}
 
 /** Tailscale, by its CLI, which talks to the Tailscale app running on this Mac. */
 export const cliTailscale: Tailscale = {

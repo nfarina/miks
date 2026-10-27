@@ -5,7 +5,7 @@ import type { Duplex } from "stream";
 /**
  * The panel's browser (`miks browse`) goes out from here, the daemon's Mac,
  * whichever Mac the window is on: its whole session uses this as its proxy
- * (through Electron main and, for a remote window, the SSH tunnel), so
+ * (through Electron main and, for a remote window, the gateway), so
  * `localhost` is this Mac's, on any port, and so are its DNS and VPN. HTTPS
  * and WebSockets arrive as CONNECT tunnels (encrypted end to end, so
  * certificates are checked as usual); plain HTTP as requests for a full URL.

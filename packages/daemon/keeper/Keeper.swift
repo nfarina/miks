@@ -1,5 +1,5 @@
 // miks-keeper: keeps this Mac available while you're away from it, unlocked
-// ("Stay awake, soft-locked" in Settings → Remotes), so agents can use its screen
+// ("Stay awake, self-locked" in Settings → Remotes), so agents can use its screen
 // (computer use) as well as its terminals and Chrome. The daemon starts it
 // and reads what it says (a JSON line per change) from its stdout.
 //
@@ -505,7 +505,11 @@ final class Keeper {
     func start() {
         _ = input.start()
         input.onWake = { [weak self] in self?.wake() }
-        input.onLockKey = { [weak self] in if self?.armed == true { self?.raise() } }
+        // Taken from macOS, so on battery (no sheet then) it locks for real, as macOS would have.
+        input.onLockKey = { [weak self] in
+            guard let self else { return }
+            if self.armed { self.raise() } else { lockForReal() }
+        }
         input.panelFrame = { [weak self] in
             // AppKit's origin is the bottom left of the main screen; the tap's, its top left.
             guard let frame = self?.unlock.frame, let height = NSScreen.screens.first?.frame.height else { return nil }

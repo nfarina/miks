@@ -9,9 +9,12 @@ import { SeparatorLayout, StyledSeparatorLayout } from "crosswing/components/Sep
 import { TabbedButton, TabbedButtonLayout } from "crosswing/components/TabbedButtonLayout";
 import { fonts } from "crosswing/fonts";
 import { DialogView } from "crosswing/modals/dialog";
-import { Check, Minus, Plus, ShieldAlert, X } from "lucide-react";
+import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
+import { usePopup } from "crosswing/modals/popup/usePopup";
+import { Check, Minus, Monitor, Plus, ShieldAlert, X } from "lucide-react";
 import type { Permission } from "miks/shared/protocol";
 import type { KeepAvailable, Remote } from "miks/shared/settings";
+import type { TailnetMac } from "miks/shared/tailscale";
 import { styled } from "styled-components";
 import { useEffect, useState } from "react";
 import { daemon, type PermissionsEvent, useDaemon, useTarget } from "./daemon";
@@ -346,7 +349,7 @@ function TailnetAccess() {
       <SeparatorLayout bordered>
         <LabeledToggle
           label="Access from your other devices"
-          detail="Your iPad or phone can use Miks in the app or a browser, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
+          detail="Your other Macs (in Miks), iPad or phone (in the app or a browser) can use Miks here, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
           on={tailnetAccess}
           onClick={() => updateSettings({ tailnetAccess: !tailnetAccess })}
         />
@@ -375,7 +378,7 @@ function TailnetAccess() {
               items={[
                 { value: "off", children: "Sleep" },
                 { value: "locked", children: "Stay awake, locked" },
-                { value: "unlocked", children: "Stay awake, soft-locked" },
+                { value: "unlocked", children: "Stay awake, self-locked" },
               ]}
             />
           </div>
@@ -386,6 +389,11 @@ function TailnetAccess() {
           The screen goes dark and its keyboard and trackpad do nothing until you use Touch ID or your password. But
           macOS never locks it, which is how agents can use the screen: the session stays open, so anything that
           reaches Miks can use it as you. Unplugged, it locks for real; with the lid closed, it sleeps.
+        </TipView>
+      )}
+      {keepAvailable === "unlocked" && keeper && keeper.accessibility && !keeper.plugged && (
+        <TipView title="On battery now">
+          So it sleeps and locks as usual (⌃⌘Q too), until it's plugged in again.
         </TipView>
       )}
       {keepAvailable === "unlocked" && keeper && !keeper.accessibility && (
@@ -410,24 +418,47 @@ function RemoteSettings() {
   const change = (id: string, changes: Partial<Remote>) =>
     setRemotes(remotes.map((remote) => (remote.id === id ? { ...remote, ...changes } : remote)));
 
-  const add = () =>
+  const add = (host = "") =>
     setRemotes([
       ...remotes,
       {
         id: crypto.randomUUID().slice(0, 8),
-        name: "",
-        host: "",
+        name: host,
+        host,
         color: REMOTE_COLORS[remotes.length % REMOTE_COLORS.length],
       },
     ]);
+
+  // The Macs on your tailnet, to add one by picking it.
+  const menu = usePopup((found: { macs?: TailnetMac[]; error?: string }) => {
+    const added = new Set(remotes.map((remote) => remote.host.toLowerCase()));
+    const macs = (found.macs ?? []).filter((mac) => mac.mine && !added.has(mac.name.toLowerCase()));
+    return (
+      <PopupMenu>
+        {found.error && <PopupMenuText disabled children={found.error} />}
+        {macs.map((mac) => (
+          <PopupMenuText
+            key={mac.name}
+            icon={<Monitor />}
+            onClick={() => add(mac.name)}
+            detail={mac.online ? undefined : "Offline"}
+            children={mac.name}
+          />
+        ))}
+        {!found.error && macs.length === 0 && <PopupMenuText disabled children="No other Macs of yours on Tailscale" />}
+        <PopupMenuSeparator />
+        <PopupMenuText onClick={() => add()} children="Another…" />
+      </PopupMenu>
+    );
+  });
 
   return (
     <StyledRemotes>
       <h3 className="heading">Access other Macs</h3>
       <p className="intro">
-        A window on another Mac's terminals, as if you were there. It connects over SSH, so <code>ssh host</code> has to
-        work from here without a password, and that Mac needs Remote Login on and Miks running. Open one here, or from
-        the Remotes menu (⌃⌥⌘1, ⌃⌥⌘2…).
+        A window on another Mac's terminals, as if you were there. It connects over Tailscale, so that Mac needs Miks
+        running, with Access from your other devices (below, on that Mac) on. Open one here, or from the Remotes menu
+        (⌃⌥⌘1, ⌃⌥⌘2…).
       </p>
       {remotes.length > 0 && (
         <SeparatorLayout bordered>
@@ -452,7 +483,7 @@ function RemoteSettings() {
               <TextInput
                 newStyle
                 className="host"
-                placeholder="SSH host"
+                placeholder="Name on Tailscale"
                 value={remote.host}
                 onValueChange={(host) => change(remote.id, { host })}
               />
@@ -473,7 +504,17 @@ function RemoteSettings() {
           ))}
         </SeparatorLayout>
       )}
-      <Button newStyle bordered className="add" icon={<Plus />} onClick={add} children="Add a Mac" />
+      <Button
+        newStyle
+        bordered
+        className="add"
+        icon={<Plus />}
+        onClick={async (event) => {
+          const target = { current: event.currentTarget };
+          menu.show(target, (await window.miks?.tailnetMacs?.()) ?? { error: "Update Miks to list your Macs." });
+        }}
+        children="Add a Mac"
+      />
       <TailnetAccess />
     </StyledRemotes>
   );

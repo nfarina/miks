@@ -89,7 +89,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   private readonly keeps = new Map<string, { command: string; seenRunning: boolean }>();
   /** The gateway for your other devices on Tailscale, as the UI shows it. */
   private gateway: GatewayState | undefined;
-  /** How "Stay awake, soft-locked" is going (daemon/keeper), while it's chosen. */
+  /** How "Stay awake, self-locked" is going (daemon/keeper), while it's chosen. */
   private keeper: KeeperState | undefined;
   private machine: MachineSettings;
   /** What each tab's Claude session has running in the background. */

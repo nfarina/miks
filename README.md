@@ -32,7 +32,7 @@ I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundle
   Mac's dev server, every port of it, with no tunnels to set up. ⌘⇧F has
   the panel fill the tab
 - Follows light and dark mode, and tells Claude Code when it changes
-- Remote windows: a window on another Mac's terminals, over SSH, with
+- Remote windows: a window on another Mac's terminals, over Tailscale, with
   copying landing on the Mac you're at and dropped files sent over. `miks update` in one updates Miks on that Mac
 - Drop files in to type their paths, or hold ⌥ to copy them into the tab's
   folder

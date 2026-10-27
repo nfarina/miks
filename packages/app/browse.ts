@@ -2,7 +2,7 @@
 // daemon, so a remote window's `localhost` is the remote's, on every port.
 // Chromium takes a proxy only as host:port, never a Unix socket, so each
 // daemon gets a front here, on 127.0.0.1, that hands every connection to its
-// socket (through the SSH tunnel, for a remote; the daemon's proxy is
+// socket (through its gateway, for a remote; the daemon's proxy is
 // packages/daemon/server/Proxy.ts). Any user of this Mac can reach a port on
 // 127.0.0.1, where the socket is ours alone, so the front asks for a password
 // that only its session is given (the `login` event).

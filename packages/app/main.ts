@@ -10,18 +10,19 @@ import { logPath, miksHome, settingsPath as settingsFile, socketPath } from "mik
 import type { RunningProgram } from "miks/shared/protocol";
 import { describeRunning } from "miks/shared/background";
 import { DEFAULT_SETTINGS, type Remote, type Settings } from "miks/shared/settings";
+import { API_HEADER, tailnetMacs } from "miks/shared/tailscale";
 import os from "os";
 import type { WebSocket } from "ws";
 import { browsePartition, isBrowsePartition } from "./browse.ts";
 import { syncClaudeHooks } from "./claudeHooks.ts";
-import { stopAllTunnels, stopTunnel, tunnelSocket } from "./tunnels.ts";
+import { checkRemote, remoteSocket, stopAllRemotes, stopRemote } from "./remotes.ts";
 import { checkForUpdates, startUpdates, updateFromShell } from "./updates.ts";
 
 // The Electron shell is deliberately thin: windows, a menu, and a pipe
 // between each window and a daemon's Unix socket (which the renderer can't
 // open itself). Every terminal lives in a daemon, so reloading a window leaves
 // them all running. A window is on this Mac's daemon, or on a remote's,
-// through an SSH tunnel (tunnels.ts); one window per daemon.
+// through its gateway on Tailscale (remotes.ts); one window per daemon.
 
 // The repo in development; Contents/Resources/app inside Miks.app.
 const root = path.resolve(import.meta.dirname, "../..");
@@ -46,11 +47,11 @@ function connectOnce(socketFile = socketPath()): Promise<WebSocket> {
  */
 async function connectDaemon(remote: Remote | null): Promise<WebSocket> {
   if (remote) {
-    const socket = await tunnelSocket(remote);
+    await checkRemote(remote);
     try {
-      return await connectOnce(socket);
+      return await connectOnce(await remoteSocket(remote));
     } catch {
-      throw new Error(`Miks isn't running on ${remote.name}. Open it there, and this window will connect.`);
+      throw new Error(`Lost the connection to ${remote.name}. Reconnecting…`);
     }
   }
 
@@ -258,11 +259,11 @@ ipcMain.on("miks:send", (event, message: string) => {
 
 /**
  * A request to a daemon's HTTP API (this Mac's, or a remote's through its
- * tunnel's socket): its JSON, or null if it isn't answering.
+ * link's socket): its JSON, or null if it isn't answering.
  */
 function daemonGet(apiPath: string, socketFile = socketPath(), method = "GET"): Promise<any> {
   return new Promise((resolve) => {
-    const request = http.request({ socketPath: socketFile, path: apiPath, method }, (response) => {
+    const request = http.request({ socketPath: socketFile, path: apiPath, method, headers: { [API_HEADER]: "1" } }, (response) => {
       let body = "";
       response.on("data", (chunk) => (body += chunk));
       response.on("end", () => {
@@ -289,7 +290,7 @@ async function restartDaemon(window: BrowserWindow | undefined) {
   let socketFile = socketPath();
   if (remote) {
     try {
-      socketFile = await tunnelSocket(remote);
+      socketFile = await remoteSocket(remote);
     } catch (error) {
       return show(window, { message: `Couldn't reach ${remote.name}`, detail: String(error instanceof Error ? error.message : error) });
     }
@@ -481,7 +482,7 @@ function createWindow(remoteId: string | null = null) {
     if (windows.get(key) === window) windows.delete(key);
     // Closed by hand, it stays closed; open when Miks quit, it comes back.
     if (!quitting) rememberOpenRemotes();
-    if (remoteId && !windows.has(key)) stopTunnel(remoteId);
+    if (remoteId && !windows.has(key)) stopRemote(remoteId);
   });
   return window;
 }
@@ -500,7 +501,7 @@ function confirmRemoteClose(window: BrowserWindow) {
     event.preventDefault();
 
     (async () => {
-      const socketFile = await tunnelSocket(remote).catch(() => null);
+      const socketFile = await remoteSocket(remote).catch(() => null);
       const ping = socketFile ? await daemonGet("/api/ping", socketFile) : null;
       let close = true;
       if (socketFile && ping?.stopWhenIdle && (ping.clients ?? 0) <= 1) {
@@ -587,6 +588,14 @@ ipcMain.on("miks:client", (event) => {
 
 ipcMain.on("miks:getTarget", (event) => {
   event.returnValue = targetFor(event.sender);
+});
+
+ipcMain.handle("miks:tailnetMacs", async () => {
+  try {
+    return { macs: await tailnetMacs() };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 });
 
 ipcMain.on("miks:openRemote", (_event, id: string) => {
@@ -694,12 +703,12 @@ ipcMain.handle("miks:confirm", async (event, { message, detail, button }: { mess
 // Dropped files, copied by the daemon: into a temporary folder for a window
 // on another Mac, which can't use this one's paths (a local window types
 // them as they are), or into the tab's folder (⌥). Each is a tar stream to
-// the daemon (through the tunnel, for a remote), so size and folders are no
+// the daemon (through its gateway, for a remote), so size and folders are no
 // trouble. Resolves with where each landed.
 ipcMain.handle("miks:sendFiles", async (event, tabId: string, paths: string[], into: "tmp" | "cwd") => {
   const remote = remoteFor(event.sender);
   if (!remote && into === "tmp") return paths;
-  const socketFile = remote ? await tunnelSocket(remote).catch(() => null) : socketPath();
+  const socketFile = remote ? await remoteSocket(remote).catch(() => null) : socketPath();
   if (!socketFile) return [];
 
   const saved: string[] = [];
@@ -718,7 +727,7 @@ ipcMain.handle("miks:browsePartition", async (event) => {
     if (!remoteId) return socketPath();
     const remote = settings.remotes.find((entry) => entry.id === remoteId);
     if (!remote) throw new Error("This machine was removed in Settings.");
-    return tunnelSocket(remote);
+    return remoteSocket(remote);
   });
 });
 
@@ -736,7 +745,7 @@ ipcMain.handle("miks:sendClipboardImage", async (event, tabId: string) => {
   const remote = remoteFor(event.sender);
   if (!remote) return { image: true };
 
-  const socketFile = await tunnelSocket(remote).catch(() => null);
+  const socketFile = await remoteSocket(remote).catch(() => null);
   if (!socketFile) return { image: true };
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), "miks-paste-"));
   try {
@@ -758,7 +767,7 @@ function sendFile(file: string, apiPath: string, socketFile: string): Promise<st
       env: { ...process.env, COPYFILE_DISABLE: "1" },
       stdio: ["ignore", "pipe", "ignore"],
     });
-    const request = http.request({ socketPath: socketFile, path: apiPath, method: "POST" }, (response) => {
+    const request = http.request({ socketPath: socketFile, path: apiPath, method: "POST", headers: { [API_HEADER]: "1" } }, (response) => {
       let body = "";
       response.on("data", (chunk) => (body += chunk));
       response.on("end", () => {
@@ -819,7 +828,7 @@ ipcMain.on("miks:setSettings", (_event, changes: Partial<Settings>) => {
 
 /**
  * A remote was added, edited or removed: the menu lists them, and windows on
- * one that changed reconnect (through a new tunnel, if its host did).
+ * one that changed reconnect (somewhere else, if its host changed).
  */
 function remotesChanged(previous: Remote[]) {
   buildMenu();
@@ -829,7 +838,7 @@ function remotesChanged(previous: Remote[]) {
     const now = settings.remotes.find((remote) => remote.id === id);
     if (!contents.isDestroyed()) contents.send("miks:target", targetFor(contents));
     if (now && before?.host === now.host) continue;
-    stopTunnel(id);
+    stopRemote(id);
     if (now) linkWindow(contents);
     else BrowserWindow.fromWebContents(contents)?.close();
   }
@@ -1062,7 +1071,7 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("will-quit", () => stopAllTunnels());
+app.on("will-quit", () => stopAllRemotes());
 
 // Closing the last window quits, like a terminal app.
 app.on("window-all-closed", () => app.quit());

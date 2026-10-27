@@ -8,6 +8,7 @@ import path from "path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { WebSocket } from "ws";
 import { type Daemon, serve } from "./daemon.ts";
+import { API_HEADER } from "../shared/tailscale.ts";
 import { Gateway, type Tailscale } from "./Gateway.ts";
 
 let home: string;
@@ -140,6 +141,35 @@ test("its WebSocket is the daemon's, for its own page only", async () => {
     socket.on("open", () => resolve("opened"));
   });
   expect(refused).toContain("403");
+
+  // A program: another Mac's Miks, for its window on this one.
+  const program = await new Promise<string>((resolve) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    socket.on("open", () => (socket.close(), resolve("opened")));
+    socket.on("error", (error) => resolve(error.message));
+  });
+  expect(program).toBe("opened");
+});
+
+test("its HTTP API is the daemon's, for programs on your own devices only", async () => {
+  gateway.setEnabled(true);
+  await waitFor(() => !!gateway.state && "url" in gateway.state);
+
+  const ping = await fetch(`http://127.0.0.1:${port}/api/ping`, { headers: { [API_HEADER]: "1" } });
+  expect(ping.status).toBe(200);
+  expect(await ping.json()).toMatchObject({ pid: process.pid });
+
+  // Without the header, as a page would send it, or with a page's Origin.
+  expect((await get("/api/ping")).status).toBe(403);
+  const page = await fetch(`http://127.0.0.1:${port}/api/ping`, { headers: { [API_HEADER]: "1", origin: "http://evil.example" } });
+  expect(page.status).toBe(403);
+
+  // Someone else's device.
+  caller = { node: "their-node", owner: "someone else" };
+  gateway = (gateway.close(), new Gateway({ socketPath: path.join(home, "miks.sock"), uiDir: path.join(home, "ui"), tailscale, port }));
+  gateway.setEnabled(true);
+  await waitFor(() => !!gateway.state && "url" in gateway.state);
+  expect((await fetch(`http://127.0.0.1:${port}/api/ping`, { headers: { [API_HEADER]: "1" } })).status).toBe(403);
 });
 
 test("it's a proxy from this Mac for your own devices: plain HTTP and CONNECT tunnels", async () => {
