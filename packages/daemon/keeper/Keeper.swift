@@ -496,7 +496,11 @@ final class Keeper {
     private var plugged = Power.plugged
     private var watchdog: Timer?
     private var reported = ""
-    private let idle = ProcessInfo.processInfo.environment["MIKS_KEEPER_IDLE"].flatMap(Double.init) ?? Power.displaySleep
+    private let idleOverride = ProcessInfo.processInfo.environment["MIKS_KEEPER_IDLE"].flatMap(Double.init)
+    /// How long without a person before the sheet goes up: the display-sleep
+    /// time, read again each minute, so a change in System Settings counts.
+    private lazy var idle = idleOverride ?? Power.displaySleep
+    private var idleReadAt = Date()
     private let testFor = ProcessInfo.processInfo.environment["MIKS_KEEPER_TEST"].flatMap(Double.init)
 
     /// Whether the sheet can go up: plugged in, and holding the keyboard.
@@ -532,6 +536,7 @@ final class Keeper {
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             if self?.sheet.isUp == true, self?.unlock.isShowing == false { Backlight.off() }
         }
+        // At most 30s, so a display-sleep time shortened later is kept to closely enough.
         let tick = Timer(timeInterval: min(30, max(1, idle / 4)), repeats: true) { [weak self] _ in self?.check() }
         RunLoop.main.add(tick, forMode: .common)
 
@@ -582,6 +587,12 @@ final class Keeper {
             // Gave up on unlocking: dark again.
             if unlock.isShowing, Date().timeIntervalSince(input.lastPerson) > 30 { dim() }
             return
+        }
+        if idleOverride == nil, Date().timeIntervalSince(idleReadAt) >= 60 {
+            idleReadAt = Date()
+            let now = Power.displaySleep
+            if now != idle { log("The display now sleeps after \(Int(now / 60)) min: the screen goes dark then.") }
+            idle = now
         }
         if armed, Date().timeIntervalSince(input.lastPerson) >= idle { raise() }
     }

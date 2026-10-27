@@ -166,7 +166,8 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   use. `unlocked` ("Stay awake, self-locked") is the keeper (`daemon/keeper/Keeper.swift`, kiosk's
   approach, ~/Code/kiosk), a daemon child that never lets the Mac lock
   (power assertions, and a mouse move in place for the screen saver's HID
-  idle clock) and instead, after the AC display-sleep time without a person
+  idle clock) and instead, after the AC display-sleep time (`pmset -g custom`,
+  read again each minute; never is 10 minutes) without a person
   (hardware input, pid 0, or screen sharing) or at ⌃⌘Q, which it takes
   from macOS: a sheet over every screen, the built-in backlight off, and
   an event tap dropping hardware input until Touch ID or the password
