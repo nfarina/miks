@@ -417,10 +417,19 @@ resizes); keep it passing.
   only while its composer isn't focused, where its own goes out next.
 
 - `miks version` (`/api/version`, `server/Version.ts`): what the daemon
-  runs, from Miks.app's `build.json` (version, commit, build time, written
-  by `build-app.ts`) or, in the repo, its version and checked-out commit;
-  and, read again then, what's installed now if that differs, which it runs
-  only once restarted.
+  runs and on which Mac, from Miks.app's `build.json` (version, commit,
+  build time, written by `build-app.ts`) or, in the repo, its version and
+  checked-out commit; what's installed there now (read again then), which it
+  runs only once restarted; and which Miks each window on it is, from
+  `ClientInfo` in its `hello` (since protocol 15): the UI's build, stamped by
+  Vite's `define` (`__MIKS_BUILD__`), and for the iOS app its own version
+  (`appInfo`). The window it was typed in is the pane's viewer in use.
+  The version warning's Details…, About Miks (the Mac's menu and the iPad's)
+  and the iOS switcher's Versions… show the same (`ui/VersionDialog.tsx`,
+  the `versions` command),
+  from a `version` message (since protocol 16; what both say is in
+  `shared/version.ts`); an older daemon can't answer, so then it shows only
+  this window and the two protocols.
 - Push notifications to the iOS app (`server/Push.ts`): the daemon decides,
   as Messages does. A tab's agent waiting or done goes to devices at once
   if this Mac's been idle a minute (`HIDIdleTime`, from `ioreg`), else

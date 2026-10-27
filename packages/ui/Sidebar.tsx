@@ -5,7 +5,7 @@ import { PanelLayoutContext } from "crosswing/components/PanelLayout";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { useConfirm } from "crosswing/modals/confirm";
 import { usePopup } from "crosswing/modals/popup/usePopup";
-import { ChevronDown, Laptop, PanelLeft, Plus, RotateCw, Settings, Trash2 } from "lucide-react";
+import { ChevronDown, Info, Laptop, PanelLeft, Plus, RotateCw, Settings, Trash2 } from "lucide-react";
 import { describeRunning } from "miks/shared/background";
 import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, use, useState } from "react";
@@ -188,6 +188,7 @@ function MacSwitcher() {
       <PopupMenuSeparator />
       <PopupMenuText icon={<Plus />} onClick={addMac} children="Add a Mac…" />
       <PopupMenuText icon={<Settings />} onClick={() => daemon.runCommand("settings")} children="Settings…" />
+      {active && <PopupMenuText icon={<Info />} onClick={() => daemon.runCommand("versions")} children="Versions…" />}
       {active && (
         <PopupMenuText
           icon={<RotateCw />}

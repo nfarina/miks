@@ -249,6 +249,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             builder.remove(menu: menu)
         }
 
+        // What `miks version` says, as the Mac app's About Miks shows it.
+        let about = UICommand(title: "About Miks", action: #selector(runMiksCommand(_:)), propertyList: "versions")
+        builder.replace(menu: .about, with: UIMenu(identifier: .about, options: .displayInline, children: [about]))
+
         let settings = UIKeyCommand(title: "Settings…", action: #selector(runMiksCommand(_:)), input: ",", modifierFlags: .command, propertyList: "settings")
         builder.insertSibling(UIMenu(options: .displayInline, children: [settings]), afterMenu: .about)
 

@@ -214,6 +214,11 @@ export class Pane extends EventEmitter<{
     if (this.inUse === viewer) this.inUse = null;
   }
 
+  /** The viewer last to size the pane or type into it, if it's still attached. */
+  get viewerInUse(): PaneViewer | null {
+    return this.inUse && this.viewers.has(this.inUse) ? this.inUse : null;
+  }
+
   /** Typing, or anything else sent as if typed; `from` is then in use. */
   write(data: string, from?: PaneViewer) {
     if (from) this.inUse = from;

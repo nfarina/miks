@@ -9,8 +9,10 @@
 #                              once you're done with it (Done, or closing it).
 #   miks browse <url>          Shows the page in the tab's panel, loaded from
 #                              this Mac: its localhost, wherever the window is.
-#   miks version               Which Miks the daemon runs, and whether the one
-#                              installed now is another (it needs a restart).
+#   miks version               Which Miks the daemon runs, and on which Mac;
+#                              what's installed there (it may need a restart);
+#                              and which Miks each window on it is, this one
+#                              first.
 
 emulate -L zsh
 
@@ -31,8 +33,10 @@ if [[ $mode == version ]]; then
     print -u2 "miks version: only in a Miks tab."
     exit 1
   fi
+  color=0
+  [[ -t 1 && -z $NO_COLOR ]] && color=1
   # A daemon from before it answers 404.
-  curl -sf -m 5 --unix-socket "$MIKS_SOCKET" "http://miks/api/version" || {
+  curl -sf -m 5 --unix-socket "$MIKS_SOCKET" "http://miks/api/version?pane=$MIKS_PANE_ID&color=$color" || {
     print -u2 "miks version: this daemon is from a Miks before miks version."
     exit 1
   }

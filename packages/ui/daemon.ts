@@ -2,9 +2,10 @@
 // exposes as `window.miks` (packages/app/preload.cjs). There's one
 // connection per page; components read state with `useDaemon` and terminals
 // subscribe to their pane's stream with `daemon.stream`.
-import { AgentStatus, ChatEntry, ClientMessage, DaemonMessage, DaemonState, Permission, RunningProgram } from "miks/shared/protocol";
+import { AgentStatus, ChatEntry, ClientInfo, ClientMessage, DaemonMessage, DaemonState, Permission, RunningProgram, VersionInfo } from "miks/shared/protocol";
 import type { Settings } from "miks/shared/settings";
 import { useSyncExternalStore } from "react";
+import { clientInfo } from "./client";
 
 type Unsubscribe = () => void;
 
@@ -33,6 +34,8 @@ export type MiksBridge = {
   getTarget(): Target | null;
   onTarget(listener: (target: Target | null) => void): Unsubscribe;
   openRemote(id: string): void;
+  /** What this window is and where, for `miks version`; missing from an older preload. */
+  client?(): Omit<ClientInfo, "ui">;
   confirm(options: { message: string; detail: string; button: string }): Promise<boolean>;
   copy(text: string): void;
   /**
@@ -158,7 +161,7 @@ class DaemonClient {
 
       this.update({ connected, retrying: false, error: null });
 
-      this.send({ type: "hello" });
+      this.send({ type: "hello", client: clientInfo() });
       for (const tabId of this.chats.keys()) this.send({ type: "watchChat", tabId });
       for (const { tabId, fileId, unsaved } of this.files.values()) {
         this.send({ type: "watchFile", tabId, fileId });
@@ -332,6 +335,22 @@ class DaemonClient {
     });
   }
 
+  /** What `miks version` says, from this window; null from an older daemon. */
+  version(): Promise<VersionInfo | null> {
+    if (!this.snapshot.connected || !this.speaks(16)) return Promise.resolve(null);
+    const requestId = String(++this.requestCount);
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => answer(null), 5_000);
+      const answer = (info: VersionInfo | null) => {
+        clearTimeout(timeout);
+        this.answers.delete(requestId);
+        resolve(info);
+      };
+      this.answers.set(requestId, answer);
+      this.send({ type: "version", requestId });
+    });
+  }
+
   /** Dictation's words: the audio, to text by Groq on the daemon's Mac (Dictation.ts). */
   async transcribe(audio: Blob): Promise<{ text?: string; error?: string }> {
     return this.ask({ type: "transcribe", requestId: "", audio: await base64(audio), mime: audio.type }, 40_000);
@@ -439,6 +458,8 @@ class DaemonClient {
         return;
       case "running":
         return this.answers.get(message.requestId)?.(message.running);
+      case "version":
+        return this.answers.get(message.requestId)?.(message.info);
       case "transcribed":
       case "fileSent": {
         const { type: _type, requestId, ...result } = message;

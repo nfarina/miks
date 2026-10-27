@@ -23,6 +23,7 @@ import { STATUS_LABELS, workspaceTitle } from "./status";
 import { StyledTabBar, TabBar } from "./TabBar";
 import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
+import { VersionDialog } from "./VersionDialog";
 import { KeyBar } from "./KeyBar";
 import { MacChooser, Ring } from "./MacChooser";
 import {
@@ -54,12 +55,16 @@ export function App() {
     <SettingsDialog initialTab={settingsTab.current} onClose={settingsDialog.hide} />
   ));
 
+  const versionDialog = useDialog(() => <VersionDialog onClose={versionDialog.hide} />);
+
   useEffect(() => {
     const handle = (command: string) => {
       if (command === "settings" || command === "settingsRemotes") {
         settingsTab.current = command === "settings" ? "general" : "remotes";
         return settingsDialog.show();
       }
+      // About Miks, and the Mac switcher's Versions… in the iOS app.
+      if (command === "versions") return versionDialog.show();
       runCommand(command);
     };
 
@@ -68,7 +73,7 @@ export function App() {
     if (import.meta.env.DEV) (window as any).miksCommand = handle;
 
     return daemon.onCommand(handle);
-  }, [settingsDialog]);
+  }, [settingsDialog, versionDialog]);
   useSeenTracking(state);
   useAppearanceReporting(connected);
   useAgentNotifications(state);
@@ -129,10 +134,10 @@ export function App() {
         >
           {target && <MachineBadge target={target} />}
           {(state.protocol ?? 1) !== PROTOCOL_VERSION && (
-            <div className="version-warning">
+            <button className="version-warning" onClick={versionDialog.show}>
               {target ? target.name : "The daemon"} is running a different version of Miks. Update both to the same one;
-              until then, some things may not work.
-            </div>
+              until then, some things may not work. <span className="details">Details…</span>
+            </button>
           )}
           {activeWorkspace ? <TabBar workspace={activeWorkspace} /> : <div className="empty-bar" />}
           <div className="terminals">
@@ -216,7 +221,19 @@ export const StyledApp = styled.div`
       padding: 6px 12px;
       font: ${fonts.display({ size: 12 })};
       background: ${colors.yellow({ alpha: 0.2 })};
+      border: none;
       border-bottom: 1px solid ${colors.separator()};
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+
+      &:hover {
+        background: ${colors.yellow({ alpha: 0.3 })};
+      }
+
+      > .details {
+        text-decoration: underline;
+      }
     }
 
     > ${StyledTabBar}, > .empty-bar {

@@ -5,13 +5,13 @@ import net from "net";
 import os from "os";
 import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
-import type { ClientMessage, DaemonMessage } from "../shared/protocol.ts";
+import type { ClientInfo, ClientMessage, DaemonMessage } from "../shared/protocol.ts";
 import { fetchImageForPanel, findPaths, readImageForPanel, showFolder } from "./Files.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
 import { transcribe } from "./Dictation.ts";
-import { versionReport } from "./Version.ts";
+import { versionInfo, versionReport } from "./Version.ts";
 import { isProxyRequest, proxyConnect, proxyRequest } from "./Proxy.ts";
 import { Push } from "./Push.ts";
 import { type SavedState, Workspaces } from "./Workspaces.ts";
@@ -79,6 +79,11 @@ export async function serve({
 
   // Connected UIs.
   const sockets = new Set<WebSocket>();
+  // Which Miks each says it is (`hello`), and which connection each pane viewer is.
+  const clients = new Map<WebSocket, ClientInfo>();
+  const viewerSockets = new WeakMap<PaneViewer, WebSocket>();
+  // Every connection for `miks version`, and whether it's `you`.
+  const versionWindows = (you?: WebSocket | null) => [...sockets].map((other) => ({ client: clients.get(other) ?? null, you: other === you }));
   // The iOS app's, by the device each is on, and whether it's showing this Mac.
   const devices = new Map<WebSocket, { deviceId: string; visible: boolean }>();
   const push = new Push({
@@ -123,8 +128,11 @@ export async function serve({
 
     // `miks version`, as text.
     if (req.method === "GET" && url.pathname === "/api/version") {
+      // The window typing is the one last in use in the tab it was typed in.
+      const viewer = workspaces.getPane(url.searchParams.get("pane") ?? "")?.viewerInUse;
+      const socket = viewer && viewerSockets.get(viewer);
       res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
-      return res.end(versionReport());
+      return res.end(versionReport(versionInfo(versionWindows(socket)), { color: url.searchParams.get("color") === "1" }));
     }
 
     if (req.method === "POST" && url.pathname === "/api/restart") {
@@ -247,6 +255,7 @@ export async function serve({
 
       switch (message.type) {
         case "hello":
+          if (message.client) clients.set(socket, message.client);
           send({ type: "state", state: workspaces.getState() });
           // Every tab's, empty ones too: a window that was away (the iOS app,
           // suspended) still has the draft that was sent while it was gone.
@@ -254,6 +263,8 @@ export async function serve({
           return;
         case "running":
           return send({ type: "running", requestId: message.requestId, running: workspaces.running() });
+        case "version":
+          return send({ type: "version", requestId: message.requestId, info: versionInfo(versionWindows(socket)) });
         case "restart":
           restart();
           return;
@@ -325,6 +336,7 @@ export async function serve({
             size: (cols, rows) => send({ type: "size", tabId, cols, rows }),
           };
           viewers.set(tabId, viewer);
+          viewerSockets.set(viewer, socket);
           const { cols, rows } = message;
           pane.attach(viewer, cols && rows ? { cols, rows } : undefined);
           return;
@@ -438,6 +450,7 @@ export async function serve({
 
     socket.on("close", () => {
       sockets.delete(socket);
+      clients.delete(socket);
       devices.delete(socket);
       answered.delete(socket);
       for (const [tabId, viewer] of viewers) workspaces.getPane(tabId)?.detach(viewer);

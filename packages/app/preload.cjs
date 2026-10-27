@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("miks", {
   /** The Mac this window's daemon is on: null for this one, else { name, color, host }. */
   getTarget: () => ipcRenderer.sendSync("miks:getTarget"),
   onTarget: (listener) => subscribe("miks:target", listener),
+  /** What this window is and where, for `miks version`. */
+  client: () => ipcRenderer.sendSync("miks:client"),
   /** Opens (or brings forward) the window on a remote from Settings. */
   openRemote: (id) => ipcRenderer.send("miks:openRemote", id),
   /** A native confirmation on this window; resolves true for its button. */

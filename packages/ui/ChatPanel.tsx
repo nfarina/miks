@@ -1,4 +1,5 @@
 import { colors } from "crosswing/colors";
+import { BottomScrollable } from "crosswing/components/BottomScrollable";
 import { PanelLayout, PanelLayoutContext, StyledPanelLayout } from "crosswing/components/PanelLayout";
 import { StyledTextArea, TextArea } from "crosswing/components/forms/TextArea";
 import { fonts } from "crosswing/fonts";
@@ -612,11 +613,18 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   const [quote, setQuote] = useState<{ text: string; top: number; left: number } | null>(null);
   // What ⌃V did, above the composer.
   const [notice, setNotice] = useState<Notice | null>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  // The conversation, in its BottomScrollable (its parent), which keeps it at
+  // the bottom by itself (column-reverse), as you send or it grows: scrollTop
+  // is 0 there, and negative above.
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const scroller = () => conversationRef.current?.parentElement ?? null;
   const composerRef = useRef<HTMLFormElement>(null);
   const atBottom = useRef(true);
-  // Where following stopped to keep a reply's start on screen (see below).
-  const pinnedAt = useRef<number | null>(null);
+  // Whether following stopped at a reply's start, to keep it on screen (see
+  // below), until you scroll; and where it last scrolled to itself, which
+  // isn't you scrolling.
+  const pinned = useRef(false);
+  const scrolledTo = useRef(0);
   // The conversation came all at once (opening it, or a rewind), not as it went.
   const loaded = useRef(false);
   const { showToast } = use(ModalContext);
@@ -651,43 +659,25 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     if (autoFocus()) focusComposer();
   }, [visible, chat?.session]);
 
-  // New messages keep it at the bottom, unless you've scrolled up to read.
-  // But not past the start of the words it ends with: you watch tool calls
-  // go by, then read the reply from its top. Whether words are the turn's
-  // last isn't known until it ends, so any are; a tool call after them
-  // carries on to the bottom. Not for one loaded all at once (opening Miks
-  // again), which was read as it went, if at all, and goes to the bottom.
+  // New messages keep it at the bottom (the BottomScrollable does), unless
+  // you've scrolled up to read. But not past the start of the words it ends
+  // with: you watch tool calls go by, then read the reply from its top.
+  // Whether words are the turn's last isn't known until it ends, so any are;
+  // a tool call after them carries on to the bottom. Not for one loaded all
+  // at once (opening Miks again), which was read as it went, if at all, and
+  // goes to the bottom.
   useLayoutEffect(() => {
-    const scroller = scrollerRef.current;
+    const element = scroller();
     const wasLoaded = loaded.current;
     loaded.current = false;
-    if (!scroller || !atBottom.current) return;
-    const bottom = scroller.scrollHeight - scroller.clientHeight;
-    const start = wasLoaded ? null : replyStart(scroller);
-    const target = start ? Math.max(Math.min(bottom, start.offsetTop - 12), scroller.scrollTop) : bottom;
-    pinnedAt.current = target < bottom - 1 ? target : null;
-    scroller.scrollTop = target;
+    if (!element || !conversationRef.current || !(atBottom.current || pinned.current)) return;
+    const start = wasLoaded ? null : replyStart(conversationRef.current);
+    // Where the start is at the top, if the bottom would leave it above.
+    const target = start ? Math.min(0, scrollTopFor(element, start, 12)) : 0;
+    pinned.current = target < -1;
+    scrolledTo.current = target;
+    element.scrollTop = target;
   }, [chat, pending, status]);
-
-  // Its bottom stays put as it changes height (the on-screen keyboard coming
-  // up, the composer growing), as in Messages: what you were reading at the
-  // bottom stays in view.
-  useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    // Measured only while shown: hidden, it has no height to go back to.
-    let height: number | null = null;
-    const observer = new ResizeObserver(() => {
-      if (!scroller.offsetParent) return;
-      const change = height === null ? 0 : height - scroller.clientHeight;
-      height = scroller.clientHeight;
-      if (change === 0) return;
-      if (pinnedAt.current !== null) pinnedAt.current += change;
-      scroller.scrollTop += change;
-    });
-    observer.observe(scroller);
-    return () => observer.disconnect();
-  }, []);
 
   // ⌃D hides the panel for the terminal, where two more quit Claude Code.
   function hide() {
@@ -737,7 +727,12 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     // (plain http, as an iPad on Tailscale had) doesn't have: sending threw.
     setPending([...pending, { id: String(++pendingCount.current), text: sent, time: Date.now() }]);
     changeText("");
+    // To the bottom, to see it go, from wherever you'd scrolled to.
     atBottom.current = true;
+    pinned.current = false;
+    scrolledTo.current = 0;
+    const element = scroller();
+    if (element) element.scrollTop = 0;
   }
 
   const pendingCount = useRef(0);
@@ -803,16 +798,17 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   // Selecting text in a message offers to quote it in your reply.
   function onMouseUp() {
     const selection = window.getSelection();
-    const scroller = scrollerRef.current;
+    const conversation = conversationRef.current;
     const selected = selection?.toString().trim();
-    if (!selection || !scroller || !selected || selection.rangeCount === 0) return setQuote(null);
-    if (!scroller.contains(selection.anchorNode) || !scroller.contains(selection.focusNode)) return setQuote(null);
+    if (!selection || !conversation || !selected || selection.rangeCount === 0) return setQuote(null);
+    if (!conversation.contains(selection.anchorNode) || !conversation.contains(selection.focusNode)) return setQuote(null);
 
+    // In the conversation, which it scrolls with.
     const rect = selection.getRangeAt(0).getBoundingClientRect();
-    const bounds = scroller.getBoundingClientRect();
+    const bounds = conversation.getBoundingClientRect();
     setQuote({
       text: selected,
-      top: rect.top - bounds.top + scroller.scrollTop - 38,
+      top: rect.top - bounds.top - 38,
       left: Math.min(Math.max(rect.left - bounds.left + rect.width / 2 - 52, 8), bounds.width - 124),
     });
   }
@@ -849,20 +845,21 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
 
   /** Scrolls to the previous or next of your messages and final replies. */
   function jump(direction: -1 | 1) {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
+    const element = scroller();
+    const conversation = conversationRef.current;
+    if (!element || !conversation) return;
 
-    const from = jumpingTo.current ?? scroller.scrollTop;
-    const stops = [...scroller.querySelectorAll<HTMLElement>(":scope > .prompt:not([data-pending]), :scope > .final-reply")]
+    // In scrollTops: 0 at the bottom, negative above.
+    const from = jumpingTo.current ?? element.scrollTop;
+    const top = element.clientHeight - element.scrollHeight;
+    const stops = [...conversation.querySelectorAll<HTMLElement>(":scope > .prompt:not([data-pending]), :scope > .final-reply")]
       // A little above each, so it isn't flush with the top.
-      .map((stop) => Math.max(stop.offsetTop - 16, 0));
-    const bottom = scroller.scrollHeight - scroller.clientHeight;
+      .map((stop) => Math.min(Math.max(scrollTopFor(element, stop, 16), top), 0));
     const next =
-      direction > 0 ? (stops.find((top) => top > from + 2) ?? bottom) : (stops.findLast((top) => top < from - 2) ?? 0);
+      direction > 0 ? (stops.find((stop) => stop > from + 2) ?? 0) : (stops.findLast((stop) => stop < from - 2) ?? top);
 
-    const target = Math.min(next, bottom);
-    jumpingTo.current = target;
-    scroller.scrollTo({ top: target, behavior: "smooth" });
+    jumpingTo.current = next;
+    element.scrollTo({ top: next, behavior: "smooth" });
   }
 
   // Code's copy buttons, and links (which open in the browser).
@@ -885,14 +882,12 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
 
   return (
     <>
-      <div
+      <BottomScrollable
         className="scroller"
-        ref={scrollerRef}
         onScroll={(event) => {
-          const scroller = event.currentTarget;
-          const pinned = pinnedAt.current !== null && Math.abs(scroller.scrollTop - pinnedAt.current) < 2;
-          if (!pinned) pinnedAt.current = null;
-          atBottom.current = pinned || scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+          const { scrollTop } = event.currentTarget;
+          if (Math.abs(scrollTop - scrolledTo.current) > 2) pinned.current = false;
+          atBottom.current = scrollTop > -40;
         }}
         onScrollEnd={() => (jumpingTo.current = null)}
         // Focusable, so a click in the conversation puts the keyboard here,
@@ -924,50 +919,52 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
         onDragOver={onDragOver}
         onDrop={onDrop}
       >
-        {chat && !session && (
-          <div className="note">Start Claude Code in this tab, and its conversation shows up here.</div>
-        )}
-        {chat && session && chat.entries.length === 0 && <div className="note">Nothing said yet.</div>}
-        {group(chat?.entries ?? [], status === "working").map((item) =>
-          item.kind === "tools" ? (
-            <ToolCalls key={item.entries[0].id} entries={item.entries} />
-          ) : item.kind === "prompt" ? (
-            <div key={item.entry.id} className="prompt">
-              <Bubble text={item.entry.text} />
+        <div className="conversation" ref={conversationRef}>
+          {chat && !session && (
+            <div className="note">Start Claude Code in this tab, and its conversation shows up here.</div>
+          )}
+          {chat && session && chat.entries.length === 0 && <div className="note">Nothing said yet.</div>}
+          {group(chat?.entries ?? [], status === "working").map((item) =>
+            item.kind === "tools" ? (
+              <ToolCalls key={item.entries[0].id} entries={item.entries} />
+            ) : item.kind === "prompt" ? (
+              <div key={item.entry.id} className="prompt">
+                <Bubble text={item.entry.text} />
+              </div>
+            ) : item.final ? (
+              <Fragment key={item.entry.id}>
+                <div className="final-reply">Reply</div>
+                <Reply text={item.entry.text} />
+              </Fragment>
+            ) : (
+              <Reply key={item.entry.id} text={item.entry.text} />
+            ),
+          )}
+          {pending.map((sent) => (
+            <div key={sent.id} className="prompt" data-pending>
+              <Bubble text={sent.text} />
             </div>
-          ) : item.final ? (
-            <Fragment key={item.entry.id}>
-              <div className="final-reply">Reply</div>
-              <Reply text={item.entry.text} />
-            </Fragment>
-          ) : (
-            <Reply key={item.entry.id} text={item.entry.text} />
-          ),
-        )}
-        {pending.map((sent) => (
-          <div key={sent.id} className="prompt" data-pending>
-            <Bubble text={sent.text} />
-          </div>
-        ))}
-        {session && status === "working" && <div className="working">Working…</div>}
-        {quote && (
-          <button
-            className="quote"
-            style={{ top: quote.top, left: quote.left }}
-            // Before the selection goes; and not to the conversation, whose
-            // mousedown takes the button away (a click elsewhere) before
-            // this click could land, and whose mouseup brings it back.
-            onMouseDown={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-            onMouseUp={(event) => event.stopPropagation()}
-            onClick={addQuote}
-          >
-            <TextQuote size={14} /> Quote <HotkeyView hotkeys={{ key: "ctrl+q" }} />
-          </button>
-        )}
-      </div>
+          ))}
+          {session && status === "working" && <div className="working">Working…</div>}
+          {quote && (
+            <button
+              className="quote"
+              style={{ top: quote.top, left: quote.left }}
+              // Before the selection goes; and not to the conversation, whose
+              // mousedown takes the button away (a click elsewhere) before
+              // this click could land, and whose mouseup brings it back.
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onMouseUp={(event) => event.stopPropagation()}
+              onClick={addQuote}
+            >
+              <TextQuote size={14} /> Quote <HotkeyView hotkeys={{ key: "ctrl+q" }} />
+            </button>
+          )}
+        </div>
+      </BottomScrollable>
       <form
         className="composer"
         ref={composerRef}
@@ -1068,10 +1065,15 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   );
 }
 
+/** The scrollTop that puts `element` `margin` below the scroller's top. */
+function scrollTopFor(scroller: HTMLElement, element: HTMLElement, margin: number): number {
+  return scroller.scrollTop + element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - margin;
+}
+
 /** The start of the words the conversation ends with (its "Reply" line, if marked), if it does. */
-function replyStart(scroller: HTMLElement): HTMLElement | null {
+function replyStart(conversation: HTMLElement): HTMLElement | null {
   let start: HTMLElement | null = null;
-  for (let child = scroller.lastElementChild; child; child = child.previousElementSibling) {
+  for (let child = conversation.lastElementChild; child; child = child.previousElementSibling) {
     if (child.matches(".working, .quote")) continue;
     if (!child.matches(".reply, .final-reply")) break;
     start = child as HTMLElement;
@@ -1233,7 +1235,7 @@ const StyledChatPanel = styled.div`
   }
 
   > .note,
-  > .scroller > .note {
+  > .scroller > .conversation > .note {
     padding: 24px;
     color: ${colors.textSecondary()};
     text-align: center;
@@ -1243,7 +1245,9 @@ const StyledChatPanel = styled.div`
     flex-grow: 1;
     outline: none;
     min-height: 0;
-    overflow-y: auto;
+  }
+
+  > .scroller > .conversation {
     position: relative;
     padding: 16px 18px 8px;
     display: flex;

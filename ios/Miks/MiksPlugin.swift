@@ -1,5 +1,6 @@
 import Foundation
 import GameController
+import UIKit
 
 /// What the page can't do itself. `fullName` turns the name you type for a Mac
 /// ("air") into its full one ("air.tailbf8edc.ts.net"), the only one its
@@ -8,6 +9,7 @@ import GameController
 /// `hardwareKeyboard` says whether one's connected (and `miks_hardwareKeyboard`
 /// whenever that changes), so the page knows focusing won't bring up the
 /// on-screen keyboard. `page` is the pages in tabs' panels (Pages.swift).
+/// `appInfo` is the app's version and the device's name, for `miks version`.
 /// `pushToken` is this device's, from AppDelegate (and `miks_pushToken` once
 /// it has one), with its APNs environment; `pendingNotification`, the one
 /// tapped to launch the app, whose tab the page opens once it's up.
@@ -86,6 +88,15 @@ class MiksPlugin: WebAppPlugin {
             let pending = MiksPlugin.pendingNotification ?? [:]
             MiksPlugin.pendingNotification = nil
             webApp.executeJSCallback(callback, result: pending)
+            return true
+        case "appInfo":
+            guard let callback = body["callback"] as? String else { return false }
+            let info = Bundle.main.infoDictionary ?? [:]
+            webApp.executeJSCallback(callback, result: [
+                "version": info["CFBundleShortVersionString"] as? String ?? "?",
+                "build": info["CFBundleVersion"] as? String ?? "?",
+                "device": UIDevice.current.name,
+            ])
             return true
         case "fullName":
             guard let callback = body["callback"] as? String, let host = body["host"] as? String else { return false }

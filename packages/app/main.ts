@@ -556,6 +556,17 @@ const targetFor = (contents: WebContents) => {
   return remote ? { name: remote.name, color: remote.color, host: remote.host } : null;
 };
 
+/** This Mac as Sharing settings names it, as the daemon says its own (server/Version.ts). */
+let machineName: string | null = null;
+
+ipcMain.on("miks:client", (event) => {
+  if (!machineName) {
+    const name = spawnSync("scutil", ["--get", "ComputerName"], { encoding: "utf8", timeout: 2000 }).stdout?.trim();
+    machineName = name || os.hostname().replace(/\.local$/, "");
+  }
+  event.returnValue = { kind: "mac", machine: machineName };
+});
+
 ipcMain.on("miks:getTarget", (event) => {
   event.returnValue = targetFor(event.sender);
 });
@@ -898,7 +909,12 @@ function buildMenu() {
     {
       role: "appMenu",
       submenu: [
-        { role: "about" },
+        {
+          // What `miks version` says, for the window's daemon; Electron's own panel with no window.
+          label: "About Miks",
+          click: (_item, window) =>
+            window ? (window as BrowserWindow).webContents.send("miks:command", "versions") : app.showAboutPanel(),
+        },
         { type: "separator" },
         { label: "Check for updates…", click: () => checkForUpdates() },
         { type: "separator" },

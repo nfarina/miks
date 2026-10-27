@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 16;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -171,9 +171,44 @@ export type PushDevice = {
   host: string;
 };
 
+/**
+ * Which Miks something is: its version, short commit ("+changes" with work
+ * not committed yet), and when it was built (null: run from source).
+ */
+export type Build = { version: string; commit: string | null; built: string | null };
+
+/** Which Miks a connection is, for `miks version`. Since protocol 15. */
+export type ClientInfo = {
+  /** Miks.app (or the dev build), a page the gateway served, or the iOS app. */
+  kind: "mac" | "browser" | "ios";
+  /** The Mac or device it's on. */
+  machine: string;
+  /** Its UI (packages/ui/vite.config.ts); `dev` from Vite's dev server, where it's the commit it started on. */
+  ui: Build & { dev?: boolean };
+  /** The iOS app's own version and build number. */
+  app?: { version: string; build: string };
+  /** The iOS app watching a Mac it isn't showing, for what its agents are doing. */
+  watching?: boolean;
+};
+
+/** What `miks version` says, for its dialog too (`version`). Since protocol 16. */
+export type VersionInfo = {
+  /** The daemon's Mac. */
+  machine: string;
+  /** What the daemon runs. */
+  running: Build;
+  protocol: number;
+  pid: number;
+  started: string;
+  /** What's installed there now, which it runs once restarted, and where: Miks.app's path, or the repo's. */
+  installed: Build & { at: string };
+  /** Every connection, and whether it's the one asking (or typing `miks version`). */
+  windows: { client: ClientInfo | null; you: boolean }[];
+};
+
 export type ClientMessage =
   /** Asks for the full state; the daemon answers with `state`. */
-  | { type: "hello" }
+  | { type: "hello"; client?: ClientInfo }
   | { type: "createWorkspace"; cwd?: string; title?: string }
   | { type: "closeWorkspace"; workspaceId: string }
   /** An empty title goes back to following the active tab. */
@@ -304,6 +339,8 @@ export type ClientMessage =
   | { type: "sendFile"; requestId: string; name: string; data: string }
   /** What's running in each tab, as `/api/running` says: answered by `running`. Since protocol 11. */
   | { type: "running"; requestId: string }
+  /** What `miks version` says: answered by `version`. Since protocol 16. */
+  | { type: "version"; requestId: string }
   /** Restarts the daemon (through launchd), as `/api/restart` does, for a window that has only the socket (the iOS app's). Since protocol 11. */
   | { type: "restart" }
   /** Changes this daemon's Mac's settings, for every window on it. Since protocol 11. */
@@ -353,6 +390,8 @@ export type DaemonMessage =
   | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] }
   /** A `running`'s answer. */
   | { type: "running"; requestId: string; running: RunningProgram[] }
+  /** A `version`'s answer. */
+  | { type: "version"; requestId: string; info: VersionInfo }
   /** A `transcribe`'s words, or why there are none. */
   | { type: "transcribed"; requestId: string; text?: string; error?: string }
   /** Where a `sendFile`'s file is now, or why it isn't. */

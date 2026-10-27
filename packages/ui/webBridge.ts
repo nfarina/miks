@@ -5,9 +5,10 @@
 // back to it; the iOS app's (crosswing://app, or the bundle's own site), to
 // whichever of the Macs you've added it shows, watching the others for what
 // their agents are doing. Imported first, before anything reads `window.miks`.
-import type { AgentStatus, DaemonMessage } from "miks/shared/protocol";
+import type { AgentStatus, ClientInfo, ClientMessage, DaemonMessage } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS, type Settings } from "miks/shared/settings";
 import type { BridgeStatus, Mac, MacWorkspace, MiksBridge, PageState } from "./daemon";
+import { deviceName, UI_BUILD } from "./client";
 import { workspaceStatus, workspaceTitle } from "./status";
 
 /** This device's own settings (the sidebar, the text size), kept in the browser, not the Mac's. */
@@ -105,6 +106,18 @@ let keyboardConnected = false;
 (window as any).miks_hardwareKeyboard = (connected: boolean) => (keyboardConnected = connected);
 void askApp<{ connected?: boolean }>("hardwareKeyboard").then((result) => {
   if (result) keyboardConnected = !!result.connected;
+});
+
+/** The iOS app's own version, and the device's name (MiksPlugin.swift); null from an app before it said. */
+type AppInfo = { version: string; build: string; device: string };
+let appInfo: AppInfo | null = null;
+void askApp<AppInfo>("appInfo").then((info) => (appInfo = info?.version ? info : null));
+
+/** What this page is and where, for `miks version` (`ClientInfo`). */
+const client = (): Omit<ClientInfo, "ui"> => ({
+  kind: inApp ? "ios" : "browser",
+  machine: appInfo?.device ?? deviceName(),
+  ...(appInfo && { app: { version: appInfo.version, build: appInfo.build } }),
 });
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -210,7 +223,7 @@ class Watcher {
     }
     this.socket = socket;
     socket.onopen = () => {
-      socket.send(JSON.stringify({ type: "hello" }));
+      socket.send(JSON.stringify({ type: "hello", client: { ...client(), ui: UI_BUILD, watching: true } } satisfies ClientMessage));
       this.announce();
     };
     socket.onmessage = (event) => {
@@ -488,6 +501,7 @@ function webBridge(): MiksBridge {
     onSettings: (listener) => subscribe(settingsListeners, listener),
     focus: () => window.focus(),
     getTarget: () => null,
+    client,
     onTarget: () => () => {},
     openRemote: () => {},
     // Which app opens links is the Mac's choice; a browser has no apps to pick from.
