@@ -103,8 +103,9 @@ fi
 
 # The app's bundle id: the shortest in the project, as extensions and the
 # watch app append to it. The first pattern is the JSON format, the second a
-# pbxproj.
-BUNDLE_ID="$(grep -ohE '"PRODUCT_BUNDLE_IDENTIFIER" *: *"[^"]+"|PRODUCT_BUNDLE_IDENTIFIER = [^;]+;' "$PROJECT"/project.* \
+# pbxproj. Files only: `project.*` also matches the project.xcworkspace
+# folder, and grep's error on it ends the script under pipefail.
+BUNDLE_ID="$(find "$PROJECT" -maxdepth 1 -type f -name 'project.*' -exec grep -ohE '"PRODUCT_BUNDLE_IDENTIFIER" *: *"[^"]+"|PRODUCT_BUNDLE_IDENTIFIER = [^;]+;' {} + \
   | sed -E 's/.*[:=] *"?([^";]+)"?;?$/\1/' | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2)"
 
 DEVICE_JSON="$(mktemp)"
