@@ -410,7 +410,7 @@ export async function serve({
           return;
         }
         case "showFolder":
-          if (path.isAbsolute(message.path)) void showFolder(message.path);
+          if (path.isAbsolute(message.path)) void showFolder(message.path, { reveal: message.reveal });
           return;
         case "transcribe": {
           const { requestId } = message;

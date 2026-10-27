@@ -110,13 +110,14 @@ export async function readImageForPanel(
 /**
  * Shows a folder in Finder on this Mac: opens it, or for a bundle (an app,
  * a `.rtfd`), which opening would start or open as a document, shows it in
- * its own folder.
+ * its own folder. With `reveal`, shows any file or folder in its own folder.
  */
-export async function showFolder(folder: string) {
+export async function showFolder(folder: string, { reveal = false } = {}) {
   try {
     const real = await fs.promises.realpath(folder);
-    if (!(await fs.promises.stat(real)).isDirectory()) return;
-    const args = (await isPackage(real)) ? ["-R", real] : [real];
+    const stat = await fs.promises.stat(real);
+    if (!reveal && !stat.isDirectory()) return;
+    const args = reveal || (await isPackage(real)) ? ["-R", real] : [real];
     spawn("open", args, { stdio: "ignore" }).on("error", () => {});
   } catch {
     // Gone since it was found.

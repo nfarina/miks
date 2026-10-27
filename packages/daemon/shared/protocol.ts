@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 17;
+export const PROTOCOL_VERSION = 18;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -328,8 +328,12 @@ export type ClientMessage =
    * moment (an `lsof`: for a click, not every hover). Since protocol 10.
    */
   | { type: "findPaths"; requestId: string; tabId: string; paths: string[]; now?: boolean }
-  /** Shows a folder (absolute) in Finder, on the daemon's Mac. Since protocol 10. */
-  | { type: "showFolder"; path: string }
+  /**
+   * Shows a folder (absolute) in Finder, on the daemon's Mac. Since protocol
+   * 10. With `reveal`, a file or folder selected in its own folder's window
+   * instead (since protocol 18; before, nothing for a file).
+   */
+  | { type: "showFolder"; path: string; reveal?: boolean }
   /**
    * Speech to text for the chat panel's microphone, base64 audio of `mime`,
    * by Groq from the daemon's Mac, which keeps the key. Answered by

@@ -324,7 +324,7 @@
       ],
     },
   };
-  for (const state of Object.values(macs)) state.protocol = 17;
+  for (const state of Object.values(macs)) state.protocol = 18;
 
   /** What each tab's terminal shows. */
   const tabScreens = { t1: "search", t2: "dev", t3: "permission", t4: "working", t5: "idle", t6: "commit", u1: "train", u2: "idle", u3: "shell" };

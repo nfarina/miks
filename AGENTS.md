@@ -534,6 +534,12 @@ resizes); keep it passing.
   opened), only in a Miks window on this Mac, never a remote's or a
   browser's. The click looks again, from where the shell is that moment
   (`now`, an `lsof`), so a `cd` just before it counts.
+- A click on code in a chat message (`ui/codeMenu.tsx`; not in a block or
+  a link) shows a menu: Copy, and for one that's there on the tab's Mac
+  (`findPaths`, from the tab's folder), Open (a file in the panel, a folder
+  in Finder) and Reveal in Finder (`showFolder` with `reveal`, since
+  protocol 18: `open -R`), the Finder ones only on this Mac; for a web
+  address, Open link.
 
 - `miks browse <url>` (`POST /api/browse`, `Tab.page`) shows a page in the
   panel (`ui/BrowseView.tsx`, a `<webview>`), switching Chat | file | page

@@ -27,6 +27,7 @@ import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
+import { useCodeMenu } from "./codeMenu";
 import { daemon } from "./daemon";
 import { useDictation } from "./dictation";
 import { StyledWaveform, Waveform } from "./Waveform";
@@ -617,6 +618,7 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   // the bottom by itself (column-reverse), as you send or it grows: scrollTop
   // is 0 there, and negative above.
   const conversationRef = useRef<HTMLDivElement>(null);
+  const codeMenu = useCodeMenu(tab.id);
   const scroller = () => conversationRef.current?.parentElement ?? null;
   const composerRef = useRef<HTMLFormElement>(null);
   const atBottom = useRef(true);
@@ -862,10 +864,10 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     element.scrollTo({ top: next, behavior: "smooth" });
   }
 
-  // Code's copy buttons, and links (which open in the browser).
+  // Code's copy buttons, code's menu, and links (which open in the browser).
   function onClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
-    if (copyCode(target)) return;
+    if (copyCode(target) || codeMenu.onClick(event)) return;
     const link = target.closest("a");
     if (link?.href) {
       event.preventDefault();
@@ -1424,6 +1426,15 @@ const StyledChatPanel = styled.div`
       }
 
       ${markdownCSS()}
+
+      /* Code in a message opens a menu (codeMenu.tsx); a link's is the link. */
+      code:not(pre > code, a code) {
+        cursor: pointer;
+
+        &:hover {
+          border-color: ${colors.textSecondary({ alpha: 0.5 })};
+        }
+      }
 
       h1,
       h2,
