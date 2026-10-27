@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -132,7 +132,12 @@ export type DaemonState = {
   gateway?: GatewayState;
   /** Its Mac's settings for every window on it (`machine.json`). Since protocol 11. */
   machine?: MachineSettings;
+  /** How "Awake, unlocked" is going, while it's chosen. Since protocol 17. */
+  keeper?: KeeperState;
 };
+
+/** What the keeper (daemon/keeper) says: whether it can hold the keyboard, whether the Mac's plugged in, and whether the screen's dark. */
+export type KeeperState = { accessibility: boolean; plugged: boolean; shielded: boolean };
 
 /** Where your other devices open Miks (a browser, on Tailscale), or why they can't. */
 export type GatewayState = { url: string } | { error: string };

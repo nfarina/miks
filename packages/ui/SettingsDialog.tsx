@@ -3,14 +3,15 @@ import { Button } from "crosswing/components/Button";
 import { LabeledToggle } from "crosswing/components/forms/LabeledToggle";
 import { Dropdown } from "crosswing/components/forms/Dropdown";
 import { TextInput } from "crosswing/components/forms/TextInput";
+import { TipView } from "crosswing/components/TipView";
 import { useInputValue } from "crosswing/components/forms/useInputValue";
 import { SeparatorLayout, StyledSeparatorLayout } from "crosswing/components/SeparatorLayout";
 import { TabbedButton, TabbedButtonLayout } from "crosswing/components/TabbedButtonLayout";
 import { fonts } from "crosswing/fonts";
 import { DialogView } from "crosswing/modals/dialog";
-import { Check, Minus, Plus, X } from "lucide-react";
+import { Check, Minus, Plus, ShieldAlert, X } from "lucide-react";
 import type { Permission } from "miks/shared/protocol";
-import type { Remote } from "miks/shared/settings";
+import type { KeepAvailable, Remote } from "miks/shared/settings";
 import { styled } from "styled-components";
 import { useEffect, useState } from "react";
 import { daemon, type PermissionsEvent, useDaemon, useTarget } from "./daemon";
@@ -327,39 +328,81 @@ const REMOTE_COLORS = ["#3b82f6", "#e5734a", "#22a06b", "#9b5de5", "#d4a20b", "#
 
 /**
  * The other way around: the window's Mac's terminals, from your other
- * devices on Tailscale (an iPad, a phone). The setting is that Mac's
- * (`machine.json`), so a window on another Mac turns on that one's, if its
- * Miks is new enough to have it.
+ * devices on Tailscale (an iPad, a phone), and whether it stays available to
+ * them while you're away. The settings are that Mac's (`machine.json`), so a
+ * window on another Mac changes that one's, if its Miks is new enough.
  */
 function TailnetAccess() {
-  const { tailnetAccess } = useSettings();
+  const { tailnetAccess, keepAvailable } = useSettings();
   const { state } = useDaemon();
   const target = useTarget();
   if (target && !state?.machine) return null;
   const gateway = state?.gateway;
+  const keeper = state?.keeper;
 
   return (
-    <SeparatorLayout bordered>
-      <LabeledToggle
-        label={target ? `Open ${target.name} from your other devices` : "Open from your other devices"}
-        detail="Your iPad or phone can use Miks in a browser, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
-        on={tailnetAccess}
-        onClick={() => updateSettings({ tailnetAccess: !tailnetAccess })}
-      />
-      {tailnetAccess && gateway && (
-        <p className="gateway">
-          {"url" in gateway ? (
-            <>
-              Open <code>{gateway.url}</code> on them.
-            </>
-          ) : (
-            gateway.error
-          )}
-        </p>
+    <>
+      <h3 className="heading">{target ? `Open ${target.name} from elsewhere` : "Open this Mac from elsewhere"}</h3>
+      <SeparatorLayout bordered>
+        <LabeledToggle
+          label="Open from your other devices"
+          detail="Your iPad or phone can use Miks in the app or a browser, over Tailscale: only devices signed in to Tailscale as you, never anything else on the network."
+          on={tailnetAccess}
+          onClick={() => updateSettings({ tailnetAccess: !tailnetAccess })}
+        />
+        {tailnetAccess && gateway && (
+          <p className="gateway">
+            {"url" in gateway ? (
+              <>
+                Open <code>{gateway.url}</code> on them.
+              </>
+            ) : (
+              gateway.error
+            )}
+          </p>
+        )}
+        {state?.machine && "keepAvailable" in state.machine && (
+          <div className="field">
+            <div className="content">
+              <div className="label">While you're away</div>
+              <div className="detail">{KEEP_AVAILABLE_DETAIL[keepAvailable]}</div>
+            </div>
+            <Dropdown
+              bordered
+              className="keep-available"
+              value={keepAvailable}
+              onValueChange={(value) => updateSettings({ keepAvailable: value as KeepAvailable })}
+              items={[
+                { value: "off", children: "Sleep" },
+                { value: "locked", children: "Stay awake, locked" },
+                { value: "unlocked", children: "Stay awake, unlocked" },
+              ]}
+            />
+          </div>
+        )}
+      </SeparatorLayout>
+      {keepAvailable === "unlocked" && (
+        <TipView icon={<ShieldAlert />} title="Miks guards it, not the lock screen">
+          Agents can use anything on it, the screen too, because it never really locks: the session stays open, and
+          anything that reaches Miks can use it as you. The screen goes dark and its keyboard and trackpad do nothing
+          until you use Touch ID or your password. Unplugged, it locks for real; with the lid closed, it sleeps.
+        </TipView>
       )}
-    </SeparatorLayout>
+      {keepAvailable === "unlocked" && keeper && !keeper.accessibility && (
+        <TipView title="Needs Accessibility">
+          To hold its keyboard and trackpad. Until you allow it (Permissions), it locks as usual.
+        </TipView>
+      )}
+    </>
   );
 }
+
+/** What each choice for while you're away does. */
+const KEEP_AVAILABLE_DETAIL: Record<KeepAvailable, string> = {
+  off: "It sleeps as usual, out of reach until it wakes.",
+  locked: "Plugged in with the lid open, it stays awake, and locks as usual. Agents can still use terminals and Chrome.",
+  unlocked: "Plugged in with the lid open, it stays awake and unlocked, so agents can use its screen too.",
+};
 
 function RemoteSettings() {
   const { remotes } = useSettings();
@@ -380,6 +423,7 @@ function RemoteSettings() {
 
   return (
     <StyledRemotes>
+      <h3 className="heading">Open other Macs</h3>
       <p className="intro">
         A window on another Mac's terminals, as if you were there. It connects over SSH, so <code>ssh host</code> has to
         work from here without a password, and that Mac needs Remote Login on and Miks running. Open one here, or from
@@ -439,6 +483,16 @@ const StyledRemotes = styled.div`
   display: flex;
   flex-flow: column;
   gap: 12px;
+
+  > .heading {
+    margin: 12px 0 0;
+    font: ${fonts.displayBold({ size: 13, line: "18px" })};
+    color: ${colors.text()};
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
 
   > .intro,
   .gateway {
@@ -546,7 +600,8 @@ const StyledSettings = styled(TabbedButtonLayout)`
       width: 130px;
     }
 
-    > .browser {
+    > .browser,
+    > .keep-available {
       width: auto;
       min-width: 130px;
     }

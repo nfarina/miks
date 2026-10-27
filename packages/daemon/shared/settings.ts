@@ -12,6 +12,17 @@ export type Remote = {
   color: string;
 };
 
+/**
+ * What this Mac does while you're away from it, plugged in with its lid open:
+ * sleeps as usual (`off`); stays awake, locking as usual (`locked`: your other
+ * devices still reach its terminals, and agents Chrome); or stays awake and
+ * unlocked, with the screen dark and its keyboard and trackpad doing nothing
+ * until you unlock (`unlocked`: agents can use the screen too). See
+ * daemon/keeper.
+ */
+export type KeepAvailable = "off" | "locked" | "unlocked";
+export const KEEP_AVAILABLE: readonly KeepAvailable[] = ["off", "locked", "unlocked"];
+
 export type Settings = {
   /** Terminal text size, in points. */
   fontSize: number;
@@ -38,14 +49,15 @@ export type Settings = {
   remotes: Remote[];
   /** Whether your other devices on Tailscale can open Miks in a browser (the daemon's gateway). */
   tailnetAccess: boolean;
+  keepAvailable: KeepAvailable;
 };
 
 /**
  * The ones a Mac keeps for every window on its daemon (another Mac's, the
  * iOS app's), in `machine.json`, rather than each window's own: whether its
- * gateway runs, and what its directories leave off.
+ * gateway runs, what its directories leave off, and whether it stays awake.
  */
-export const MACHINE_SETTINGS = ["hidePathPrefix", "tailnetAccess"] as const;
+export const MACHINE_SETTINGS = ["hidePathPrefix", "tailnetAccess", "keepAvailable"] as const;
 export type MachineSettings = Pick<Settings, (typeof MACHINE_SETTINGS)[number]>;
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   browser: "",
   remotes: [],
   tailnetAccess: false,
+  keepAvailable: "off",
 };
 
 /**

@@ -4,6 +4,7 @@ import path from "path";
 import { logPath, socketPath, statePath } from "../shared/paths.ts";
 import { serve } from "./daemon.ts";
 import { Gateway } from "./Gateway.ts";
+import { Keeper } from "./Keeper.ts";
 
 const [command] = process.argv.slice(2);
 
@@ -58,7 +59,14 @@ if (command === "serve") {
   });
   gateway.on("change", () => daemon.workspaces.setGateway(gateway.state));
   // As this Mac's settings say (machine.json), which any window on this daemon changes.
-  const followSettings = () => gateway.setEnabled(daemon.workspaces.getMachineSettings().tailnetAccess);
+  // And while you're away from it (keepAvailable), as long as it's plugged in.
+  const keeper = new Keeper(log);
+  keeper.on("change", () => daemon.workspaces.setKeeper(keeper.state));
+  const followSettings = () => {
+    const settings = daemon.workspaces.getMachineSettings();
+    gateway.setEnabled(settings.tailnetAccess);
+    keeper.setMode(settings.keepAvailable);
+  };
   followSettings();
   daemon.workspaces.on("machine", followSettings);
 

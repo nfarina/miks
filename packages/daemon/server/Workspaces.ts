@@ -10,6 +10,7 @@ import {
   type ChatEntry,
   type DaemonState,
   type GatewayState,
+  type KeeperState,
   type OpenFile,
   type OpenPage,
   PROTOCOL_VERSION,
@@ -88,6 +89,8 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   private readonly keeps = new Map<string, { command: string; seenRunning: boolean }>();
   /** The gateway for your other devices on Tailscale, as the UI shows it. */
   private gateway: GatewayState | undefined;
+  /** How "Awake, unlocked" is going (daemon/keeper), while it's chosen. */
+  private keeper: KeeperState | undefined;
   private machine: MachineSettings;
   /** What each tab's Claude session has running in the background. */
   private readonly backgrounds = new Map<string, BackgroundTasks>();
@@ -146,6 +149,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
       home: os.homedir(),
       activeWorkspaceId: this.activeWorkspaceId,
       gateway: this.gateway,
+      keeper: this.keeper,
       machine: this.machine,
       workspaces: this.workspaces.map((workspace) => ({
         id: workspace.id,
@@ -459,6 +463,11 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
       saveMachineSettings(path.dirname(this.socketPath), this.machine);
     } catch {}
     this.emit("machine");
+    this.emit("change");
+  }
+
+  setKeeper(keeper: KeeperState | undefined) {
+    this.keeper = keeper;
     this.emit("change");
   }
 

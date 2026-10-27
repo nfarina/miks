@@ -139,6 +139,32 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   with the device's own settings in localStorage. Plain http over Tailscale
   isn't a secure context: no `crypto.randomUUID` (sending threw once), no
   clipboard API. Verified from an iPad.
+- While you're away (Settings → Remotes, `keepAvailable`, a Mac's own
+  setting): asleep, a Mac drops off Tailscale. `locked` is `caffeinate -s`
+  from the daemon (`server/Keeper.ts`): plugged in, it never idle-sleeps,
+  and locks as usual. Behind the lock screen, with the display off, the
+  daemon, terminals and Claude in Chrome all still work (it loaded, clicked
+  and screenshotted pages), but screen captures are black, so not computer
+  use. `unlocked` is the keeper (`daemon/keeper/Keeper.swift`, kiosk's
+  approach, ~/Code/kiosk), a daemon child that never lets the Mac lock
+  (power assertions, and a mouse move in place for the screen saver's HID
+  idle clock) and instead, after the AC display-sleep time without a person
+  (hardware input, pid 0, or screen sharing) or at ⌃⌘Q, which it takes
+  from macOS: a sheet over every screen, the built-in backlight off, and
+  an event tap dropping hardware input until Touch ID or the password
+  (`ODRecord.verifyPassword`). Its sheet is 99% opaque and
+  `sharingType = .none`: fully opaque, macOS stopped drawing what it
+  covered, and captures (`screencapture`, ScreenCaptureKit) came back white
+  or missing the wallpaper and menu bar; this way they see everything, on
+  every display. Create a window, then `setFrame` it onto a screen: with
+  `screen:`, the rect counts from that screen's origin, which left a
+  second display uncovered. It fails locked (`SACLockScreenImmediate`):
+  unplugged, its stdin closing (the daemon gone), or told to quit with the
+  sheet up, and the daemon runs `miks-keeper lock` if it dies with it up.
+  All verified on an Air with an external display. Without Accessibility
+  it never raises the sheet, and the Mac locks as usual. The daemon builds
+  it from source when that's newer; `build-app.ts` builds it into the
+  bundle. `MIKS_KEEPER_TEST=<s>` lowers the sheet by itself, for testing.
 - The iOS app (`ios/`, see its README): chatwing's shared shell, synced as
   `{"name": "chatwing", "paths": ["ios/"]}` in `.wings` (wings syncs only
   those paths), plus Miks's own `ios/Miks/` and `Miks.xcodeproj`, without

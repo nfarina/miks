@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { DEFAULT_SETTINGS, MACHINE_SETTINGS, type MachineSettings } from "../shared/settings.ts";
+import { DEFAULT_SETTINGS, KEEP_AVAILABLE, MACHINE_SETTINGS, type MachineSettings } from "../shared/settings.ts";
 
 /**
  * This Mac's settings for every window on its daemon (shared/settings.ts),
@@ -29,5 +29,6 @@ export function only(source: Record<string, unknown>): MachineSettings {
   for (const key of MACHINE_SETTINGS) {
     if (typeof source?.[key] === typeof DEFAULT_SETTINGS[key]) settings[key] = source[key];
   }
+  if (settings.keepAvailable !== undefined && !KEEP_AVAILABLE.includes(settings.keepAvailable as never)) delete settings.keepAvailable;
   return settings as MachineSettings;
 }

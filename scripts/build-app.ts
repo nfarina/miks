@@ -55,6 +55,11 @@ export async function buildApp(): Promise<string> {
   copy("packages/daemon/package.json");
   copy("packages/daemon/server");
   copy("packages/daemon/shared");
+  // The keeper ("Awake, unlocked"), built here: the daemon builds it from
+  // source in the repo, and the bundle has only the binary (server/Keeper.ts).
+  console.log("Building the keeper…");
+  fs.mkdirSync(path.join(stage, "packages/daemon/keeper/build"), { recursive: true });
+  run("swiftc", ["-O", path.join(root, "packages/daemon/keeper/Keeper.swift"), "-o", path.join(stage, "packages/daemon/keeper/build/miks-keeper")]);
   copy("packages/ui/dist");
   for (const name of ["node-pty", "ws", "@xterm/headless", "@xterm/addon-serialize"]) {
     copy(`node_modules/${name}`);
