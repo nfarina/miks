@@ -14,6 +14,13 @@ import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 const RootStyle = createGlobalStyle`
+  /* No text autosizing: on an iPhone, turning to landscape and back left
+     the chat's replies (long runs of text) huge, and the rest as it was. */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     ${getBuilderVarCSS([colors.textBackground])}
     background: ${colors.textBackground()};
