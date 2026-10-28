@@ -234,6 +234,11 @@ class DaemonClient {
   }
 
   /** Tells the daemon whether a file this window watches has changes it hasn't saved, so it's kept open. */
+  /** Whether any of a tab's files has changes this window hasn't saved. */
+  hasUnsaved(tabId: string): boolean {
+    return [...this.files.values()].some((watch) => watch.tabId === tabId && watch.unsaved);
+  }
+
   fileUnsaved(tabId: string, fileId: string, unsaved: boolean) {
     const watch = this.files.get(`${tabId}:${fileId}`);
     if (!watch || !!watch.unsaved === unsaved) return;

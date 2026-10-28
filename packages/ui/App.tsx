@@ -13,7 +13,7 @@ import { keyframes, styled } from "styled-components";
 import { HostContext } from "crosswing/host/context";
 import { coarsePointer } from "crosswing/host/pointer";
 import { provideSafeArea, safeArea, safeAreaTopBar } from "crosswing/safearea";
-import { ChatLayout, hasPanel, isChatOpen, setChatOpen, toggleChat, toggleExpanded } from "./ChatPanel";
+import { ChatLayout, closeInPanel, hasPanel, isChatOpen, setChatOpen, stepPanel, toggleChat, toggleExpanded } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
 import { daemon, type Target, useDaemon, useMacs, useTarget } from "./daemon";
 import { renderMarkdown } from "./markdown";
@@ -645,16 +645,20 @@ function runCommand(command: string) {
     case "newWorkspace":
       return daemon.send({ type: "createWorkspace" });
     case "closeTab": {
+      // With the keyboard in the panel, what it shows (a file, the page).
       const tab = tabs[tabIndex];
-      if (tab) closeTab(tab);
+      if (tab && !closeInPanel(tab)) void closeTab(tab);
       return;
     }
     case "closeWorkspace":
       if (workspace) closeWorkspace(workspace);
       return;
+    // Through the panel's tabs first, with the keyboard in it.
     case "nextTab":
+      if (tabs[tabIndex] && stepPanel(tabs[tabIndex], 1)) return;
       return selectTab(1);
     case "previousTab":
+      if (tabs[tabIndex] && stepPanel(tabs[tabIndex], -1)) return;
       return selectTab(-1);
     case "nextWorkspace":
       return selectWorkspace((workspaceIndex + 1) % workspaces.length);

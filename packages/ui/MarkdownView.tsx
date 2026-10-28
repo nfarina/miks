@@ -374,31 +374,6 @@ const StyledMarkdownView = styled.div`
     font: ${fonts.display({ size: 14, line: "22px" })};
     color: ${colors.text()};
 
-    > *:first-child {
-      margin-top: 0;
-    }
-
-    p,
-    ul,
-    ol,
-    blockquote,
-    table,
-    > .code,
-    > pre {
-      margin: 0 0 14px;
-    }
-
-    ul,
-    ol {
-      padding-left: 24px;
-    }
-
-    li + li,
-    li > ul,
-    li > ol {
-      margin-top: 4px;
-    }
-
     ${markdownCSS()}
 
     h1,
@@ -407,38 +382,7 @@ const StyledMarkdownView = styled.div`
     h4,
     h5,
     h6 {
-      margin: 24px 0 12px;
       scroll-margin-top: 12px;
-    }
-    h1 {
-      padding-bottom: 6px;
-      border-bottom: 1px solid ${colors.separator()};
-      font: ${fonts.displayBold({ size: 24, line: "32px" })};
-    }
-    h2 {
-      padding-bottom: 5px;
-      border-bottom: 1px solid ${colors.separator()};
-      font: ${fonts.displayBold({ size: 19, line: "26px" })};
-    }
-    h3 {
-      font: ${fonts.displayBold({ size: 16, line: "22px" })};
-    }
-    h4,
-    h5,
-    h6 {
-      font: ${fonts.displayBold({ size: 14, line: "20px" })};
-    }
-    h6 {
-      color: ${colors.textSecondary()};
-    }
-
-    a {
-      color: #5b4fd1;
-      text-underline-offset: 2px;
-
-      @media (prefers-color-scheme: dark) {
-        color: #a8a0ff;
-      }
     }
 
     img {
@@ -454,10 +398,6 @@ const StyledMarkdownView = styled.div`
       font: ${fonts.display({ size: 12, line: "18px" })};
     }
 
-    hr {
-      margin: 20px 0;
-    }
-
     pre {
       ${terminalScrollbarCSS()}
     }
@@ -466,11 +406,6 @@ const StyledMarkdownView = styled.div`
     pre.frontmatter {
       background: ${colors.textBackgroundAlt()};
       color: ${colors.textSecondary()};
-    }
-
-    th,
-    td {
-      padding: 5px 10px;
     }
   }
 `;

@@ -6,7 +6,8 @@ import { fonts } from "crosswing/fonts";
 import { ModalContext } from "crosswing/modals/context";
 import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView";
 import { tooltip } from "crosswing/modals/popup";
-import { ArrowUp, ChevronRight, LoaderCircle, Mic, Paperclip, Square, TextQuote } from "lucide-react";
+import { useDraggable } from "crosswing/components/draggable/useDraggable";
+import { ArrowUp, ChevronRight, LoaderCircle, Mic, Paperclip, Square, TextQuote, X } from "lucide-react";
 import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
@@ -31,8 +32,8 @@ import { useCodeMenu } from "./codeMenu";
 import { daemon } from "./daemon";
 import { useDictation } from "./dictation";
 import { StyledWaveform, Waveform } from "./Waveform";
-import { FileView } from "./FileView";
-import { addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
+import { closeFile, FileView } from "./FileView";
+import { accentColor, addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
 import { autoFocus, useSettings } from "./settings";
 import { openLink } from "./links";
@@ -152,6 +153,47 @@ const openTabs = tabFlags("ChatPanel:open");
  */
 const expandedTabs = tabFlags("ChatPanel:expanded");
 
+/**
+ * Which tabs' conversations were closed (the ✕ on Chat), leaving their
+ * files and page in the panel. Opening the panel yourself (⌘⇧C) or a new
+ * session brings it back.
+ */
+const chatClosedTabs = tabFlags("ChatPanel:chatClosed");
+
+/**
+ * The order you've dragged each tab's panel tabs into, in this window's
+ * storage like the rest; what isn't in it goes after, as it came.
+ */
+const viewOrders = {
+  get(tab: Tab): string[] {
+    try {
+      return JSON.parse(localStorage.getItem(`ChatPanel:order:${keyOf(tab)}`) ?? "[]");
+    } catch {
+      return [];
+    }
+  },
+  set(tab: Tab, order: string[]) {
+    try {
+      localStorage.setItem(`ChatPanel:order:${keyOf(tab)}`, JSON.stringify(order));
+    } catch {}
+  },
+};
+
+/** What the menu's tab commands do in each tab's panel, while the keyboard's in it. */
+const panelCommands = new Map<string, { step: (offset: number) => boolean; close: () => boolean }>();
+
+/**
+ * ⌘⇧[ and ⌘⇧]: with the keyboard in the tab's panel, the panel's tab
+ * before or after; false past its ends, for the tab bar's to take over.
+ */
+export const stepPanel = (tab: Tab, offset: number) => panelCommands.get(tab.id)?.step(offset) ?? false;
+
+/**
+ * ⌘W: with the keyboard in the tab's panel, closes what it shows (asking
+ * first if it's a file with changes), never the terminal's tab.
+ */
+export const closeInPanel = (tab: Tab) => panelCommands.get(tab.id)?.close() ?? false;
+
 export const isChatOpen = openTabs.has;
 /** Opens or closes a tab's panel for you (a long reply, a file arriving), not as your choice. */
 export const setChatOpen = openTabs.set;
@@ -170,7 +212,10 @@ let focusOnShow = false;
 /** Opens or closes a tab's panel (⌘⇧C, or the tab bar's button), moving the keyboard with it. */
 export function toggleChat(tab: Tab) {
   const open = !isChatOpen(tab);
-  if (open) focusOnShow = true;
+  if (open) {
+    focusOnShow = true;
+    chatClosedTabs.set(tab, false);
+  }
   else focusActiveTerminal();
   choosePanel(tab, open);
 }
@@ -232,13 +277,17 @@ export function ChatLayout({
   // Escape) leaves an open file as it was, unsaved changes and all.
   const panelOpen = useChatOpen(tab);
   const expanded = useExpanded(tab);
+  const chatClosed = chatClosedTabs.useFlag(tab);
   const { page } = tab;
   const files = openFiles(tab);
-  const visible = panelOpen && hasPanel(tab);
   // Which of what it has the panel shows: what you picked, or else the
   // latest to open (a page, then a file, then the conversation).
   const [view, setView] = useState<PanelView>("page");
-  const views = panelViews(tab);
+  const [order, setOrder] = useState(() => viewOrders.get(tab));
+  const views = ordered(panelViews(tab, chatClosed), order);
+  const visible = panelOpen && views.length > 0;
+  // Picked (a click, ⌘⇧[ and ⌘⇧]), it takes the keyboard once it's on show.
+  const focusShown = useRef(false);
   const showing: PanelView = views.includes(view) ? view : (views.at(-1) ?? "chat");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -259,8 +308,11 @@ export function ChatLayout({
         openedForContent.current = true;
         setChatOpen(tab, true);
       }
-    } else if (files.length === 0 && !page && openedForContent.current && (before.files.size > 0 || before.page)) {
+    } else if (files.length === 0 && !page && (openedForContent.current || chatClosed) && (before.files.size > 0 || before.page)) {
+      // With its conversation closed too, there's nothing left: it comes
+      // back the next time the panel opens.
       openedForContent.current = false;
+      chatClosedTabs.set(tab, false);
       setChatOpen(tab, false);
     }
   }, [files.map((file) => `${file.id}.${file.opened ?? 0}`).join(), page?.id]);
@@ -272,6 +324,7 @@ export function ChatLayout({
   useEffect(() => {
     const had = hadAgent.current;
     hadAgent.current = !!tab.agent;
+    if (!had && tab.agent) chatClosedTabs.set(tab, false);
     if (had || !tab.agent || tab.agent.restored || isChatOpen(tab) || !autoOpens()) return;
     autoOpened = { key: keyOf(tab), time: Date.now() };
     if (active) focusOnShow = true;
@@ -287,6 +340,12 @@ export function ChatLayout({
   useLayoutEffect(() => {
     returnTo.current = active ? panelFocus.get(tab.id) : undefined;
   }, [active]);
+
+  useEffect(() => {
+    if (!focusShown.current || !ref.current) return;
+    focusShown.current = false;
+    focusPanel(ref.current, showing === "chat" ? "composer" : showing === "page" ? "page" : "file");
+  }, [showing]);
 
   // Opened yourself (⌘⇧C) with a file or page showing: the keyboard goes to it.
   useEffect(() => {
@@ -346,10 +405,18 @@ export function ChatLayout({
         </TerminalArea>
         <ChatPanel
           tab={tab}
+          views={views}
+          onReorder={(next) => {
+            setOrder(next);
+            viewOrders.set(tab, next);
+          }}
           visible={visible}
           supported={supported}
           showing={showing}
-          onShow={setView}
+          onShow={(next) => {
+            focusShown.current = true;
+            setView(next);
+          }}
           onHide={() => {
             choosePanel(tab, false);
             focusActiveTerminal();
@@ -365,11 +432,20 @@ export function ChatLayout({
 type PanelView = "chat" | `file:${string}` | "page";
 
 /** What a tab's panel has to show, in the order they're offered. */
-const panelViews = (tab: Tab): PanelView[] => [
-  ...(tab.agent ? (["chat"] as const) : []),
+const panelViews = (tab: Tab, chatClosed: boolean): PanelView[] => [
+  ...(tab.agent && !chatClosed ? (["chat"] as const) : []),
   ...openFiles(tab).map((file) => `file:${file.id}` as const),
   ...(tab.page ? (["page"] as const) : []),
 ];
+
+/** Views in the order you've put them in, the rest after as they were. */
+function ordered(views: PanelView[], order: string[]): PanelView[] {
+  const rank = (view: PanelView) => {
+    const index = order.indexOf(view);
+    return index === -1 ? order.length + views.indexOf(view) : index;
+  };
+  return [...views].sort((a, b) => rank(a) - rank(b));
+}
 
 /** Where in a tab's panel the keyboard can be. */
 type PanelPlace = "composer" | "conversation" | "file" | "page";
@@ -486,6 +562,132 @@ const StyledChatLayout = styled.div`
   }
 `;
 
+// Styled on its own, not from inside the row: the copy that follows the
+// pointer while dragging is put outside it, and must still look the part.
+// Its spacing is padding inside its border box, with the visuals on .box, so
+// that copy (sized from the border box) matches and nothing shifts.
+const StyledViewTab = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  box-sizing: border-box;
+  max-width: 60%;
+  padding: 0 1px;
+  cursor: default;
+  user-select: none;
+
+  > .box {
+    flex-grow: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-sizing: border-box;
+    height: 28px;
+    padding: 0 4px 0 10px;
+    border-radius: 7px;
+    color: ${colors.textSecondary()};
+
+    &:hover {
+      background: ${colors.buttonBackgroundGlow()};
+    }
+
+    > .unsaved {
+      flex-shrink: 0;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    > .label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font: ${fonts.displayMedium({ size: 12, line: "16px" })};
+    }
+
+    > .close {
+      flex-shrink: 0;
+      display: flex;
+      padding: 2px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      opacity: 0;
+      /* Hidden, it isn't there: tapping where it would be picks the tab. */
+      pointer-events: none;
+
+      > svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      &:hover {
+        background: ${colors.buttonBackgroundGlow()};
+      }
+    }
+
+    @media (hover: hover) {
+      &:hover > .close {
+        opacity: 0.7;
+        pointer-events: auto;
+      }
+    }
+  }
+
+  &[data-on="true"] > .box {
+    background: ${colors.linkActiveBackground()};
+    color: ${colors.text()};
+
+    > .close {
+      opacity: 0.7;
+      pointer-events: auto;
+    }
+  }
+
+  &[data-dragging="true"] > .box {
+    background: ${colors.textBackgroundPanel()};
+    color: ${colors.text()};
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+  }
+
+  ${coarsePointer(`
+    > .box {
+      height: 36px;
+      padding: 0 4px 0 12px;
+      border-radius: 10px;
+
+      > .label {
+        font-size: 14px;
+      }
+
+      > .close {
+        padding: 6px;
+        border-radius: 8px;
+
+        > svg {
+          width: 15px;
+          height: 15px;
+        }
+      }
+    }
+  `)}
+`;
+
+const ViewDropTarget = styled.div`
+  flex-shrink: 0;
+  align-self: center;
+  width: var(--target-width, 0px);
+  height: 28px;
+  border-radius: 7px;
+
+  &[data-draggable-hover="true"] {
+    background: ${colors.buttonBackgroundGlow()};
+  }
+`;
+
 /**
  * The tab's Claude Code conversation, for reading in proportional type with
  * real markdown, and a place to write the next message. Everything here is
@@ -495,6 +697,8 @@ const StyledChatLayout = styled.div`
  */
 export function ChatPanel({
   tab,
+  views,
+  onReorder,
   visible,
   supported,
   showing,
@@ -503,6 +707,9 @@ export function ChatPanel({
   focusFile,
 }: {
   tab: Tab;
+  /** What it has to show (panelViews), in your order. */
+  views: PanelView[];
+  onReorder: (views: PanelView[]) => void;
   visible: boolean;
   supported: boolean;
   /** The conversation, the tab's file or its page; each stays put while another shows. */
@@ -515,40 +722,139 @@ export function ChatPanel({
 }) {
   const { fontSize } = useSettings();
   const [pageTitle, setPageTitle] = useState("");
-  const views = panelViews(tab);
+  // Files with changes not yet saved, marked in their tabs.
+  const [unsaved, setUnsaved] = useState<Record<string, boolean>>({});
+  // With more than one thing in it, each has a tab, and the one showing has
+  // its controls beside them, here, rather than a header of its own.
+  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null);
+  const tabbed = views.length > 1;
   const files = openFiles(tab);
   const fileOf = (view: PanelView) => files.find((file) => view === `file:${file.id}`);
   const label = (view: PanelView) =>
     view === "chat" ? "Chat" : view === "page" ? pageTitle || hostOf(tab.page?.url) : fileOf(view)?.path.split("/").pop();
+  const hint = (view: PanelView) => (view === "page" ? (tab.page?.url ?? null) : (fileOf(view)?.path ?? null));
+
+  // Press and hold a tab to drag it along the row, as in the tab bar. Each
+  // panel's its own group: they're all on the page, hidden or not.
+  const group = `panel-views:${tab.id}`;
+  useDraggable({
+    group,
+    lockAxis: "x",
+    onDrop: (moving, target) => {
+      const rest = views.filter((view) => view !== moving);
+      const index = target.startsWith("after:") ? rest.indexOf(target.slice("after:".length) as PanelView) + 1 : 0;
+      rest.splice(index, 0, moving as PanelView);
+      onReorder(rest);
+    },
+  });
+
+  /**
+   * Closes one of its tabs, showing the one beside it if it was on show; the
+   * last one closing hides the panel. The conversation only goes from the
+   * panel: it comes back with ⌘⇧C.
+   */
+  async function close(view: PanelView) {
+    const file = fileOf(view);
+    if (file && !(await closeFile(tab, file, !!unsaved[file.id]))) return;
+    if (view === "chat" && views.length > 1) chatClosedTabs.set(tab, true);
+    if (view === "page") daemon.send({ type: "closePage", tabId: tab.id });
+
+    const index = views.indexOf(view);
+    const next = views[index + 1] ?? views[index - 1];
+    if (!next) onHide();
+    else if (view === showing) onShow(next);
+  }
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const hasKeyboard = () => visible && !!rootRef.current?.contains(document.activeElement);
+  useEffect(() => {
+    panelCommands.set(tab.id, {
+      step(offset) {
+        const next = views[views.indexOf(showing) + offset];
+        if (!hasKeyboard() || !next) return false;
+        onShow(next);
+        return true;
+      },
+      close() {
+        if (!hasKeyboard()) return false;
+        void close(showing);
+        return true;
+      },
+    });
+    return () => {
+      panelCommands.delete(tab.id);
+    };
+  });
 
   return (
     // Its text grows and shrinks with the terminal's (⌘= and ⌘-), through
     // the font scale crosswing's fonts all follow.
     <StyledChatPanel
+      ref={rootRef}
       data-showing={showing.startsWith("file:") ? "file" : showing}
       style={{ "--font-scale": fontSize / DEFAULT_SETTINGS.fontSize } as CSSProperties}
     >
-      {views.length > 1 && (
+      {tabbed && (
         <div className="switcher">
-          {views.map((view) => (
-            <button key={view} data-on={showing === view} title={fileOf(view)?.path} onClick={() => onShow(view)}>
-              {label(view)}
-            </button>
-          ))}
+          <div className="views" data-draggable-root>
+            <ViewDropTarget data-draggable-target="top" data-draggable-group={group} />
+            {views.map((view) => (
+              <Fragment key={view}>
+                <StyledViewTab
+                  data-draggable-id={view}
+                  data-draggable-group={group}
+                  data-on={showing === view}
+                  onClick={() => onShow(view)}
+                  onAuxClick={(event) => event.button === 1 && close(view)}
+                  {...tooltip(hint(view), { delay: true, placement: "below" })}
+                >
+                  <div className="box">
+                    {fileOf(view) && unsaved[fileOf(view)!.id] && <span className="unsaved" />}
+                    <span className="label">{label(view)}</span>
+                    <button
+                      className="close"
+                      // Not a drag: closing should work on a quick click.
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        close(view);
+                      }}
+                      {...tooltip("Close", { delay: true })}
+                    >
+                      <X />
+                    </button>
+                  </div>
+                </StyledViewTab>
+                <ViewDropTarget
+                  data-draggable-target={`after:${view}`}
+                  data-draggable-group={group}
+                  data-draggable-related-id={view}
+                />
+              </Fragment>
+            ))}
+          </div>
+          <div className="tools" ref={setToolbar} />
         </div>
       )}
-      {tab.agent && supported && <Conversation tab={tab} visible={visible} />}
+      {tab.agent && supported && <Conversation tab={tab} visible={visible} showing={showing === "chat"} />}
       {tab.agent && !supported && (
         <div className="note">This tab's Mac has an older Miks. Update it there to see conversations here.</div>
       )}
       {files.map((file) => (
         <div key={file.id} className="file-view" hidden={showing !== `file:${file.id}`}>
-          <FileView tab={tab} file={file} focusOnOpen={focusFile && file.edit} onHide={onHide} />
+          <FileView
+            tab={tab}
+            file={file}
+            toolbar={tabbed ? (showing === `file:${file.id}` ? toolbar : null) : undefined}
+            focusOnOpen={focusFile && file.edit}
+            onHide={onHide}
+            onUnsaved={(value) => setUnsaved((current) => ({ ...current, [file.id]: value }))}
+          />
         </div>
       ))}
       {tab.page && (
         <div className="page-view">
-          <BrowseView tab={tab} page={tab.page} onTitle={setPageTitle} />
+          <BrowseView tab={tab} page={tab.page} closable={!tabbed} onTitle={setPageTitle} />
         </div>
       )}
     </StyledChatPanel>
@@ -606,7 +912,7 @@ function group(entries: ChatEntry[], working: boolean): Item[] {
 /** The most kept in the panel at once, as in the daemon. */
 const MAX_ENTRIES = 2000;
 
-function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
+function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; showing: boolean }) {
   const [chat, setChat] = useState<{ session: string | null; entries: ChatEntry[] } | null>(null);
   const [text, setText] = useState(drafts.get(tab));
   // Sent from here and not yet in the transcript: shown right away, faded.
@@ -627,6 +933,9 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
   // isn't you scrolling.
   const pinned = useRef(false);
   const scrolledTo = useRef(0);
+  // Where you'd scrolled to, for when it shows again after a file: hidden
+  // (display: none), it forgets, and comes back at its top, not the bottom.
+  const scrollTop = useRef(0);
   // The conversation came all at once (opening it, or a rewind), not as it went.
   const loaded = useRef(false);
   const { showToast } = use(ModalContext);
@@ -680,6 +989,12 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
     scrolledTo.current = target;
     element.scrollTop = target;
   }, [chat, pending, status]);
+
+  // Back from a file or page, where it was.
+  useLayoutEffect(() => {
+    const element = scroller();
+    if (showing && element) element.scrollTop = atBottom.current ? 0 : scrollTop.current;
+  }, [showing]);
 
   // ⌃D hides the panel for the terminal, where two more quit Claude Code.
   function hide() {
@@ -887,9 +1202,12 @@ function Conversation({ tab, visible }: { tab: Tab; visible: boolean }) {
       <BottomScrollable
         className="scroller"
         onScroll={(event) => {
-          const { scrollTop } = event.currentTarget;
-          if (Math.abs(scrollTop - scrolledTo.current) > 2) pinned.current = false;
-          atBottom.current = scrollTop > -40;
+          // Not hidden (a file showing instead), where it isn't you scrolling.
+          if (!event.currentTarget.offsetParent) return;
+          const top = event.currentTarget.scrollTop;
+          scrollTop.current = top;
+          if (Math.abs(top - scrolledTo.current) > 2) pinned.current = false;
+          atBottom.current = top > -40;
         }}
         onScrollEnd={() => (jumpingTo.current = null)}
         // Focusable, so a click in the conversation puts the keyboard here,
@@ -1198,41 +1516,31 @@ const StyledChatPanel = styled.div`
     flex-flow: column;
   }
 
+  /* Like the tab bar's tabs, with the showing one's controls at the end. */
   > .switcher {
     flex-shrink: 0;
     display: flex;
-    gap: 4px;
-    padding: 8px 12px 0;
-    /* Files enough to run past its end: it scrolls, sideways. */
-    overflow-x: auto;
-    scrollbar-width: none;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px 7px 12px;
+    border-bottom: 1px solid ${colors.separator()};
 
-    > button {
+    > .views {
+      flex-grow: 1;
+      min-width: 0;
+      display: flex;
+      /* Files enough to run past its end: it scrolls, sideways. */
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    > .tools {
       flex-shrink: 0;
-      max-width: 60%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      height: 26px;
-      padding: 0 12px;
-      border: none;
-      border-radius: 13px;
-      background: transparent;
-      color: ${colors.textSecondary()};
-      font: ${fonts.displayMedium({ size: 12, line: "16px" })};
-      cursor: pointer;
+      display: flex;
 
-      &[data-on="true"] {
-        background: ${colors.buttonBackgroundGlow()};
-        color: ${colors.text()};
+      &:empty {
+        display: none;
       }
-
-      ${coarsePointer(`
-        height: 34px;
-        padding: 0 14px;
-        border-radius: 17px;
-        font-size: 14px;
-      `)}
     }
   }
 
@@ -1394,37 +1702,6 @@ const StyledChatPanel = styled.div`
       overflow-wrap: break-word;
       user-select: text;
 
-      > *:first-child {
-        margin-top: 0;
-      }
-      > *:last-child {
-        margin-bottom: 0;
-      }
-
-      p,
-      ul,
-      ol,
-      blockquote,
-      table,
-      > .code {
-        margin: 0 0 10px;
-      }
-
-      ul,
-      ol {
-        padding-left: 22px;
-      }
-
-      /* Items often run to a few lines each: a gap tells them apart. */
-      li + li {
-        margin-top: 8px;
-      }
-
-      li > ul,
-      li > ol {
-        margin: 4px 0;
-      }
-
       ${markdownCSS()}
 
       /* Code in a message opens a menu (codeMenu.tsx); a link's is the link. */
@@ -1434,48 +1711,6 @@ const StyledChatPanel = styled.div`
         &:hover {
           border-color: ${colors.textSecondary({ alpha: 0.5 })};
         }
-      }
-
-      h1,
-      h2,
-      h3,
-      h4 {
-        margin: 16px 0 8px;
-      }
-      h1 {
-        font: ${fonts.displayBold({ size: 20, line: "26px" })};
-      }
-      h2 {
-        font: ${fonts.displayBold({ size: 17, line: "23px" })};
-      }
-      h3,
-      h4 {
-        font: ${fonts.displayBold({ size: 15, line: "21px" })};
-      }
-
-      /* Quieter than the prose, like the tool lines. */
-      a {
-        color: ${colors.textSecondary()};
-        text-decoration-color: ${colors.textSecondary({ alpha: 0.4 })};
-        text-underline-offset: 2px;
-      }
-
-      hr {
-        margin: 14px 0;
-      }
-
-      code:not(pre > code) {
-        /* Blue-violet, so code stands out from the prose around it. */
-        color: #5b4fd1;
-
-        @media (prefers-color-scheme: dark) {
-          color: #a8a0ff;
-        }
-      }
-
-      th,
-      td {
-        padding: 4px 8px;
       }
     }
 
@@ -1562,12 +1797,8 @@ const StyledChatPanel = styled.div`
       gap: 8px;
       /* Room above, so it stands out while you scroll. */
       margin: 18px 0 -4px;
-      color: #5b4fd1;
       font: ${fonts.displayMedium({ size: 11, line: "14px" })};
-
-      @media (prefers-color-scheme: dark) {
-        color: #a8a0ff;
-      }
+      ${accentColor()}
 
       &::after {
         content: "";

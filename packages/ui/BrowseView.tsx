@@ -30,7 +30,18 @@ type Webview = HTMLWebViewElement & {
  * own web view, over this one where `.native` is (nativePage.ts), loading
  * through the Mac's gateway.
  */
-export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; onTitle: (title: string) => void }) {
+export function BrowseView({
+  tab,
+  page,
+  closable,
+  onTitle,
+}: {
+  tab: Tab;
+  page: OpenPage;
+  /** Whether it has its own ✕, which it doesn't when the panel's tabs close it. */
+  closable: boolean;
+  onTitle: (title: string) => void;
+}) {
   const ref = useRef<Webview>(null);
   const [partition, setPartition] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -160,9 +171,11 @@ export function BrowseView({ tab, page, onTitle }: { tab: Tab; page: OpenPage; o
             onChange={(event) => setAddress(event.target.value)}
           />
         </form>
-        <button className="close" onClick={() => daemon.send({ type: "closePage", tabId: tab.id })} {...tooltip("Close", { delay: true })}>
-          <X />
-        </button>
+        {closable && (
+          <button className="close" onClick={() => daemon.send({ type: "closePage", tabId: tab.id })} {...tooltip("Close", { delay: true })}>
+            <X />
+          </button>
+        )}
       </div>
       <div className="page">
         {/* A string: React leaves out `true` for an element it doesn't know, and without it a link that opens a new window does nothing. */}

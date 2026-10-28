@@ -163,12 +163,93 @@ export function copyCode(target: HTMLElement): boolean {
   return true;
 }
 
+/** The blue-violet markdown picks things out in: inline code, task boxes. */
+export const accentColor = () => `
+  color: #5b4fd1;
+
+  @media (prefers-color-scheme: dark) {
+    color: #a8a0ff;
+  }
+`;
+
 /**
- * Markdown as both panels show it: quotes, code (with `addCopyButtons`'),
- * tables, task lists. Each adds its own spacing, headings and links.
+ * Markdown as both panels show it: spacing, lists, headings, links,
+ * quotes, code (with `addCopyButtons`'), tables, task lists.
  */
 export function markdownCSS(): string {
   return `
+    > *:first-child {
+      margin-top: 0;
+    }
+    > *:last-child {
+      margin-bottom: 0;
+    }
+
+    p,
+    ul,
+    ol,
+    blockquote,
+    table,
+    > .code,
+    > pre {
+      margin: 0 0 12px;
+    }
+
+    ul,
+    ol {
+      padding-left: 22px;
+    }
+
+    /* Items often run to a few lines each: a gap tells them apart. */
+    li + li {
+      margin-top: 8px;
+    }
+
+    li > ul,
+    li > ol {
+      margin: 4px 0;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      margin: 20px 0 8px;
+    }
+    h1 {
+      font: ${fonts.displayBold({ size: 20, line: "26px" })};
+    }
+    h2 {
+      font: ${fonts.displayBold({ size: 17, line: "23px" })};
+    }
+    h3,
+    h4,
+    h5,
+    h6 {
+      font: ${fonts.displayBold({ size: 15, line: "21px" })};
+    }
+    h6 {
+      color: ${colors.textSecondary()};
+    }
+
+    /* Quieter than the prose, like the chat's tool lines. */
+    a {
+      color: ${colors.textSecondary()};
+      text-decoration-color: ${colors.textSecondary({ alpha: 0.4 })};
+      text-underline-offset: 2px;
+    }
+
+    hr {
+      margin: 16px 0;
+    }
+
+    th,
+    td {
+      padding: 4px 8px;
+    }
+
     ${taskListCSS()}
 
     blockquote {
@@ -225,6 +306,8 @@ export function markdownCSS(): string {
       border: 1px solid ${colors.separator()};
       overflow-wrap: anywhere;
       font: ${fonts.displayMono({ size: 12.5, line: "18px" })};
+      /* So code stands out from the prose around it. */
+      ${accentColor()}
     }
 
     table {

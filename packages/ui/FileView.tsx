@@ -12,6 +12,7 @@ import { X } from "lucide-react";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { styled } from "styled-components";
 import { daemon, type FileEvent } from "./daemon";
 import { codemirrorDark } from "./highlighting/codemirrorDark";
@@ -32,14 +33,23 @@ import { terminalScrollbarCSS } from "./TerminalView";
 export function FileView({
   tab,
   file,
+  toolbar,
   focusOnOpen,
   onHide,
+  onUnsaved,
 }: {
   tab: Tab;
   file: OpenFile;
+  /**
+   * Where its controls go when the panel's tabs name it (and close it):
+   * beside them, without a header of its own; null while it's hidden. Left
+   * out, it has its own header.
+   */
+  toolbar?: HTMLElement | null;
   focusOnOpen: boolean;
   /** Escape: hides the panel, the file still open in it as it was. */
   onHide: () => void;
+  onUnsaved: (unsaved: boolean) => void;
 }) {
   const { showToast } = use(ModalContext);
   const dark = useMatchMedia("(prefers-color-scheme: dark)");
@@ -81,6 +91,7 @@ export function FileView({
     setDirty(value);
     // Kept open while it has changes, however many more files open.
     daemon.fileUnsaved(tab.id, file.id, value);
+    onUnsaved(value);
   }
 
   function replaceText(text: string) {
@@ -228,16 +239,20 @@ export function FileView({
     return true;
   }
 
-  async function close() {
+  /** Back to reading it, as it is on disk: your changes go, once you say so. */
+  async function cancel() {
     if (dirtyRef.current) {
       const discard = await window.miks?.confirm({
-        message: `Close ${name} without saving?`,
-        detail: "Your changes will be lost.",
-        button: "Don't save",
+        message: `Discard your changes to ${name}?`,
+        detail: "They'll be lost.",
+        button: "Discard",
       });
       if (!discard) return;
+      replaceText(diskRef.current?.content ?? "");
+      markDirty(false);
     }
-    daemon.send({ type: "closeFile", tabId: tab.id, fileId: file.id });
+    setEditing(false);
+    if (markdown) showPreview(true);
   }
 
   /** A link in the preview to another file: it opens beside this one. */
@@ -274,51 +289,66 @@ export function FileView({
           ? "This file can't be read."
           : null;
 
+  const controls = (
+    <StyledFileControls>
+      {ready && markdown && (
+        <div className="mode">
+          <button data-on={preview} onClick={() => showPreview(true)}>
+            Preview
+          </button>
+          <button data-on={!preview} onClick={() => showPreview(false)}>
+            Source
+          </button>
+        </div>
+      )}
+      {ready && !editing && (
+        <button
+          className="action"
+          onClick={() => {
+            showPreview(false);
+            setEditing(true);
+          }}
+        >
+          Edit
+        </button>
+      )}
+      {ready && editing && !file.wait && (
+        <button className="action" onClick={() => void cancel()} {...tooltip("Stop editing", { delay: true })}>
+          Cancel
+        </button>
+      )}
+      {ready && editing && !file.wait && (
+        <button className="action" disabled={!dirty || saving} onClick={() => void save()} {...tooltip("Save", { hotkey: "cmd+s", delay: true })}>
+          Save
+        </button>
+      )}
+      {file.wait && (
+        <button className="action primary" disabled={saving} onClick={() => void done()} {...tooltip("Save and close, and let what's waiting go on", { delay: true })}>
+          Done
+        </button>
+      )}
+    </StyledFileControls>
+  );
+
   return (
     <StyledFileView>
-      <div className="header">
-        <div className="name" title={file.path}>
-          <span className="file">
-            {name}
-            {dirty && <span className="dirty" {...tooltip("Not saved", { delay: true })} />}
-          </span>
-          <span className="folder">{displayPath(folder || "/", getSettings().hidePathPrefix, home)}</span>
-        </div>
-        {ready && markdown && (
-          <div className="mode">
-            <button data-on={preview} onClick={() => showPreview(true)}>
-              Preview
-            </button>
-            <button data-on={!preview} onClick={() => showPreview(false)}>
-              Source
-            </button>
+      {toolbar === undefined ? (
+        <div className="header">
+          <div className="name" {...tooltip(file.path, { delay: true })}>
+            <span className="file">
+              {name}
+              {dirty && <span className="dirty" {...tooltip("Not saved", { delay: true })} />}
+            </span>
+            <span className="folder">{displayPath(folder || "/", getSettings().hidePathPrefix, home)}</span>
           </div>
-        )}
-        {ready && !editing && (
-          <button
-            className="action"
-            onClick={() => {
-              showPreview(false);
-              setEditing(true);
-            }}
-          >
-            Edit
+          {controls}
+          <button className="close" onClick={() => void closeFile(tab, file, dirtyRef.current)} {...tooltip("Close", { delay: true })}>
+            <X size={15} />
           </button>
-        )}
-        {ready && editing && !file.wait && (
-          <button className="action" disabled={!dirty || saving} onClick={() => void save()} {...tooltip("Save", { hotkey: "cmd+s", delay: true })}>
-            Save
-          </button>
-        )}
-        {file.wait && (
-          <button className="action primary" disabled={saving} onClick={() => void done()} {...tooltip("Save and close, and let what's waiting go on", { delay: true })}>
-            Done
-          </button>
-        )}
-        <button className="close" onClick={() => void close()} {...tooltip("Close", { delay: true })}>
-          <X size={15} />
-        </button>
-      </div>
+        </div>
+      ) : (
+        toolbar && createPortal(controls, toolbar)
+      )}
       {conflict && (
         <div className="conflict">
           <span>{name} changed on disk.</span>
@@ -347,7 +377,88 @@ export function FileView({
   );
 }
 
-const editableExtension = (editing: boolean) => [EditorView.editable.of(editing), EditorState.readOnly.of(!editing)];
+/**
+ * Closes a file in a tab's panel, asking first if it has unsaved changes.
+ * Resolves with whether it closed.
+ */
+export async function closeFile(tab: Tab, file: OpenFile, unsaved: boolean): Promise<boolean> {
+  if (unsaved) {
+    const name = file.path.split("/").pop() ?? file.path;
+    const discard = await window.miks?.confirm({
+      message: `Close ${name} without saving?`,
+      detail: "Your changes will be lost.",
+      button: "Don't save",
+    });
+    if (!discard) return false;
+  }
+  daemon.send({ type: "closeFile", tabId: tab.id, fileId: file.id });
+  return true;
+}
+
+// Focusable read-only too, so a click (or ⌘⇧[ and ⌘⇧]) puts the keyboard in
+// it, for ⌘W, ⌘F and the panel's tabs.
+const editableExtension = (editing: boolean) => [
+  EditorView.editable.of(editing),
+  EditorState.readOnly.of(!editing),
+  EditorView.contentAttributes.of({ tabindex: "-1" }),
+];
+
+/** Its controls: in its header, or beside the panel's tabs. */
+const StyledFileControls = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  /* A segmented control, so it doesn't pass for more of the panel's tabs. */
+  > .mode {
+    flex-shrink: 0;
+    display: flex;
+    padding: 2px;
+    border-radius: 8px;
+    background: ${colors.buttonBackgroundGlow()};
+
+    > button {
+      height: 22px;
+      padding: 0 10px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: ${colors.textSecondary()};
+      font: ${fonts.displayMedium({ size: 12, line: "16px" })};
+      cursor: pointer;
+
+      &[data-on="true"] {
+        background: ${colors.textBackground()};
+        color: ${colors.text()};
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+      }
+    }
+  }
+
+  > .action {
+    flex-shrink: 0;
+    height: 26px;
+    padding: 0 12px;
+    border-radius: 13px;
+    border: 1px solid ${colors.separator()};
+    background: ${colors.textBackground()};
+    color: ${colors.text()};
+    font: ${fonts.displayMedium({ size: 12, line: "16px" })};
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    &.primary {
+      border-color: transparent;
+      background: #5b4fd1;
+      color: #fff;
+    }
+  }
+`;
 
 const StyledFileView = styled.div`
   flex-grow: 1;
@@ -393,52 +504,6 @@ const StyledFileView = styled.div`
         white-space: nowrap;
         color: ${colors.textSecondary()};
         font: ${fonts.display({ size: 11, line: "15px" })};
-      }
-    }
-
-    /* Like the panel's switcher above it. */
-    > .mode {
-      flex-shrink: 0;
-      display: flex;
-      gap: 2px;
-
-      > button {
-        height: 26px;
-        padding: 0 10px;
-        border: none;
-        border-radius: 13px;
-        background: transparent;
-        color: ${colors.textSecondary()};
-        font: ${fonts.displayMedium({ size: 12, line: "16px" })};
-        cursor: pointer;
-
-        &[data-on="true"] {
-          background: ${colors.buttonBackgroundGlow()};
-          color: ${colors.text()};
-        }
-      }
-    }
-
-    > .action {
-      flex-shrink: 0;
-      height: 26px;
-      padding: 0 12px;
-      border-radius: 13px;
-      border: 1px solid ${colors.separator()};
-      background: ${colors.textBackground()};
-      color: ${colors.text()};
-      font: ${fonts.displayMedium({ size: 12, line: "16px" })};
-      cursor: pointer;
-
-      &:disabled {
-        opacity: 0.4;
-        cursor: default;
-      }
-
-      &.primary {
-        border-color: transparent;
-        background: #5b4fd1;
-        color: #fff;
       }
     }
 
