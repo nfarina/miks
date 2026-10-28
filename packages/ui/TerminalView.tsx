@@ -11,7 +11,7 @@ import { DragEvent, HTMLAttributes, use, useEffect, useRef } from "react";
 import { styled } from "styled-components";
 import { safeArea } from "crosswing/safearea";
 import { daemon, isRemote } from "./daemon";
-import { autoFocus, getSettings, useSettings } from "./settings";
+import { autoFocus, DEVICE_SETTINGS, getSettings, useSettings } from "./settings";
 import { trackCommands } from "./commandMarks";
 import { handleClipboardWrites } from "./osc52";
 import { handlePathLinks } from "./pathLinks";
@@ -58,6 +58,7 @@ export function TerminalView({
     views.set(tabId, view);
 
     terminal.loadAddon(fit);
+    const settling = settle(containerRef.current!);
     // ⌃V in a window on another Mac: this Mac's clipboard image, for Claude.
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown" || !isRemote() || !isPasteImageKey(event)) return true;
@@ -93,6 +94,7 @@ export function TerminalView({
       // Once it's parsed, where the cursor is: the snapshot carries no marks.
       if (event.type === "snapshot") terminal.write(event.data, () => commands.attached());
       else terminal.write(event.data);
+      if (event.type === "output") settling.output();
       if (event.type === "output") for (const watcher of outputWatchers.get(tabId) ?? []) watcher(event.data);
     });
 
@@ -134,11 +136,18 @@ export function TerminalView({
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resize = terminal.onResize(({ cols, rows }) => {
       if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => daemon.send({ type: "resize", tabId, cols, rows }), 100);
+      resizeTimer = setTimeout(() => {
+        daemon.send({ type: "resize", tabId, cols, rows });
+        settling.sent();
+      }, 100);
     });
 
     const observer = new ResizeObserver(() => {
-      if (activeRef.current) fit.fit();
+      if (!activeRef.current) return;
+      const { cols, rows } = terminal;
+      fit.fit();
+      drawNow(terminal);
+      if (DEVICE_SETTINGS && (terminal.cols !== cols || terminal.rows !== rows)) settling.start();
     });
     observer.observe(containerRef.current!);
 
@@ -316,6 +325,64 @@ type View = {
 let activeView: View | null = null;
 const views = new Map<string, View>();
 
+/**
+ * Blurs the terminal while a new size settles, on a device (the on-screen
+ * keyboard coming or going, turning it): what's on screen until the
+ * program redraws at the new size is its old screen cut to fit, so it shows
+ * once the redraw has come and gone quiet, or after a while if none comes
+ * (a shell at its prompt may draw nothing).
+ */
+function settle(element: HTMLElement) {
+  let quiet: ReturnType<typeof setTimeout> | undefined;
+  let limit: ReturnType<typeof setTimeout> | undefined;
+  let sent = false;
+  const done = () => {
+    clearTimeout(quiet);
+    clearTimeout(limit);
+    limit = undefined;
+    delete element.dataset.settling;
+  };
+  return {
+    start() {
+      element.dataset.settling = "true";
+      sent = false;
+      clearTimeout(quiet);
+      clearTimeout(limit);
+      limit = setTimeout(done, SETTLE_LIMIT_MS);
+    },
+    /** The new size has gone to the pane, so what comes next is the redraw. */
+    sent() {
+      sent = true;
+    },
+    output() {
+      if (!limit || !sent) return;
+      clearTimeout(quiet);
+      quiet = setTimeout(done, SETTLE_QUIET_MS);
+    },
+  };
+}
+
+/** Long enough for Claude Code's redraw to arrive from another Mac. */
+const SETTLE_LIMIT_MS = 700;
+/** Output that stops this long after the resize is the redraw done. */
+const SETTLE_QUIET_MS = 80;
+
+/**
+ * Draws what's waiting to be drawn now, not on the next frame. A refit
+ * resizes the canvas at once and draws on the next animation frame, but a
+ * ResizeObserver runs after this frame's, so the frame between showed the
+ * old picture squeezed or stretched to the new size: the on-screen
+ * keyboard coming and going flashed the text squashed. xterm.js has no
+ * public way, so this is its RenderDebouncer's own, and does nothing if
+ * that changes.
+ */
+function drawNow(terminal: Terminal) {
+  const debouncer = (terminal as any)._core?._renderService?._renderDebouncer;
+  if (!debouncer?._animationFrame || typeof debouncer._innerRefresh !== "function") return;
+  cancelAnimationFrame(debouncer._animationFrame);
+  debouncer._innerRefresh();
+}
+
 export type Key = "escape" | "interrupt" | "tab" | "backtab" | "up" | "down" | "left" | "right" | "|" | "~" | "/" | "-";
 
 /** A key from the key bar (KeyBar.tsx), into the terminal on screen: arrows as its program wants them. */
@@ -473,6 +540,14 @@ export const StyledTerminalView = styled.div`
 
   &[data-active="true"] {
     visibility: visible;
+  }
+
+  /* Out of focus while a new size settles (settle()), then into it. */
+  transition: filter 0.15s ease-out;
+
+  &[data-settling] {
+    filter: blur(6px);
+    transition: none;
   }
 `;
 
