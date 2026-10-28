@@ -1,7 +1,7 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { HostContext } from "crosswing/host/context";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyboardOff } from "lucide-react";
 import { type ReactNode, use, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { setCtrl, useCtrl } from "./keys";
@@ -10,9 +10,12 @@ import { typeKey, type Key } from "./TerminalView";
 import { hardwareKeyboard } from "./webBridge";
 
 /**
- * The keys a touch screen's keyboard hasn't (Esc, Tab, ⇧Tab for Claude
+ * The keys a touch screen's keyboard hasn't (Esc, ⌃C, Tab, ⇧Tab for Claude
  * Code's modes, Ctrl, arrows) and symbols it buries, just above it, while a
  * terminal has the keyboard. Not with a hardware keyboard, which has them.
+ * ⌃C twice quits Claude Code, which says so after the first. At the end,
+ * kept in view, a key to put the keyboard away: an iPad's has one, an
+ * iPhone's hasn't.
  */
 export function KeyBar() {
   const { viewport } = use(HostContext);
@@ -33,32 +36,38 @@ export function KeyBar() {
 
   return (
     <StyledKeyBar>
-      <KeyButton onPress={() => typeKey("escape")}>esc</KeyButton>
-      <KeyButton onPress={() => typeKey("tab")}>tab</KeyButton>
-      <KeyButton onPress={() => typeKey("backtab")}>⇧tab</KeyButton>
-      <KeyButton
-        data-state={ctrlState}
-        onPress={() => setCtrl(ctrlState === "off" ? "once" : ctrlState === "once" ? "locked" : "off")}
-      >
-        ctrl
-      </KeyButton>
-      <KeyButton repeats onPress={() => typeKey("left")}>
-        <ArrowLeft />
-      </KeyButton>
-      <KeyButton repeats onPress={() => typeKey("up")}>
-        <ArrowUp />
-      </KeyButton>
-      <KeyButton repeats onPress={() => typeKey("down")}>
-        <ArrowDown />
-      </KeyButton>
-      <KeyButton repeats onPress={() => typeKey("right")}>
-        <ArrowRight />
-      </KeyButton>
-      {["|", "~", "/", "-"].map((symbol) => (
-        <KeyButton key={symbol} onPress={() => typeKey(symbol as Key)}>
-          {symbol}
+      <div className="keys">
+        <KeyButton onPress={() => typeKey("escape")}>esc</KeyButton>
+        <KeyButton onPress={() => typeKey("interrupt")}>⌃C</KeyButton>
+        <KeyButton onPress={() => typeKey("tab")}>tab</KeyButton>
+        <KeyButton onPress={() => typeKey("backtab")}>⇧tab</KeyButton>
+        <KeyButton
+          data-state={ctrlState}
+          onPress={() => setCtrl(ctrlState === "off" ? "once" : ctrlState === "once" ? "locked" : "off")}
+        >
+          ctrl
         </KeyButton>
-      ))}
+        <KeyButton repeats onPress={() => typeKey("left")}>
+          <ArrowLeft />
+        </KeyButton>
+        <KeyButton repeats onPress={() => typeKey("up")}>
+          <ArrowUp />
+        </KeyButton>
+        <KeyButton repeats onPress={() => typeKey("down")}>
+          <ArrowDown />
+        </KeyButton>
+        <KeyButton repeats onPress={() => typeKey("right")}>
+          <ArrowRight />
+        </KeyButton>
+        {["|", "~", "/", "-"].map((symbol) => (
+          <KeyButton key={symbol} onPress={() => typeKey(symbol as Key)}>
+            {symbol}
+          </KeyButton>
+        ))}
+      </div>
+      <KeyButton onRelease onPress={() => (document.activeElement as HTMLElement | null)?.blur()}>
+        <KeyboardOff />
+      </KeyButton>
     </StyledKeyBar>
   );
 }
@@ -66,16 +75,20 @@ export function KeyBar() {
 /**
  * A key that never takes focus from the terminal (or the keyboard would go
  * down), pressed as the finger lands; with `repeats`, again and again while
- * it's held, as a keyboard's do.
+ * it's held, as a keyboard's do. With `onRelease`, as it lifts instead: for
+ * one that hides the bar, which pressed on landing went from under the
+ * finger, so the tap's click landed on the terminal and focused it again.
  */
 function KeyButton({
   onPress,
   repeats,
+  onRelease,
   children,
   ...rest
 }: {
   onPress: () => void;
   repeats?: boolean;
+  onRelease?: boolean;
   children: ReactNode;
   "data-state"?: string;
 }) {
@@ -94,6 +107,7 @@ function KeyButton({
       tabIndex={-1}
       onPointerDown={(event) => {
         event.preventDefault();
+        if (onRelease) return;
         onPress();
         if (!repeats) return;
         const again = (delay: number) => {
@@ -109,7 +123,12 @@ function KeyButton({
       onPointerLeave={stop}
       // The pointerdown did it; what follows a touch would take the focus.
       onMouseDown={(event) => event.preventDefault()}
-      onTouchEnd={(event) => event.preventDefault()}
+      onTouchEnd={(event) => {
+        event.preventDefault();
+        if (onRelease) onPress();
+      }}
+      // A mouse's (or trackpad's): a touch's click never comes, its touchend prevented.
+      onClick={() => onRelease && onPress()}
       {...rest}
     >
       {children}
@@ -120,13 +139,20 @@ function KeyButton({
 const StyledKeyBar = styled.div`
   flex-shrink: 0;
   display: flex;
-  gap: 5px;
-  padding: 6px 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
   border-top: 1px solid ${colors.separator()};
   background: ${colors.textBackgroundPanel()};
 
+  > .keys {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 5px;
+    padding: 6px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  > .keys > button,
   > button {
     flex-shrink: 0;
     min-width: 44px;
@@ -163,5 +189,9 @@ const StyledKeyBar = styled.div`
       background: #5b4fd1;
       color: #fff;
     }
+  }
+
+  > button {
+    margin: 6px 8px 6px 0;
   }
 `;

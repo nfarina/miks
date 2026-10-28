@@ -316,7 +316,7 @@ type View = {
 let activeView: View | null = null;
 const views = new Map<string, View>();
 
-export type Key = "escape" | "tab" | "backtab" | "up" | "down" | "left" | "right" | "|" | "~" | "/" | "-";
+export type Key = "escape" | "interrupt" | "tab" | "backtab" | "up" | "down" | "left" | "right" | "|" | "~" | "/" | "-";
 
 /** A key from the key bar (KeyBar.tsx), into the terminal on screen: arrows as its program wants them. */
 export function typeKey(key: Key) {
@@ -327,11 +327,13 @@ export function typeKey(key: Key) {
     ? `\x1b${view.terminal.modes.applicationCursorKeysMode ? "O" : "["}${arrow}`
     : key === "escape"
       ? "\x1b"
-      : key === "tab"
-        ? "\t"
-        : key === "backtab"
-          ? "\x1b[Z"
-          : key;
+      : key === "interrupt"
+        ? "\x03"
+        : key === "tab"
+          ? "\t"
+          : key === "backtab"
+            ? "\x1b[Z"
+            : key;
   daemon.send({ type: "input", tabId: view.tabId, data });
 }
 
