@@ -1181,7 +1181,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
     focusComposer();
   }
 
-  // Where a jump (↑ or ↓) is scrolling to, until it gets there: pressing
+  // Where a jump (⌥↑ or ⌥↓) is scrolling to, until it gets there: pressing
   // again on the way goes on from there, not from wherever the scroll is.
   const jumpingTo = useRef<number | null>(null);
 
@@ -1236,8 +1236,9 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
         }}
         onScrollEnd={() => (jumpingTo.current = null)}
         // Focusable, so a click in the conversation puts the keyboard here,
-        // where / goes to the composer, ↑ and ↓ jump between your messages
-        // and replies, and Escape goes back to the terminal.
+        // where / goes to the composer, ⌥↑ and ⌥↓ jump between your messages
+        // and replies (↑ and ↓ scroll, as a page's do; ⌥ as in moving by
+        // paragraph), and Escape goes back to the terminal.
         tabIndex={-1}
         onKeyDown={(event) => {
           const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
@@ -1250,7 +1251,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
           } else if (isHideKey(event)) {
             event.preventDefault();
             hide();
-          } else if ((event.key === "ArrowUp" || event.key === "ArrowDown") && plain) {
+          } else if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
             event.preventDefault();
             jump(event.key === "ArrowUp" ? -1 : 1);
           } else if (event.key === "Escape") {

@@ -116,6 +116,29 @@ export function MarkdownView({
     requestAnimationFrame(keepPlace);
   }, [file.opened]);
 
+  // Where a jump (⌥↑ or ⌥↓) is scrolling to, until it gets there: pressing
+  // again on the way goes on from there, not from wherever the scroll is.
+  const jumpingTo = useRef<number | null>(null);
+
+  /** Scrolls to the previous or next heading, as the chat's ⌥↑ and ⌥↓ go between messages. */
+  function jump(direction: -1 | 1) {
+    const scroller = scrollerRef.current;
+    const content = contentRef.current;
+    if (!scroller || !content) return;
+
+    const from = jumpingTo.current ?? scroller.scrollTop;
+    const bottom = scroller.scrollHeight - scroller.clientHeight;
+    const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
+    const stops = [...content.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6")]
+      // As a link to one puts it: a little below the top.
+      .map((heading) => Math.min(Math.max(heading.getBoundingClientRect().top - origin - 12, 0), bottom));
+    const next =
+      direction > 0 ? (stops.find((stop) => stop > from + 2) ?? bottom) : (stops.findLast((stop) => stop < from - 2) ?? 0);
+
+    jumpingTo.current = next;
+    scroller.scrollTo({ top: next, behavior: "smooth" });
+  }
+
   /** Back to where you were, if the content's moved under you since. */
   function keepPlace() {
     const scroller = scrollerRef.current;
@@ -218,9 +241,14 @@ export function MarkdownView({
         // You scrolling: stay where you put it, not where it was.
         onWheel={() => (pinRef.current = null)}
         onPointerDown={() => (pinRef.current = null)}
+        onScrollEnd={() => (jumpingTo.current = null)}
         onKeyDown={(event) => {
           pinRef.current = null;
           if (event.key === "Escape") onHide();
+          else if ((event.key === "ArrowUp" || event.key === "ArrowDown") && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            event.preventDefault();
+            jump(event.key === "ArrowUp" ? -1 : 1);
+          }
         }}
       >
         <div
