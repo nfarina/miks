@@ -595,6 +595,17 @@ resizes); keep it passing.
   nothing, so only what takes touches counts as over a page. Verified from
   an iPad. The app has no web `Notification` (throwing for one blanked the
   page).
+- ⌘⇧T (Reopen closed, `reopen`, since protocol 19) brings back the last
+  tab, workspace, file or page you closed (not a shell that exited), from
+  the daemon's last 20 (`Workspaces.closed`, in memory only: a restart
+  restores what's open). A tab comes back where it was, as a restore
+  would (directory, history, Claude session, kept command, panel), under
+  its old `key`, so each window's state for it (panel open, draft) is
+  back too; a plain shell's also starts from what its terminal showed
+  (`Pane.snapshot`, without modes), its old prompt line wiped for the new
+  one. A history file stays while ⌘⇧T could bring its tab back. Closing a
+  workspace's last tab closes it, so that's remembered as the workspace.
+  `state.json` keeps each tab's files now too.
 - ⌘⇧F (or the tab bar's button beside the panel's) has the panel fill the
   tab, per tab like open or not: CSS over the same PanelLayout (nothing
   remounts, so a page keeps its state), the terminal keeping its full size
