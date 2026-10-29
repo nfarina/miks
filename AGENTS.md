@@ -460,6 +460,10 @@ resizes); keep it passing.
   `state.json`), hands it to the others and, every tab's, empty ones too (a window that was away missed the emptying), to each window's `hello`; never
   in `state` (every window, every keystroke). A window takes another's
   only while its composer isn't focused, where its own goes out next.
+  A reply this window hasn't had on screen (`ChatPanel:seenReply:<key>`
+  in its storage), arriving all at once with its start above the screen
+  (it came while you were on another device), gets a round ⌃ at the top
+  right, as Messages has, up to its start; it fades once you're there.
 
 - `miks version` (`/api/version`, `server/Version.ts`): what the daemon
   runs and on which Mac, from Miks.app's `build.json` (version, commit,

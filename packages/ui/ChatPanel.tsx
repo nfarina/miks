@@ -7,7 +7,7 @@ import { ModalContext } from "crosswing/modals/context";
 import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView";
 import { tooltip } from "crosswing/modals/popup";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
-import { ArrowUp, ChevronRight, LoaderCircle, Mic, Paperclip, Square, TextQuote, X } from "lucide-react";
+import { ArrowUp, ChevronRight, ChevronUp, LoaderCircle, Mic, Paperclip, Square, TextQuote, X } from "lucide-react";
 import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
@@ -26,7 +26,7 @@ import {
 } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
-import { padSafeArea } from "crosswing/safearea";
+import { padSafeArea, safeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { useCodeMenu } from "./codeMenu";
 import { daemon } from "./daemon";
@@ -934,6 +934,22 @@ function group(entries: ChatEntry[], working: boolean): Item[] {
   return items;
 }
 
+/** The latest reply each tab's conversation has had on screen in this window, for catching up on what came since. */
+const seenReplies = {
+  get(tab: Tab): string | null {
+    try {
+      return localStorage.getItem(`ChatPanel:seenReply:${keyOf(tab)}`);
+    } catch {
+      return null;
+    }
+  },
+  set(tab: Tab, id: string) {
+    try {
+      localStorage.setItem(`ChatPanel:seenReply:${keyOf(tab)}`, id);
+    } catch {}
+  },
+};
+
 /** The most kept in the panel at once, as in the daemon. */
 const MAX_ENTRIES = 2000;
 
@@ -1014,6 +1030,52 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
     scrolledTo.current = target;
     element.scrollTop = target;
   }, [chat, pending, status]);
+
+  // Coming to a reply you haven't seen (it came while you were away, on
+  // another device, say), with its start above the screen: a button up to
+  // it, as Messages has, until you're there.
+  const [catchUp, setCatchUp] = useState(false);
+  const latestReply = chat?.entries.findLast((entry) => entry.kind === "reply")?.id ?? null;
+
+  function checkCatchUp() {
+    const element = scroller();
+    const conversation = conversationRef.current;
+    if (!latestReply || !visible || !showing || document.visibilityState !== "visible" || !element || !conversation) return;
+    const start = replyStart(conversation);
+    const bounds = element.getBoundingClientRect();
+    const top = start?.getBoundingClientRect().top;
+    // Below the screen (you'd scrolled up to read): not seen yet.
+    if (top !== undefined && top > bounds.bottom) return;
+    const seen = seenReplies.get(tab);
+    seenReplies.set(tab, latestReply);
+    if (seen !== latestReply && top !== undefined && top < bounds.top - 2) setCatchUp(true);
+  }
+
+  useLayoutEffect(checkCatchUp, [latestReply, visible, showing]);
+
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === "visible" && checkCatchUp();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  });
+
+  /** Whether the reply's start has come down onto the screen. */
+  function caughtUp(): boolean {
+    const element = scroller();
+    const start = conversationRef.current && replyStart(conversationRef.current);
+    return !element || !start || start.getBoundingClientRect().top >= element.getBoundingClientRect().top - 2;
+  }
+
+  function goToReply() {
+    const element = scroller();
+    const start = conversationRef.current && replyStart(conversationRef.current);
+    setCatchUp(false);
+    if (!element || !start) return;
+    const target = Math.min(0, scrollTopFor(element, start, 12));
+    pinned.current = target < -1;
+    scrolledTo.current = target;
+    element.scrollTo({ top: target, behavior: "smooth" });
+  }
 
   // Back from a file or page, where it was.
   useLayoutEffect(() => {
@@ -1233,6 +1295,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
           scrollTop.current = top;
           if (Math.abs(top - scrolledTo.current) > 2) pinned.current = false;
           atBottom.current = top > -40;
+          if (catchUp && caughtUp()) setCatchUp(false);
         }}
         onScrollEnd={() => (jumpingTo.current = null)}
         // Focusable, so a click in the conversation puts the keyboard here,
@@ -1319,6 +1382,18 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
           )}
         </div>
       </BottomScrollable>
+      <button
+        className="catch-up"
+        data-shown={catchUp}
+        // Over the conversation's top, below the panel's tabs if it has them.
+        style={{ top: (scroller()?.offsetTop ?? 0) + 10 }}
+        tabIndex={catchUp ? 0 : -1}
+        aria-hidden={!catchUp}
+        onClick={goToReply}
+        {...tooltip("Up to the reply", { delay: true })}
+      >
+        <ChevronUp size={18} />
+      </button>
       <form
         className="composer"
         ref={composerRef}
@@ -1589,6 +1664,40 @@ const StyledChatPanel = styled.div`
     flex-grow: 1;
     outline: none;
     min-height: 0;
+  }
+
+  /* Messages' catch-up button: round, floating at the top right. */
+  > .catch-up {
+    position: absolute;
+    right: ${safeArea.right("12px")};
+    z-index: 2;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid ${colors.separator()};
+    border-radius: 50%;
+    background: ${colors.textBackground()};
+    color: ${colors.text()};
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(0.85);
+    pointer-events: none;
+    transition:
+      opacity 0.2s ease-out,
+      transform 0.2s ease-out;
+
+    &[data-shown="true"] {
+      opacity: 1;
+      transform: none;
+      pointer-events: auto;
+    }
+  }
+
+  &:not([data-showing="chat"]) > .catch-up {
+    display: none;
   }
 
   > .scroller > .conversation {
