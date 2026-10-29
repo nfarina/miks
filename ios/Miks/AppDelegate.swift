@@ -228,6 +228,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             ("Toggle sidebar", "b", .command, "toggleSidebar"),
             ("Toggle panel", "c", [.command, .shift], "toggleChat"),
             ("Panel fills the tab", "f", [.command, .shift], "toggleExpanded"),
+            ("Focus terminal", UIKeyCommand.inputLeftArrow, [.command, .alternate], "focusTerminal"),
+            ("Focus panel", UIKeyCommand.inputRightArrow, [.command, .alternate], "focusPanel"),
             ("Bigger text", "=", .command, "fontBigger"),
             ("Smaller text", "-", .command, "fontSmaller"),
             ("Actual size", "0", .command, "fontReset"),

@@ -13,7 +13,18 @@ import { keyframes, styled } from "styled-components";
 import { HostContext } from "crosswing/host/context";
 import { coarsePointer } from "crosswing/host/pointer";
 import { provideSafeArea, safeArea, safeAreaTopBar } from "crosswing/safearea";
-import { ChatLayout, closeInPanel, hasPanel, isChatOpen, setChatOpen, stepPanel, toggleChat, toggleExpanded } from "./ChatPanel";
+import {
+  ChatLayout,
+  closeInPanel,
+  focusPanelOf,
+  focusTerminalOf,
+  hasPanel,
+  isChatOpen,
+  setChatOpen,
+  stepPanel,
+  toggleChat,
+  toggleExpanded,
+} from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
 import { daemon, type Target, useDaemon, useMacs, useTarget } from "./daemon";
 import { renderMarkdown } from "./markdown";
@@ -652,6 +663,12 @@ function runCommand(command: string) {
     }
     case "closeWorkspace":
       if (workspace) closeWorkspace(workspace);
+      return;
+    case "focusPanel":
+      if (tabs[tabIndex]) focusPanelOf(tabs[tabIndex]);
+      return;
+    case "focusTerminal":
+      if (tabs[tabIndex]) focusTerminalOf(tabs[tabIndex]);
       return;
     case "reopenClosed":
       // An older daemon has nothing to reopen.

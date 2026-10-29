@@ -997,6 +997,8 @@ function buildMenu() {
         command("toggleSidebar", "CmdOrCtrl+B", "Toggle sidebar"),
         command("toggleChat", "CmdOrCtrl+Shift+C", "Toggle panel"),
         command("toggleExpanded", "CmdOrCtrl+Shift+F", "Panel fills the tab"),
+        command("focusTerminal", "CmdOrCtrl+Alt+Left", "Focus terminal"),
+        command("focusPanel", "CmdOrCtrl+Alt+Right", "Focus panel"),
         { type: "separator" },
         command("fontBigger", "CmdOrCtrl+=", "Bigger text"),
         command("fontSmaller", "CmdOrCtrl+-", "Smaller text"),

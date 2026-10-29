@@ -248,6 +248,25 @@ function choosePanel(tab: Tab, open: boolean) {
   setChatOpen(tab, open);
 }
 
+/** Each tab's area (`ChatLayout`), for putting the keyboard in its panel. */
+const layoutRoots = new Map<string, HTMLElement>();
+
+/** ⌥⌘→: the keyboard into the tab's panel, to what it shows, opening it if it's hidden. */
+export function focusPanelOf(tab: Tab) {
+  if (!hasPanel(tab)) return;
+  if (!isChatOpen(tab)) return toggleChat(tab);
+  const root = layoutRoots.get(tab.id);
+  if (root) focusPanel(root, "composer");
+}
+
+/** ⌥⌘←: the keyboard back to the terminal, which a panel filling the tab (⌘⇧F) makes room for. */
+export function focusTerminalOf(tab: Tab) {
+  if (!expandedTabs.has(tab)) return focusActiveTerminal();
+  expandedTabs.set(tab, false);
+  // Once it's rendered: until then the terminal's under it, inert.
+  setTimeout(focusActiveTerminal);
+}
+
 /** Makes a tab's panel fill the tab, or go back beside the terminal (⌘⇧F); a hidden one comes back filling it. */
 export function toggleExpanded(tab: Tab) {
   if (!isChatOpen(tab)) {
@@ -290,6 +309,12 @@ export function ChatLayout({
   const focusShown = useRef(false);
   const showing: PanelView = views.includes(view) ? view : (views.at(-1) ?? "chat");
   const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) layoutRoots.set(tab.id, ref.current);
+    return () => {
+      layoutRoots.delete(tab.id);
+    };
+  }, [tab.id]);
 
   // A file or page opening (or opened again) comes to the front, opening
   // the panel if it was closed; and a panel opened for them closes once
