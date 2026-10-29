@@ -6,7 +6,7 @@ import { basicSetup } from "codemirror";
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
-import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
+import { PopupMenu, PopupMenuSeparator, PopupMenuText, PopupMenuToggle } from "crosswing/components/PopupMenu";
 import { ModalContext } from "crosswing/modals/context";
 import { tooltip } from "crosswing/modals/popup";
 import { usePopup } from "crosswing/modals/popup/usePopup";
@@ -21,7 +21,7 @@ import { codemirrorDark } from "./highlighting/codemirrorDark";
 import { codemirrorLight } from "./highlighting/codemirrorLight";
 import { isMarkdown } from "./markdown";
 import { headingPending, MarkdownView } from "./MarkdownView";
-import { autoFocus, DEVICE_SETTINGS, getSettings } from "./settings";
+import { autoFocus, DEVICE_SETTINGS, getSettings, updateSettings, useSettings } from "./settings";
 import { terminalScrollbarCSS } from "./TerminalView";
 
 /**
@@ -80,8 +80,9 @@ export function FileView({
   const [previewText, setPreviewText] = useState<string | null>(null);
 
   const name = file.path.split("/").pop() ?? file.path;
-  // Prose (markdown, plain text) wraps; code doesn't. ⌥Z toggles it.
-  const [wrap, setWrap] = useState(() => markdown || !LanguageDescription.matchFilename(languages, name));
+  // ⌥Z, for every file, in every window.
+  const wrap = useSettings().wordWrap;
+  const setWrap = (value: boolean) => updateSettings({ wordWrap: value });
   const folder = file.path.slice(0, file.path.length - name.length - 1);
   const home = daemon.getSnapshot().state?.home ?? null;
 
@@ -149,7 +150,7 @@ export function FileView({
             keydown: (event) => {
               if (event.code !== "KeyZ" || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return false;
               event.preventDefault();
-              setWrap((value) => !value);
+              setWrap(!getSettings().wordWrap);
               return true;
             },
           }),
@@ -312,24 +313,23 @@ export function FileView({
   const menu = usePopup(() => {
     // Finder only where Finder is: a Miks window on this Mac.
     const finder = !DEVICE_SETTINGS && !isRemote() && daemon.speaks(18);
+    const finderMissing = DEVICE_SETTINGS
+      ? "Only in Miks on the Mac"
+      : isRemote()
+        ? "Only for files on this Mac"
+        : "Update Miks on this Mac first";
     return (
       <PopupMenu>
-        <PopupMenuText
-          icon={<WrapText />}
-          checked={wrap}
-          hotkeys={{ key: "alt+z" }}
-          onClick={() => setWrap(!wrap)}
-          children="Word wrap"
-        />
+        <PopupMenuToggle icon={<WrapText />} on={wrap} onClick={() => setWrap(!wrap)} children="Word wrap" detail="⌥Z" />
         <PopupMenuSeparator />
         <PopupMenuText icon={<Copy />} onClick={() => window.miks?.copy(file.path)} children="Copy path" />
-        {finder && (
-          <PopupMenuText
-            icon={<FolderSearch />}
-            onClick={() => daemon.send({ type: "showFolder", path: file.path, reveal: true })}
-            children="Reveal in Finder"
-          />
-        )}
+        <PopupMenuText
+          icon={<FolderSearch />}
+          disabled={!finder}
+          detail={!finder && finderMissing}
+          onClick={() => daemon.send({ type: "showFolder", path: file.path, reveal: true })}
+          children="Reveal in Finder"
+        />
       </PopupMenu>
     );
   });
