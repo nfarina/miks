@@ -99,6 +99,7 @@ export class Pane extends EventEmitter<{
     dark = true,
     cols = 80,
     rows = 24,
+    screen,
   }: {
     id: string;
     cwd: string;
@@ -109,6 +110,8 @@ export class Pane extends EventEmitter<{
     dark?: boolean;
     cols?: number;
     rows?: number;
+    /** What a closed tab's terminal showed (`snapshot`), to start from, as if it never went. */
+    screen?: string;
   }) {
     super();
     this.id = id;
@@ -161,6 +164,9 @@ export class Pane extends EventEmitter<{
       this.foreground = this.titleSetBy;
       this.emit("title", title, previous);
     });
+
+    // The old prompt's line goes: the new shell's takes its place.
+    if (screen) this.terminal.write(screen + "\x1b[0m\r\x1b[2K");
 
     this.pty = pty.spawn(file, args, {
       name: "xterm-256color",
@@ -257,6 +263,16 @@ export class Pane extends EventEmitter<{
    */
   clear() {
     this.terminal.clear();
+  }
+
+  /**
+   * The screen and scrollback, without its modes (mouse reports, an
+   * alternate screen), which belonged to programs that won't be there to
+   * start it from (`screen`).
+   */
+  snapshot(): { screen: string; cols: number; rows: number } {
+    const screen = this.serializer.serialize({ scrollback: SCROLLBACK, excludeModes: true, excludeAltBuffer: true });
+    return { screen, cols: this.terminal.cols, rows: this.terminal.rows };
   }
 
   kill() {

@@ -229,6 +229,14 @@ export async function serve({
     });
   });
 
+  // After the state with its tab in it.
+  workspaces.on("reopenedDraft", (tabId, text) =>
+    setImmediate(() => {
+      const message = JSON.stringify({ type: "draft", tabId, text } satisfies DaemonMessage);
+      for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    }),
+  );
+
   wss.on("connection", (socket) => {
     sockets.add(socket);
 
@@ -302,6 +310,8 @@ export async function serve({
           return workspaces.setDark(message.dark);
         case "closeTab":
           return workspaces.closeTab(message.tabId);
+        case "reopen":
+          return workspaces.reopen();
         case "select": {
           workspaces.select(message.workspaceId, message.tabId);
           const workspace = workspaces.getState().workspaces.find((w) => w.id === message.workspaceId);
@@ -386,7 +396,7 @@ export async function serve({
           return;
         }
         case "closeFile":
-          return workspaces.closeFile(message.tabId, message.fileId);
+          return workspaces.closeFileByHand(message.tabId, message.fileId);
         case "openFile":
           if (!path.isAbsolute(message.path)) return;
           return void workspaces.openFile(message.tabId, message.path, { edit: false, wait: false });

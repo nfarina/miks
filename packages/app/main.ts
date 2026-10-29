@@ -971,6 +971,7 @@ function buildMenu() {
         command("closeTab", "CmdOrCtrl+W", "Close tab"),
         // Not ⌘⇧W, which closes the window, as everywhere else on a Mac.
         command("closeWorkspace", "CmdOrCtrl+Alt+W", "Close workspace"),
+        command("reopenClosed", "CmdOrCtrl+Shift+T", "Reopen closed"),
         { role: "close", label: "Close window", accelerator: "CmdOrCtrl+Shift+W" },
       ],
     },

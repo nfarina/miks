@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -231,6 +231,8 @@ export type ClientMessage =
   /** The UI's light or dark appearance, for programs that follow it. */
   | { type: "appearance"; dark: boolean }
   | { type: "closeTab"; tabId: string }
+  /** Brings back what was closed last: a tab, workspace, file or page (⌘⇧T). Since protocol 19. */
+  | { type: "reopen" }
   /** Selecting a tab also marks its agent's `done` as seen. */
   | { type: "select"; workspaceId: string; tabId?: string }
   /**

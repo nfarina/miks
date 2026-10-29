@@ -653,6 +653,10 @@ function runCommand(command: string) {
     case "closeWorkspace":
       if (workspace) closeWorkspace(workspace);
       return;
+    case "reopenClosed":
+      // An older daemon has nothing to reopen.
+      if (daemon.speaks(19)) daemon.send({ type: "reopen" });
+      return;
     // Through the panel's tabs first, with the keyboard in it.
     case "nextTab":
       if (tabs[tabIndex] && stepPanel(tabs[tabIndex], 1)) return;

@@ -34,9 +34,36 @@ export type SavedState = {
     title: string | null;
     cwd: string;
     activeTab: number;
-    tabs: { cwd: string; claudeSessionId?: string; historyId?: string; keep?: string; page?: string; draft?: string }[];
+    tabs: SavedTab[];
   }[];
 };
+
+/** A tab as it was: enough to bring it back, after a restart or closing it. */
+export type SavedTab = {
+  cwd: string;
+  claudeSessionId?: string;
+  historyId?: string;
+  keep?: string;
+  page?: string;
+  draft?: string;
+  /** The files in its panel, oldest first. */
+  files?: string[];
+};
+
+/**
+ * A tab closed, with what its terminal showed (`Pane.snapshot`), unless
+ * what comes back draws its own (a Claude session or a kept command).
+ */
+type ClosedTab = SavedTab & { screen?: { screen: string; cols: number; rows: number } };
+
+/** What ⌘⇧T reopens, the latest first: kept in memory, a restart brings back what's open anyway. */
+type Closed =
+  | { kind: "tab"; workspaceId: string; index: number; tab: ClosedTab }
+  | { kind: "workspace"; index: number; title: string | null; cwd: string; activeTab: number; tabs: ClosedTab[] }
+  | { kind: "file"; tabId: string; path: string }
+  | { kind: "page"; tabId: string; url: string };
+
+const MAX_CLOSED = 20;
 
 /** Hears a tab's open file: as it is now, and again whenever it changes on disk. */
 export type FileListener = (file: FileContents & { id: string }) => void;
@@ -72,7 +99,13 @@ type WorkspaceRecord = {
  * the agents in those panes are doing. Emits `change` after any mutation that
  * clients should hear about.
  */
-export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [] }> {
+export class Workspaces extends EventEmitter<{
+  change: [];
+  draft: [];
+  /** A reopened tab's draft, for every window. */
+  reopenedDraft: [tabId: string, text: string];
+  machine: [];
+}> {
   private readonly workspaces: WorkspaceRecord[] = [];
   private activeWorkspaceId: string | null = null;
   private readonly panes = new Map<string, Pane>();
@@ -116,6 +149,8 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   private readonly drafts = new Map<string, string>();
   /** Each tab's own shell history file's name, kept across restores. */
   private readonly historyIds = new Map<string, string>();
+  /** What's been closed, for ⌘⇧T, the latest last. */
+  private readonly closed: Closed[] = [];
   /** Each tab's shell's directory, as of the last `pollCwds`. */
   private readonly cwds = new Map<string, string>();
   private dark = true;
@@ -209,6 +244,14 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
     const workspace = this.findWorkspace(workspaceId);
     if (!workspace) return;
 
+    this.remember({
+      kind: "workspace",
+      index: this.workspaces.indexOf(workspace),
+      title: workspace.title,
+      cwd: workspace.cwd,
+      activeTab: Math.max(0, workspace.tabIds.indexOf(workspace.activeTabId ?? "")),
+      tabs: workspace.tabIds.map((tabId) => this.closingTab(tabId, workspace.cwd)),
+    });
     // Each pane's exit removes its tab, and the last one removes the workspace.
     for (const tabId of workspace.tabIds) this.panes.get(tabId)?.kill();
   }
@@ -241,7 +284,15 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
       keep,
       historyId = randomUUID(),
       after,
-    }: { cwd?: string; resumeClaudeSession?: string; keep?: string; historyId?: string; after?: string } = {},
+      screen,
+    }: {
+      cwd?: string;
+      resumeClaudeSession?: string;
+      keep?: string;
+      historyId?: string;
+      after?: string;
+      screen?: ClosedTab["screen"];
+    } = {},
   ): string | undefined {
     const workspace = this.findWorkspace(workspaceId);
     if (!workspace) return;
@@ -257,6 +308,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
           ? this.thenShell(`${this.claudeCommand} --resume ${resumeClaudeSession}`)
           : this.command,
       dark: this.dark,
+      ...screen,
       env: { MIKS_PANE_ID: id, MIKS_SOCKET: this.socketPath, MIKS_HISTORY: this.historyFile(historyId) },
     });
     this.panes.set(id, pane);
@@ -279,7 +331,128 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   }
 
   closeTab(tabId: string) {
-    this.panes.get(tabId)?.kill();
+    const workspace = this.workspaces.find((w) => w.tabIds.includes(tabId));
+    const pane = this.panes.get(tabId);
+    if (!workspace || !pane) return;
+    // Its last: the workspace goes with it, and comes back with it.
+    if (workspace.tabIds.length === 1) return this.closeWorkspace(workspace.id);
+
+    this.remember({ kind: "tab", workspaceId: workspace.id, index: workspace.tabIds.indexOf(tabId), tab: this.closingTab(tabId, workspace.cwd) });
+    pane.kill();
+  }
+
+  /** A file closed from the panel (✕, ⌘W, Done), to reopen. */
+  closeFileByHand(tabId: string, fileId?: string) {
+    const open = this.openEntry(tabId, fileId);
+    if (open) this.remember({ kind: "file", tabId, path: open.file.path });
+    this.closeFile(tabId, fileId);
+  }
+
+  /**
+   * Brings back what was closed last (⌘⇧T), where it was: a tab or
+   * workspace with its directory, history, Claude session, kept command,
+   * panel and, for a plain shell, what its terminal showed; a file or page
+   * into its tab, while that's still open.
+   */
+  reopen() {
+    for (let closed = this.closed.pop(); closed; closed = this.closed.pop()) {
+      switch (closed.kind) {
+        case "tab": {
+          // Its workspace closed since: into the one on screen.
+          const workspace = this.findWorkspace(closed.workspaceId) ?? this.findWorkspace(this.activeWorkspaceId ?? "");
+          if (!workspace) break;
+          const tabId = this.reopenTab(workspace, closed.tab);
+          if (!tabId) break;
+          // Where it was, as near as the tabs still there allow.
+          workspace.tabIds.splice(workspace.tabIds.indexOf(tabId), 1);
+          workspace.tabIds.splice(Math.min(closed.index, workspace.tabIds.length), 0, tabId);
+          this.activeWorkspaceId = workspace.id;
+          this.emit("change");
+          return;
+        }
+        case "workspace": {
+          const workspace: WorkspaceRecord = { id: shortId(), title: closed.title, cwd: closed.cwd, tabIds: [], activeTabId: null };
+          this.workspaces.splice(Math.min(closed.index, this.workspaces.length), 0, workspace);
+          for (const tab of closed.tabs) this.reopenTab(workspace, tab);
+          workspace.activeTabId = workspace.tabIds[closed.activeTab] ?? workspace.tabIds[0] ?? null;
+          this.activeWorkspaceId = workspace.id;
+          this.emit("change");
+          return;
+        }
+        case "file":
+          if (!this.panes.has(closed.tabId)) break;
+          this.selectTab(closed.tabId);
+          void this.openFile(closed.tabId, closed.path, { edit: false, wait: false });
+          return;
+        case "page":
+          if (!this.panes.has(closed.tabId)) break;
+          this.selectTab(closed.tabId);
+          this.openPage(closed.tabId, closed.url);
+          return;
+      }
+    }
+  }
+
+  private reopenTab(workspace: WorkspaceRecord, tab: ClosedTab): string | undefined {
+    const tabId = this.createTab(workspace.id, {
+      cwd: tab.cwd,
+      resumeClaudeSession: tab.claudeSessionId,
+      keep: tab.keep,
+      historyId: tab.historyId,
+      screen: tab.screen,
+    });
+    if (!tabId) return;
+    if (tab.page) this.openPage(tabId, tab.page);
+    if (tab.draft) {
+      this.drafts.set(tabId, tab.draft);
+      this.emit("reopenedDraft", tabId, tab.draft);
+    }
+    for (const file of tab.files ?? []) void this.openFile(tabId, file, { edit: false, wait: false });
+    return tabId;
+  }
+
+  private selectTab(tabId: string) {
+    const workspace = this.workspaces.find((w) => w.tabIds.includes(tabId));
+    if (workspace) this.select(workspace.id, tabId);
+  }
+
+  /** A tab about to close, as it is: in the directory it was last polled in (lsof would hold the close up). */
+  private closingTab(tabId: string, workspaceCwd: string): ClosedTab {
+    const tab = this.savedTab(tabId, this.cwds.get(tabId) ?? workspaceCwd);
+    const drawsItself = tab.claudeSessionId || tab.keep;
+    return drawsItself ? tab : { ...tab, screen: this.panes.get(tabId)?.snapshot() };
+  }
+
+  private savedTab(tabId: string, cwd: string): SavedTab {
+    const files = this.files.get(tabId)?.map((open) => open.file.path);
+    return {
+      cwd,
+      claudeSessionId: this.resumableSession(tabId),
+      historyId: this.historyIds.get(tabId),
+      keep: this.keeps.get(tabId)?.command,
+      page: this.pages.get(tabId)?.url,
+      draft: this.drafts.get(tabId),
+      ...(files?.length ? { files } : {}),
+    };
+  }
+
+  private remember(closed: Closed) {
+    this.closed.push(closed);
+    for (const dropped of this.closed.splice(0, this.closed.length - MAX_CLOSED)) {
+      // Its tabs' histories, kept for it, go now.
+      const tabs = dropped.kind === "tab" ? [dropped.tab] : dropped.kind === "workspace" ? dropped.tabs : [];
+      for (const tab of tabs) if (tab.historyId && !this.historyInUse(tab.historyId)) fs.rmSync(this.historyFile(tab.historyId), { force: true });
+    }
+  }
+
+  /** Whether a tab open, or one that could reopen, has this history. */
+  private historyInUse(historyId: string): boolean {
+    if ([...this.historyIds.values()].includes(historyId)) return true;
+    return this.closed.some(
+      (closed) =>
+        (closed.kind === "tab" && closed.tab.historyId === historyId) ||
+        (closed.kind === "workspace" && closed.tabs.some((tab) => tab.historyId === historyId)),
+    );
   }
 
   moveWorkspace(workspaceId: string, index: number) {
@@ -505,14 +678,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
         cwd: workspace.cwd,
         activeTab: Math.max(0, workspace.tabIds.indexOf(workspace.activeTabId ?? "")),
         tabs: await Promise.all(
-          workspace.tabIds.map(async (tabId) => ({
-            cwd: (await this.panes.get(tabId)?.cwd()) ?? workspace.cwd,
-            claudeSessionId: this.resumableSession(tabId),
-            historyId: this.historyIds.get(tabId),
-            keep: this.keeps.get(tabId)?.command,
-            page: this.pages.get(tabId)?.url,
-            draft: this.drafts.get(tabId),
-          })),
+          workspace.tabIds.map(async (tabId) => this.savedTab(tabId, (await this.panes.get(tabId)?.cwd()) ?? workspace.cwd)),
         ),
       })),
     );
@@ -551,6 +717,7 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
         });
         if (tabId && tab.page) this.openPage(tabId, tab.page);
         if (tabId && tab.draft) this.drafts.set(tabId, tab.draft);
+        for (const file of tab.files ?? []) if (tabId) void this.openFile(tabId, file, { edit: false, wait: false });
       }
       workspace.activeTabId = workspace.tabIds[savedWorkspace.activeTab] ?? workspace.tabIds[0] ?? null;
     }
@@ -844,7 +1011,11 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   }
 
   closePage(tabId: string) {
-    if (this.pages.delete(tabId)) this.emit("change");
+    const page = this.pages.get(tabId);
+    if (!page) return;
+    this.remember({ kind: "page", tabId, url: page.url });
+    this.pages.delete(tabId);
+    this.emit("change");
   }
 
   /** Ends every pane. For tests; the real daemon just exits. */
@@ -885,8 +1056,9 @@ export class Workspaces extends EventEmitter<{ change: []; draft: []; machine: [
   private removeTab(tabId: string) {
     // Closed for good, not just stopping with the daemon: its history goes.
     const historyId = this.historyIds.get(tabId);
-    if (historyId && !this.stopping) fs.rmSync(this.historyFile(historyId), { force: true });
     this.historyIds.delete(tabId);
+    // Unless ⌘⇧T could bring it back.
+    if (historyId && !this.stopping && !this.historyInUse(historyId)) fs.rmSync(this.historyFile(historyId), { force: true });
     this.keeps.delete(tabId);
     clearTimeout(this.pendingDone.get(tabId));
     this.pendingDone.delete(tabId);

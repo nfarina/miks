@@ -218,6 +218,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             ("New workspace", "n", .command, "newWorkspace"),
             ("Close tab", "w", .command, "closeTab"),
             ("Close workspace", "w", [.command, .alternate], "closeWorkspace"),
+            ("Reopen closed", "t", [.command, .shift], "reopenClosed"),
         ]),
         (.edit, [
             ("Select last command", "a", [.command, .shift], "selectLastCommand"),
