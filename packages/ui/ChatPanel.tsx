@@ -1724,7 +1724,8 @@ const StyledChatPanel = styled.div`
         min-width: 0;
         overflow-wrap: anywhere;
         padding: 8px 12px;
-        border-radius: 14px;
+        /* Half a line's bubble (21px and its padding), so one line is a pill, as in Messages. */
+        border-radius: 18.5px;
         /* Your own words: no need for the replies' roomier lines. */
         font: ${fonts.display({ size: 14, line: "21px" })};
         background: ${colors.darkBlue()};
