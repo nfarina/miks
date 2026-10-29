@@ -6,20 +6,22 @@ import { basicSetup } from "codemirror";
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
+import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { ModalContext } from "crosswing/modals/context";
 import { tooltip } from "crosswing/modals/popup";
-import { X } from "lucide-react";
+import { usePopup } from "crosswing/modals/popup/usePopup";
+import { Copy, Ellipsis, FolderSearch, WrapText, X } from "lucide-react";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { styled } from "styled-components";
-import { daemon, type FileEvent } from "./daemon";
+import { daemon, type FileEvent, isRemote } from "./daemon";
 import { codemirrorDark } from "./highlighting/codemirrorDark";
 import { codemirrorLight } from "./highlighting/codemirrorLight";
 import { isMarkdown } from "./markdown";
 import { headingPending, MarkdownView } from "./MarkdownView";
-import { autoFocus, getSettings } from "./settings";
+import { autoFocus, DEVICE_SETTINGS, getSettings } from "./settings";
 import { terminalScrollbarCSS } from "./TerminalView";
 
 /**
@@ -59,6 +61,7 @@ export function FileView({
     theme: new Compartment(),
     language: new Compartment(),
     editable: new Compartment(),
+    wrap: new Compartment(),
   }));
 
   // What's on disk, as last read or saved: what a save checks it against.
@@ -77,6 +80,8 @@ export function FileView({
   const [previewText, setPreviewText] = useState<string | null>(null);
 
   const name = file.path.split("/").pop() ?? file.path;
+  // Prose (markdown, plain text) wraps; code doesn't. ⌥Z toggles it.
+  const [wrap, setWrap] = useState(() => markdown || !LanguageDescription.matchFilename(languages, name));
   const folder = file.path.slice(0, file.path.length - name.length - 1);
   const home = daemon.getSnapshot().state?.home ?? null;
 
@@ -138,6 +143,16 @@ export function FileView({
               },
             },
           ]),
+          // ⌥Z, as VS Code's. By the key, not the character: on a Mac it
+          // types Ω, and CodeMirror leaves ⌥ and a letter alone there.
+          EditorView.domEventHandlers({
+            keydown: (event) => {
+              if (event.code !== "KeyZ" || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return false;
+              event.preventDefault();
+              setWrap((value) => !value);
+              return true;
+            },
+          }),
           // Escape hides the panel, once CodeMirror has nothing of its own
           // to close with it (search, completions).
           Prec.lowest(
@@ -154,6 +169,7 @@ export function FileView({
           compartments.theme.of(dark ? codemirrorDark : codemirrorLight),
           compartments.language.of([]),
           compartments.editable.of(editableExtension(editing)),
+          compartments.wrap.of(wrap ? EditorView.lineWrapping : []),
           // Unsaved: different from the file as it is on disk.
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return;
@@ -185,6 +201,10 @@ export function FileView({
   useEffect(() => {
     viewRef.current?.dispatch({ effects: compartments.theme.reconfigure(dark ? codemirrorDark : codemirrorLight) });
   }, [dark]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: compartments.wrap.reconfigure(wrap ? EditorView.lineWrapping : []) });
+  }, [wrap]);
 
   useEffect(() => {
     viewRef.current?.dispatch({ effects: compartments.editable.reconfigure(editableExtension(editing)) });
@@ -289,6 +309,31 @@ export function FileView({
           ? "This file can't be read."
           : null;
 
+  const menu = usePopup(() => {
+    // Finder only where Finder is: a Miks window on this Mac.
+    const finder = !DEVICE_SETTINGS && !isRemote() && daemon.speaks(18);
+    return (
+      <PopupMenu>
+        <PopupMenuText
+          icon={<WrapText />}
+          checked={wrap}
+          hotkeys={{ key: "alt+z" }}
+          onClick={() => setWrap(!wrap)}
+          children="Word wrap"
+        />
+        <PopupMenuSeparator />
+        <PopupMenuText icon={<Copy />} onClick={() => window.miks?.copy(file.path)} children="Copy path" />
+        {finder && (
+          <PopupMenuText
+            icon={<FolderSearch />}
+            onClick={() => daemon.send({ type: "showFolder", path: file.path, reveal: true })}
+            children="Reveal in Finder"
+          />
+        )}
+      </PopupMenu>
+    );
+  });
+
   const controls = (
     <StyledFileControls>
       {ready && markdown && (
@@ -325,6 +370,11 @@ export function FileView({
       {file.wait && (
         <button className="action primary" disabled={saving} onClick={() => void done()} {...tooltip("Save and close, and let what's waiting go on", { delay: true })}>
           Done
+        </button>
+      )}
+      {ready && (
+        <button className="more" onClick={menu.onClick} {...tooltip("More", { delay: true })}>
+          <Ellipsis size={15} />
         </button>
       )}
     </StyledFileControls>
@@ -456,6 +506,25 @@ const StyledFileControls = styled.div`
       border-color: transparent;
       background: #5b4fd1;
       color: #fff;
+    }
+  }
+
+  > .more {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: ${colors.textSecondary()};
+    cursor: pointer;
+
+    &:hover {
+      background: ${colors.buttonBackgroundGlow()};
+      color: ${colors.text()};
     }
   }
 `;
