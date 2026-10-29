@@ -13,7 +13,7 @@ import { usePopup } from "crosswing/modals/popup/usePopup";
 import { Copy, Ellipsis, FolderSearch, WrapText, X } from "lucide-react";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
-import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type KeyboardEvent, use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { styled } from "styled-components";
 import { daemon, type FileEvent, isRemote } from "./daemon";
@@ -55,6 +55,7 @@ export function FileView({
 }) {
   const { showToast } = use(ModalContext);
   const dark = useMatchMedia("(prefers-color-scheme: dark)");
+  const rootRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [compartments] = useState(() => ({
@@ -91,6 +92,23 @@ export function FileView({
     setPreview(value);
     if (value && viewRef.current) setPreviewText(viewRef.current.state.doc.toString());
   }
+
+  // ⌘⇧V (VS Code's markdown preview), from either: the keyboard goes along,
+  // or it'd be left on what just went hidden.
+  const switchFocus = useRef(false);
+  function onKeyDown(event: KeyboardEvent) {
+    if (!markdown || !ready || event.code !== "KeyV" || !event.metaKey || !event.shiftKey || event.altKey || event.ctrlKey) return;
+    event.preventDefault();
+    switchFocus.current = true;
+    showPreview(!previewRef.current);
+  }
+
+  useEffect(() => {
+    if (!switchFocus.current) return;
+    switchFocus.current = false;
+    if (preview) rootRef.current?.querySelector<HTMLElement>(".markdown-view")?.focus({ preventScroll: true });
+    else viewRef.current?.focus();
+  }, [preview]);
 
   function markDirty(value: boolean) {
     dirtyRef.current = value;
@@ -320,7 +338,7 @@ export function FileView({
         : "Update Miks on this Mac first";
     return (
       <PopupMenu>
-        <PopupMenuToggle icon={<WrapText />} on={wrap} onClick={() => setWrap(!wrap)} children="Word wrap" detail="⌥Z" />
+        <PopupMenuToggle icon={<WrapText />} on={wrap} onClick={() => setWrap(!wrap)} hotkeys={{ key: "alt+z" }} children="Word wrap" />
         <PopupMenuSeparator />
         <PopupMenuText icon={<Copy />} onClick={() => window.miks?.copy(file.path)} children="Copy path" />
         <PopupMenuText
@@ -338,10 +356,10 @@ export function FileView({
     <StyledFileControls>
       {ready && markdown && (
         <div className="mode">
-          <button data-on={preview} onClick={() => showPreview(true)}>
+          <button data-on={preview} onClick={() => showPreview(true)} {...tooltip("Preview", { hotkey: "cmd+shift+v", delay: true })}>
             Preview
           </button>
-          <button data-on={!preview} onClick={() => showPreview(false)}>
+          <button data-on={!preview} onClick={() => showPreview(false)} {...tooltip("Source", { hotkey: "cmd+shift+v", delay: true })}>
             Source
           </button>
         </div>
@@ -381,7 +399,7 @@ export function FileView({
   );
 
   return (
-    <StyledFileView>
+    <StyledFileView ref={rootRef} onKeyDown={onKeyDown}>
       {toolbar === undefined ? (
         <div className="header">
           <div className="name" {...tooltip(file.path, { delay: true })}>
