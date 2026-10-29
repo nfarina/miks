@@ -1279,7 +1279,15 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
               </div>
             ) : item.final ? (
               <Fragment key={item.entry.id}>
-                <div className="final-reply">Reply</div>
+                <div className="final-reply">
+                  Reply
+                  {/* Only where there's a keyboard to press them on. */}
+                  {autoFocus() && (
+                    <span className="keys" {...tooltip("Jump between messages and replies", { delay: true })}>
+                      ⌥↑ ⌥↓
+                    </span>
+                  )}
+                </div>
                 <Reply text={item.entry.text} />
               </Fragment>
             ) : (
@@ -1831,6 +1839,15 @@ const StyledChatPanel = styled.div`
         flex-grow: 1;
         border-top: 1px solid currentColor;
         opacity: 0.4;
+      }
+
+      /* After the line, quietly. */
+      > .keys {
+        order: 1;
+        color: ${colors.textSecondary()};
+        font: ${fonts.display({ size: 11, line: "14px" })};
+        opacity: 0.7;
+        cursor: default;
       }
     }
 
