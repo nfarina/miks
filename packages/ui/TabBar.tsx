@@ -2,7 +2,7 @@ import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { Maximize2, Minimize2, PanelRight, Plus, RotateCw, X } from "lucide-react";
 import type { Tab, Workspace } from "miks/shared/protocol";
-import { Fragment, HTMLAttributes } from "react";
+import { Fragment, HTMLAttributes, useEffect, useRef } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { safeAreaTopBar } from "crosswing/safearea";
@@ -18,11 +18,43 @@ import { StatusDot } from "./StatusDot";
 
 const DRAG_GROUP = "tabs";
 
+/** How wide the fade is at an edge of the tabs with more beyond it. */
+const FADE = 24;
+
 export function TabBar({ workspace, ...rest }: HTMLAttributes<HTMLDivElement> & { workspace: Workspace }) {
   const activeTab = workspace.tabs.find((tab) => tab.id === workspace.activeTabId);
   const chatOpen = useChatOpen(activeTab ?? null);
   const expanded = useExpanded(activeTab ?? null);
   const { sidebarVisible } = useSettings();
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  // How far each edge fades: only where there's more to scroll to.
+  const updateFades = () => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const end = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+    strip.style.setProperty("--fade-start", `${Math.min(Math.max(strip.scrollLeft, 0), FADE)}px`);
+    strip.style.setProperty("--fade-end", `${Math.min(Math.max(end, 0), FADE)}px`);
+  };
+
+  useEffect(() => {
+    const observer = new ResizeObserver(updateFades);
+    observer.observe(stripRef.current!);
+    return () => observer.disconnect();
+  }, []);
+
+  // The tab you're on is always in view.
+  useEffect(() => {
+    updateFades();
+    const strip = stripRef.current!;
+    const active = strip.querySelector<HTMLElement>('[data-active="true"]');
+    if (!active) return;
+    const start = active.offsetLeft - strip.offsetLeft;
+    const end = start + active.offsetWidth;
+    // Clear of the fades.
+    if (start < strip.scrollLeft + FADE) strip.scrollTo({ left: start - FADE, behavior: "smooth" });
+    else if (end > strip.scrollLeft + strip.clientWidth - FADE) strip.scrollTo({ left: end - strip.clientWidth + FADE, behavior: "smooth" });
+  }, [workspace.activeTabId, workspace.tabs.length]);
 
   // Press and hold a tab to drag it along the bar.
   useDraggable({
@@ -35,17 +67,19 @@ export function TabBar({ workspace, ...rest }: HTMLAttributes<HTMLDivElement> & 
     <StyledTabBar data-draggable-root {...rest}>
       {/* While the sidebar shows, it has this itself. */}
       {!sidebarVisible && <SidebarToggle />}
-      <TabDropTarget data-draggable-target="top" data-draggable-group={DRAG_GROUP} />
-      {workspace.tabs.map((tab) => (
-        <Fragment key={tab.id}>
-          <TabView tab={tab} workspaceId={workspace.id} active={tab.id === workspace.activeTabId} />
-          <TabDropTarget
-            data-draggable-target={`after:${tab.id}`}
-            data-draggable-group={DRAG_GROUP}
-            data-draggable-related-id={tab.id}
-          />
-        </Fragment>
-      ))}
+      <div className="tabs" ref={stripRef} onScroll={updateFades}>
+        <TabDropTarget data-draggable-target="top" data-draggable-group={DRAG_GROUP} />
+        {workspace.tabs.map((tab) => (
+          <Fragment key={tab.id}>
+            <TabView tab={tab} workspaceId={workspace.id} active={tab.id === workspace.activeTabId} />
+            <TabDropTarget
+              data-draggable-target={`after:${tab.id}`}
+              data-draggable-group={DRAG_GROUP}
+              data-draggable-related-id={tab.id}
+            />
+          </Fragment>
+        ))}
+      </div>
       <button
         className="new-tab"
         {...tooltip("New tab", { hotkey: "cmd+t", delay: true })}
@@ -100,9 +134,31 @@ export const StyledTabBar = styled.div`
     -webkit-app-region: no-drag;
   }
 
+  /* Tabs that don't fit scroll, between the bar's buttons, which stay put. */
+  > .tabs {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--fade-start, 0px),
+      #000 calc(100% - var(--fade-end, 0px)),
+      transparent
+    );
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
   > .new-tab,
   > .expand-toggle,
   > .chat-toggle {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -169,6 +225,17 @@ export const StyledTabBar = styled.div`
       height: 18px;
     }
   `)}
+
+  /* A phone's width: the tabs take what the buttons leave, shared evenly. */
+  @media (hover: none) and (max-width: 600px) {
+    > .tabs {
+      flex: 1 1 0;
+    }
+
+    > .spacer {
+      display: none;
+    }
+  }
 `;
 
 function TabView({ tab, workspaceId, active }: { tab: Tab; workspaceId: string; active: boolean }) {
@@ -182,7 +249,9 @@ function TabView({ tab, workspaceId, active }: { tab: Tab; workspaceId: string; 
     >
       <div className="box">
         {tab.agent && <StatusDot status={tab.agent.status} />}
-        <div className="title">{tabTitle(tab)}</div>
+        <div className="title">
+          <span>{tabTitle(tab)}</span>
+        </div>
         {tab.kept && (
           <span className="kept" title="Runs again when Miks restores this tab">
             <RotateCw />
@@ -213,7 +282,7 @@ const StyledTab = styled.div`
   display: flex;
   flex-shrink: 1;
   box-sizing: border-box;
-  min-width: 0;
+  min-width: 60px;
   max-width: 222px;
   padding: 0 1px;
   cursor: default;
@@ -256,6 +325,9 @@ const StyledTab = styled.div`
 
     > .close {
       display: flex;
+      flex-shrink: 0;
+      /* At the tab's end, however short its title. */
+      margin-left: auto;
       padding: 2px;
       border: none;
       border-radius: 4px;
@@ -327,7 +399,48 @@ const StyledTab = styled.div`
     &[data-active="true"] > .box > .close {
       opacity: 0.7;
     }
+
+    /* Enough to tell it from the others, and to scroll past that. */
+    min-width: 92px;
   `)}
+
+  /* A phone's width: each tab as wide as what's in it (a dot, ↻ and ✕ take
+     room a plain tab doesn't need), sharing out what's left over. The title
+     wants all its width, but gives it up down to the track's minimum, which
+     a nowrap block's min-content wouldn't: that would be all of it. */
+  @media (hover: none) and (max-width: 600px) {
+    flex: 1 1 auto;
+    min-width: auto;
+
+    > .box {
+      min-width: auto;
+
+      > .title {
+        display: grid;
+        grid-template-columns: minmax(40px, max-content);
+
+        > span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+    }
+
+    /* The tab you're on keeps more of its title, past which the tabs scroll. */
+    &[data-active="true"] > .box > .title {
+      grid-template-columns: minmax(84px, max-content);
+    }
+
+    /* Only the tab you're on has one here, so the others needn't leave room. */
+    &:not([data-active="true"]) > .box {
+      padding-right: 12px;
+
+      > .close {
+        display: none;
+      }
+    }
+  }
 `;
 
 const TabDropTarget = styled.div`
