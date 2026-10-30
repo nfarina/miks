@@ -1,4 +1,5 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
@@ -7,15 +8,16 @@ import "@xterm/xterm/css/xterm.css";
 import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
 import { ModalContext, type ModalContextValue } from "crosswing/modals/context";
 import { displayPath } from "miks/shared/settings";
-import { DragEvent, HTMLAttributes, use, useEffect, useRef } from "react";
+import { DragEvent, HTMLAttributes, use, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { safeArea } from "crosswing/safearea";
 import { daemon, isRemote } from "./daemon";
 import { autoFocus, DEVICE_SETTINGS, getSettings, useSettings } from "./settings";
 import { trackCommands } from "./commandMarks";
+import { FindBar, focusFind, onFind } from "./find";
 import { handleClipboardWrites } from "./osc52";
 import { handlePathLinks } from "./pathLinks";
-import { withModifiers } from "./keys";
+import { keepDeleteRepeating, withModifiers, withoutFiller } from "./keys";
 import { handleWheel } from "./wheel";
 import { openLink } from "./links";
 
@@ -39,6 +41,10 @@ export function TerminalView({
   const dark = useMatchMedia("(prefers-color-scheme: dark)");
   const { showToast } = use(ModalContext);
   const { fontSize, optionAsMeta } = useSettings();
+  const findRef = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findResult, setFindResult] = useState({ count: 0, current: -1 });
 
   useEffect(() => {
     const terminal = new Terminal({
@@ -53,7 +59,10 @@ export function TerminalView({
     });
     const fit = new FitAddon();
     const commands = trackCommands(terminal);
-    const view: View = { tabId, terminal, fit, commands, elsewhere: false };
+    const search = new SearchAddon();
+    terminal.loadAddon(search);
+    const searched = search.onDidChangeResults(({ resultIndex, resultCount }) => setFindResult({ count: resultCount, current: resultIndex }));
+    const view: View = { tabId, terminal, fit, commands, search, elsewhere: false };
     viewRef.current = view;
     views.set(tabId, view);
 
@@ -72,6 +81,7 @@ export function TerminalView({
     const pathLinks = handlePathLinks(terminal, tabId);
     terminal.open(containerRef.current!);
     const wheel = handleWheel(terminal, (data) => daemon.send({ type: "input", tabId, data }));
+    keepDeleteRepeating(terminal, (data) => daemon.send({ type: "input", tabId, data }));
     handleClipboardWrites(terminal, (text) => window.miks?.copy(text));
 
     const unstream = daemon.stream(tabId, (event) => {
@@ -117,13 +127,30 @@ export function TerminalView({
     const input = terminal.onData((data) => {
       if (typed || !userInput) {
         // With the key bar's Ctrl, if it's on (keys.ts).
-        daemon.send({ type: "input", tabId, data: withModifiers(data) });
+        const keys = withModifiers(withoutFiller(data));
+        if (keys === "\x16" && DEVICE_SETTINGS && hasAgent(tabId)) pasteImageFromDevice();
+        else if (keys) daemon.send({ type: "input", tabId, data: keys });
       } else {
         daemon.send({ type: "input", tabId, data, reply: true });
       }
       typed = false;
     });
     const binary = terminal.onBinary((data) => daemon.send({ type: "input", tabId, data }));
+
+    // ⌃V on a device: Claude would read the Mac's clipboard, not this one.
+    const pasteImageFromDevice = () => {
+      void pasteClipboardImage(tabId).then((pasted) => pasted || showToast({ title: "No image on the clipboard" }));
+    };
+    // A paste with only an image on a device, as a drop: xterm.js takes text.
+    const container = containerRef.current!;
+    const onPaste = (event: ClipboardEvent) => {
+      const images = clipboardImages(event.clipboardData);
+      if (!DEVICE_SETTINGS || images.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void attachedText(images, tabId, showToast).then((text) => text && terminal.paste(text));
+    };
+    container.addEventListener("paste", onPaste, { capture: true });
 
     if (activeRef.current) prepareActive(terminal, fit);
     if (daemon.connected) attach();
@@ -153,6 +180,8 @@ export function TerminalView({
 
     return () => {
       observer.disconnect();
+      container.removeEventListener("paste", onPaste, { capture: true });
+      searched.dispose();
       input.dispose();
       userInput?.dispose();
       binary.dispose();
@@ -230,6 +259,30 @@ export function TerminalView({
     };
   }, [active]);
 
+  // ⌘F (find.tsx): through the scrollback, or what's on screen in a
+  // full-screen program, which is all there is of what it's shown.
+  useEffect(() =>
+    onFind([containerRef.current], () => {
+      setFindOpen(true);
+      focusFind(findRef.current);
+    }),
+  );
+
+  function find(query: string, direction: 1 | -1, incremental = false) {
+    const search = viewRef.current?.search;
+    if (!query) return search?.clearDecorations();
+    const options = { incremental, decorations: dark ? findDecorationsDark : findDecorationsLight };
+    if (direction > 0) search?.findNext(query, options);
+    else search?.findPrevious(query, options);
+  }
+
+  function closeFind() {
+    setFindOpen(false);
+    viewRef.current?.search.clearDecorations();
+    viewRef.current?.terminal.clearSelection();
+    viewRef.current?.terminal.focus();
+  }
+
   async function onDrop(event: DragEvent<HTMLDivElement>) {
     const text = await droppedText(event, tabId, showToast);
     if (!text) return;
@@ -239,7 +292,21 @@ export function TerminalView({
   }
 
   return (
-    <StyledTerminalView ref={containerRef} data-active={active} onDragOver={onDragOver} onDrop={onDrop} {...rest} />
+    <StyledTerminalView ref={containerRef} data-active={active} data-find="terminal" onDragOver={onDragOver} onDrop={onDrop} {...rest}>
+      {findOpen && (
+        <FindBar
+          inputRef={findRef}
+          query={findQuery}
+          status={!findQuery ? "" : findResult.count ? `${findResult.current + 1} of ${findResult.count}` : "No results"}
+          onQuery={(query) => {
+            setFindQuery(query);
+            find(query, 1, true);
+          }}
+          onStep={(direction) => find(findQuery, direction)}
+          onClose={closeFind}
+        />
+      )}
+    </StyledTerminalView>
   );
 }
 
@@ -308,6 +375,31 @@ export async function attachedText(files: File[], tabId: string, showToast: Moda
   return paths.length > 0 ? paths.map(shellEscape).join(" ") + " " : null;
 }
 
+/** The images in a paste, unless it has text, which is then what's pasted. */
+export function clipboardImages(clipboard: DataTransfer | null): File[] {
+  if (!clipboard || clipboard.getData("text/plain")) return [];
+  return [...clipboard.files].filter((file) => file.type.startsWith("image/"));
+}
+
+/**
+ * The image on this device's clipboard, if any, for a window with no Mac's
+ * clipboard to go to (`pasteClipboardImage` is the Mac's). Call it from the
+ * tap or key itself: iOS asks with its own Paste button, which needs one. Not
+ * in a page that isn't a secure context, which has no clipboard API.
+ */
+export async function clipboardImageFile(): Promise<File | null> {
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      const type = item.types.find((other) => other.startsWith("image/"));
+      if (type) return new File([await item.getType(type)], `pasted-image.${type.slice("image/".length).replace("jpeg", "jpg")}`, { type });
+    }
+  } catch {}
+  return null;
+}
+
+const hasAgent = (tabId: string) =>
+  !!daemon.getSnapshot().state?.workspaces.some((workspace) => workspace.tabs.some((tab) => tab.id === tabId && tab.agent));
+
 function shellEscape(path: string): string {
   // Only ASCII characters the shell treats specially; "é" stays as it is.
   return path.replace(/[\s!"#$&'()*;<>?[\\\]^`{|}~]/g, "\\$&");
@@ -318,6 +410,7 @@ type View = {
   terminal: Terminal;
   fit: FitAddon;
   commands: ReturnType<typeof trackCommands>;
+  search: SearchAddon;
   /** Drawn at another screen's size, for the one in use, until this one is used again. */
   elsewhere: boolean;
 };
@@ -463,10 +556,18 @@ export const isPasteImageKey = (event: { key: string; ctrlKey: boolean; metaKey:
  * Pastes the clipboard's image into Claude Code's prompt in the tab. On this
  * Mac that's ⌃V, which Claude answers by reading the clipboard itself. On
  * another Mac's window it would read the wrong one, so the image goes over
- * and its path is typed, which Claude takes the way it takes a dropped image.
- * Resolves with whether there was an image.
+ * and its path is typed, which Claude takes the way it takes a dropped image,
+ * as with a device's. Resolves with whether there was an image.
  */
 export async function pasteClipboardImage(tabId: string): Promise<boolean> {
+  // A device's: never ⌃V, which would read the Mac's.
+  if (DEVICE_SETTINGS) {
+    const file = await clipboardImageFile();
+    const sent = file && (await daemon.sendFile(file));
+    if (sent?.path) views.get(tabId)?.terminal.paste(shellEscape(sent.path) + " ");
+    return !!sent?.path;
+  }
+
   const bridge = window.miks;
   const result = (await bridge?.sendClipboardImage(tabId)) ?? { image: false };
   const view = views.get(tabId);
@@ -595,6 +696,10 @@ export const terminalScrollbarCSS = () => `
     }
   }
 `;
+
+const FIND_MATCH = { matchOverviewRuler: "#ffd600", activeMatchColorOverviewRuler: "#ff9600" };
+const findDecorationsDark = { ...FIND_MATCH, matchBackground: "#6b5a00", activeMatchBackground: "#b86a00" };
+const findDecorationsLight = { ...FIND_MATCH, matchBackground: "#fff0a0", activeMatchBackground: "#ffb84d" };
 
 const darkTheme: ITheme = {
   background: TERMINAL_BACKGROUND.dark,

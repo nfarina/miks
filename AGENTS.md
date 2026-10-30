@@ -225,7 +225,9 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   control key; twice, locked), arrows that repeat while held (`typeKey`, in
   the program's cursor-key mode) and buried symbols. Its keys act on
   pointerdown and cancel touchend, so the terminal keeps focus (and the
-  keyboard stays up). Two fingers scroll a terminal as a trackpad does
+  keyboard stays up). Holding the on-screen keyboard's delete: xterm.js
+  keeps its textarea empty, so `keepDeleteRepeating` (`ui/keys.ts`) keeps a
+  zero-width space in it. Two fingers scroll a terminal as a trackpad does
   (`ui/wheel.ts`). Both verified on an iPad. The app looks for a new web
   bundle every 30s while open, and reloads once it's there. Its keyboard
   shortcuts are the Mac menu's, from `buildMenu` in `ios/Miks/AppDelegate.swift`
@@ -416,7 +418,9 @@ resizes); keep it passing.
   transcript is a tree (each line's `parentUuid`): a rewind carries on
   from an earlier line, leaving the rest in the file, so the panel shows
   the path back from the latest line, and a `reset` when it stops
-  continuing the one shown. A compaction (`compact_boundary`) has no
+  continuing the one shown. Rewinding itself writes nothing (a real one
+  left the file as it was), so the panel can't see it until the next
+  message. A compaction (`compact_boundary`) has no
   parent (its `logicalParentUuid` is in no line), so the path crosses it to
   the line written before it. Files run past 100MB (tool output);
   only the tree's lines (they start with `{"parentUuid"`) are parsed, and
@@ -446,7 +450,10 @@ resizes); keep it passing.
   The composer's paperclip types files as paths on the tab's Mac, as a drop
   does (`attachedText` in `TerminalView.tsx`); from a device without the
   Mac's files (the iOS app), the daemon writes them to its tmpdir
-  (`sendFile`). Its microphone records with `MediaRecorder` (a timeslice,
+  (`sendFile`). A device's clipboard image goes the same way: a paste
+  with one, the paperclip's Paste image, or ⌃V (`clipboardImageFile`, the
+  clipboard API, for which iOS shows its own Paste button; in a Claude tab,
+  ⌃V never reaches Claude, who'd read the Mac's clipboard). Its microphone records with `MediaRecorder` (a timeslice,
   or Safari hands over nothing) and the daemon has Groq transcribe it
   (`server/Dictation.ts`, `whisper-large-v3-turbo`), with the key as
   `groq` in `keys.json` in Miks's home, never in a page: the iOS app's
@@ -554,6 +561,12 @@ resizes); keep it passing.
   opened), only in a Miks window on this Mac, never a remote's or a
   browser's. The click looks again, from where the shell is that moment
   (`now`, an `lsof`), so a `cd` just before it counts.
+- ⌘F (`ui/find.tsx`, `listenForFind`) goes to what has the keyboard, by
+  `data-find`: a chat or rendered markdown searches its text as CSS Custom
+  Highlight ranges, so the DOM never changes, a terminal through
+  `@xterm/addon-search`, and CodeMirror keeps its own (a focused `.cm-editor`).
+  Only ⌘, not ⌃F, a program's. A full-screen program (Claude Code) has only
+  its screen to search.
 - A click on code in a chat message (`ui/codeMenu.tsx`; not in a block or
   a link) shows a menu: Copy, and for one that's there on the tab's Mac
   (`findPaths`, from the tab's folder), Open (a file in the panel, a folder

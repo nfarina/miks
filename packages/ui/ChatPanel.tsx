@@ -2,12 +2,14 @@ import { colors } from "crosswing/colors";
 import { BottomScrollable } from "crosswing/components/BottomScrollable";
 import { PanelLayout, PanelLayoutContext, StyledPanelLayout } from "crosswing/components/PanelLayout";
 import { StyledTextArea, TextArea } from "crosswing/components/forms/TextArea";
+import { PopupMenu, PopupMenuText } from "crosswing/components/PopupMenu";
 import { fonts } from "crosswing/fonts";
 import { ModalContext } from "crosswing/modals/context";
 import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView";
+import { usePopup } from "crosswing/modals/popup/usePopup";
 import { tooltip } from "crosswing/modals/popup";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
-import { ArrowUp, ChevronRight, ChevronUp, LoaderCircle, Mic, Paperclip, Square, TextQuote, X } from "lucide-react";
+import { ArrowUp, ChevronRight, ChevronUp, ClipboardPaste, LoaderCircle, Mic, Paperclip, Square, TextQuote, X } from "lucide-react";
 import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
@@ -31,14 +33,17 @@ import { BrowseView } from "./BrowseView";
 import { useCodeMenu } from "./codeMenu";
 import { daemon } from "./daemon";
 import { useDictation } from "./dictation";
+import { onFind, useFind } from "./find";
 import { StyledWaveform, Waveform } from "./Waveform";
 import { closeFile, FileView } from "./FileView";
 import { accentColor, addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
-import { autoFocus, useSettings } from "./settings";
+import { autoFocus, DEVICE_SETTINGS, useSettings } from "./settings";
 import { openLink } from "./links";
 import {
   attachedText,
+  clipboardImageFile,
+  clipboardImages,
   droppedText,
   focusActiveTerminal,
   isPasteImageKey,
@@ -1144,7 +1149,10 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
   // ⌃V (or ⌘V with only an image) puts the clipboard's image in Claude's
   // prompt, in the terminal, ahead of what you send from here.
   async function pasteImage() {
-    const image = await pasteClipboardImage(tab.id);
+    // A device's goes in with what you're writing, as an attachment does.
+    const file = DEVICE_SETTINGS ? await clipboardImageFile() : null;
+    if (file) return attach([file]);
+    const image = !DEVICE_SETTINGS && (await pasteClipboardImage(tab.id));
     setNotice({
       id: (notice?.id ?? 0) + 1,
       text: image ? "Image pasted into Claude's prompt" : "No image on the clipboard",
@@ -1181,7 +1189,17 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
     [tab.id],
   );
 
+  const find = useFind(scroller, { onClose: focusComposer, style: { top: (scroller()?.offsetTop ?? 0) + 8 } });
+  useEffect(() => onFind([scroller(), composerRef.current], find.show));
+
   const fileInput = useRef<HTMLInputElement>(null);
+  // On a device, a text field may not offer Paste for an image alone.
+  const attachMenu = usePopup(() => (
+    <PopupMenu>
+      <PopupMenuText icon={<ClipboardPaste />} onClick={() => void pasteImage()} children="Paste image" />
+      <PopupMenuText icon={<Paperclip />} onClick={() => fileInput.current?.click()} children="Photo or file" />
+    </PopupMenu>
+  ));
   const dictation = useDictation({
     onText: insert,
     onError: (error) => showToast({ title: "Couldn't dictate", message: error, destructive: true }),
@@ -1288,6 +1306,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
     <>
       <BottomScrollable
         className="scroller"
+        data-find="chat"
         onScroll={(event) => {
           // Not hidden (a file showing instead), where it isn't you scrolling.
           if (!event.currentTarget.offsetParent) return;
@@ -1394,9 +1413,11 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
       >
         <ChevronUp size={18} />
       </button>
+      {find.bar}
       <form
         className="composer"
         ref={composerRef}
+        data-find="chat"
         onSubmit={(event) => {
           event.preventDefault();
           send();
@@ -1410,7 +1431,10 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
           className="tool attach"
           disabled={!session}
           {...tooltip("Attach files", { delay: true })}
-          onClick={() => fileInput.current?.click()}
+          onClick={(event) => {
+            if (DEVICE_SETTINGS && window.isSecureContext) attachMenu.onClick(event);
+            else fileInput.current?.click();
+          }}
         >
           <Paperclip size={19} />
         </button>
@@ -1434,6 +1458,11 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
             onPaste={(event) => {
               // An image and no text: what Claude takes is the image.
               const { clipboardData } = event;
+              const images = clipboardImages(clipboardData);
+              if (DEVICE_SETTINGS && images.length > 0) {
+                event.preventDefault();
+                return void attach(images);
+              }
               if (clipboardData.getData("text/plain") || ![...clipboardData.items].some((item) => item.type.startsWith("image/"))) return;
               event.preventDefault();
               void pasteImage();
@@ -1696,7 +1725,8 @@ const StyledChatPanel = styled.div`
     }
   }
 
-  &:not([data-showing="chat"]) > .catch-up {
+  &:not([data-showing="chat"]) > .catch-up,
+  &:not([data-showing="chat"]) > .find-bar {
     display: none;
   }
 

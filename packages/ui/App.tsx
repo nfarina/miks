@@ -31,6 +31,7 @@ import { renderMarkdown } from "./markdown";
 import { getSettings, setFontSize, updateSettings, useSettings } from "./settings";
 import { Sidebar } from "./Sidebar";
 import { STATUS_LABELS, workspaceTitle } from "./status";
+import { listenForFind } from "./find";
 import { StyledTabBar, TabBar } from "./TabBar";
 import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
@@ -91,6 +92,7 @@ export function App() {
   useAgentNotifications(state);
   useLongReplyOpening(state);
   useHandoff(state);
+  useEffect(listenForFind, []);
 
   // Coming back to a dropped connection (a phone that slept), the last
   // screen stays up while it reconnects; the terminals attach again then.

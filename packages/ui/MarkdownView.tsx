@@ -3,6 +3,7 @@ import { fonts } from "crosswing/fonts";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
+import { onFind, useFind } from "./find";
 import { daemon, type ImageResult } from "./daemon";
 import { openLink } from "./links";
 import { addCopyButtons, copyCode, markdownCSS, renderMarkdownDocument, resolveLocalPath } from "./markdown";
@@ -30,6 +31,8 @@ export function MarkdownView({
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const find = useFind(() => contentRef.current, { onClose: () => scrollerRef.current?.focus() });
+  useEffect(() => onFind([scrollerRef.current], find.show));
   // What's on screen: replaced only when it'd come out different.
   const shownRef = useRef<string | null>(null);
   // Where to stay as the content changes size (images arriving), until
@@ -238,6 +241,7 @@ export function MarkdownView({
         className="markdown-view"
         ref={scrollerRef}
         tabIndex={-1}
+        data-find="file"
         // You scrolling: stay where you put it, not where it was.
         onWheel={() => (pinRef.current = null)}
         onPointerDown={() => (pinRef.current = null)}
@@ -261,6 +265,7 @@ export function MarkdownView({
           }}
         />
       </StyledMarkdownView>
+      {find.bar}
     </>
   );
 }

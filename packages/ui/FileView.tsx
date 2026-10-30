@@ -153,6 +153,17 @@ export function FileView({
         doc: diskRef.current.content ?? "",
         extensions: [
           basicSetup,
+          // CodeMirror's find says these in lowercase.
+          EditorState.phrases.of({
+            next: "Next",
+            previous: "Previous",
+            all: "All",
+            "match case": "Match case",
+            regexp: "Regexp",
+            "by word": "By word",
+            replace: "Replace",
+            "replace all": "Replace all",
+          }),
           keymap.of([
             {
               key: "Mod-s",
@@ -548,6 +559,7 @@ const StyledFileControls = styled.div`
 `;
 
 const StyledFileView = styled.div`
+  position: relative;
   flex-grow: 1;
   min-height: 0;
   display: flex;
@@ -659,6 +671,89 @@ const StyledFileView = styled.div`
 
       &.cm-focused {
         outline: none;
+      }
+
+      /* CodeMirror's find, as chatwing's apps have it. */
+      .cm-searchMatch-selected > * {
+        color: inherit;
+      }
+
+      > .cm-panels {
+        border-top: 1px solid ${colors.separator()};
+        background: ${colors.textBackgroundPanel()};
+        color: ${colors.text()};
+
+        > .cm-search {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 34px 7px 10px;
+          font: ${fonts.display({ size: 13 })};
+
+          > br {
+            flex-basis: 100%;
+            height: 0;
+            content: "";
+          }
+
+          > input {
+            margin: 0;
+            padding: 4px 10px;
+            border: 1px solid ${colors.separator()};
+            border-radius: 6px;
+            background: ${colors.textBackground()};
+            color: ${colors.text()};
+            font: ${fonts.displayMono({ size: 13 })};
+
+            &:focus {
+              outline: 1px solid ${colors.mediumBlue()};
+            }
+          }
+
+          > label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin: 0;
+            font: inherit;
+
+            > input {
+              margin: 0;
+            }
+          }
+
+          > button {
+            appearance: none;
+            box-sizing: border-box;
+            min-height: 28px;
+            margin: 0;
+            padding: 4px 10px;
+            border: none;
+            border-radius: 6px;
+            background: ${colors.buttonBackgroundGlow()};
+            background-image: none;
+            color: ${colors.text()};
+            font: ${fonts.display({ size: 13 })};
+
+            &:focus {
+              outline: 1px solid ${colors.mediumBlue()};
+            }
+          }
+
+          > button[name="close"] {
+            position: absolute;
+            top: 7px;
+            right: 6px;
+            min-height: 0;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            background: transparent;
+            color: ${colors.textSecondary()};
+            font: ${fonts.display({ size: 20 })};
+          }
+        }
       }
 
       .cm-scroller {
