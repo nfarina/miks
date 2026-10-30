@@ -375,6 +375,12 @@ class WebAppViewController:
             let id = Bundle.main.bundleIdentifier ?? ""
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)")!)
 
+        case "setHandoffPath":
+            // Assigned to us so AppKit keeps it current while we're frontmost.
+            userActivity?.invalidate()
+            userActivity = Handoff.activity(forPath: body["path"] as? String)
+            userActivity?.becomeCurrent()
+
         case "requestReview":
             // Best-effort native star-rating dialog. Apple rate-limits it
             // (~3×/year) and decides whether to actually show it, so the web

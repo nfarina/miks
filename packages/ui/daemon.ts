@@ -32,6 +32,11 @@ export type MiksBridge = {
   setSettings(changes: Partial<Settings>): void;
   onSettings(listener: (settings: Settings) => void): Unsubscribe;
   focus(): void;
+  /** Advertises this tab for Handoff (handoff.ts); missing from an older preload. */
+  handoff?(path: string | null): void;
+  /** A Handoff that arrived before any window was up. */
+  takeHandoff?(): string | null;
+  onHandoff?(listener: (path: string) => void): Unsubscribe;
   getTarget(): Target | null;
   onTarget(listener: (target: Target | null) => void): Unsubscribe;
   openRemote(id: string): void;

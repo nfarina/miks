@@ -66,6 +66,8 @@ export interface HostContextValue {
   }): Promise<void>;
   requestLocationUpdate(): Promise<void>;
   openSettings(): Promise<void>;
+  /** Advertises this page for Handoff to the user's other devices. Pass null if there's nothing to pick up. */
+  setHandoffPath(path: string | null): void;
   /** Best-effort: asks the OS to present its native "rate this app" star dialog (iOS StoreKit). No-op off native; the OS rate-limits and may show nothing. */
   requestReview(): Promise<void>;
   badgeAppIcon(badge: number): Promise<void>;

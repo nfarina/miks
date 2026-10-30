@@ -42,6 +42,12 @@
 	</dict>
 	<!-- The chat panel's dictation, and the attachment picker's Take Photo
 	     (without which taking one crashes the app). -->
+	<!-- Handoff with the Mac app (see Shared/Handoff.swift); it's Electron, and
+	     names this same type in scripts/build-app.ts. -->
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).page</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Miks listens while you dictate a message.</string>
 	<key>NSCameraUsageDescription</key>

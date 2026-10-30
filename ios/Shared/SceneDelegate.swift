@@ -48,9 +48,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // application(_:continue:). (Push-notification taps are still delivered
         // to UNUserNotificationCenterDelegate.didReceive on the AppDelegate.)
         for activity in connectionOptions.userActivities {
-            if let url = activity.webpageURL {
-                log.info("Cold-launch universal link: \(url)")
-                appDelegate?.webAppController?.handleDeepLink(link: url.absoluteString)
+            if let path = activity.appPath {
+                log.info("Cold-launch user activity: \(path)")
+                appDelegate?.webAppController?.handleDeepLink(link: path)
             }
         }
 
@@ -80,10 +80,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // @chatwing:sceneLifecycle:end
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
-        // Warm universal links (app already running) arrive here.
-        if let url = userActivity.webpageURL {
-            log.info("Continuing universal link: \(url)")
-            appDelegate?.webAppController?.handleDeepLink(link: url.absoluteString)
+        // Handoff, and warm universal links (app already running), arrive here.
+        if let path = userActivity.appPath {
+            log.info("Continuing user activity: \(path)")
+            appDelegate?.webAppController?.handleDeepLink(link: path)
         }
     }
 

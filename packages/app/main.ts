@@ -798,6 +798,40 @@ ipcMain.on("miks:focus", (event) => {
 });
 
 //
+// Handoff with the iOS app (ui/handoff.ts). Its bundle ID is the shell's, so
+// its activity type is what Shared/Handoff.swift makes of that, and the URL
+// needs to be a real one but only its path and query mean anything.
+//
+
+const HANDOFF_TYPE = "com.nfarina.miks.ios.page";
+const HANDOFF_SITE = "https://miks-app.nfarina.com";
+
+let pendingHandoff: string | null = null;
+
+ipcMain.on("miks:handoff", (_event, path: string | null) => {
+  if (path) app.setUserActivity(HANDOFF_TYPE, {}, HANDOFF_SITE + path);
+  else app.invalidateCurrentActivity();
+});
+
+ipcMain.on("miks:takeHandoff", (event) => {
+  event.returnValue = pendingHandoff;
+  pendingHandoff = null;
+});
+
+app.on("will-continue-activity", (event, type) => {
+  if (type === HANDOFF_TYPE) event.preventDefault();
+});
+
+app.on("continue-activity", (event, type, _userInfo, details) => {
+  if (type !== HANDOFF_TYPE || !details.webpageURL) return;
+  event.preventDefault();
+  const { pathname, search } = new URL(details.webpageURL);
+  const path = pathname + search;
+  if (windows.size === 0) pendingHandoff = path;
+  for (const window of windows.values()) window.webContents.send("miks:handoff", path);
+});
+
+//
 // Settings, in settings.json, shared by every window.
 //
 

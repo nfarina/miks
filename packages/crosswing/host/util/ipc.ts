@@ -105,6 +105,11 @@ export async function openSettings() {
   post("openSettings");
 }
 
+/** Advertises this page for Handoff to the user's other devices. Pass null if there's nothing to pick up. */
+export function setHandoffPath(path: string | null) {
+  post("setHandoffPath", { path });
+}
+
 export async function requestReview() {
   post("requestReview");
 }

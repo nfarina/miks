@@ -36,6 +36,7 @@ import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
 import { VersionDialog } from "./VersionDialog";
 import { KeyBar } from "./KeyBar";
+import { useHandoff } from "./handoff";
 import { MacChooser, Ring } from "./MacChooser";
 import {
   clearActiveTerminal,
@@ -89,6 +90,7 @@ export function App() {
   useAppearanceReporting(connected);
   useAgentNotifications(state);
   useLongReplyOpening(state);
+  useHandoff(state);
 
   // Coming back to a dropped connection (a phone that slept), the last
   // screen stays up while it reconnects; the terminals attach again then.

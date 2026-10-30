@@ -497,6 +497,12 @@ class WebAppViewController:
         case "openSettings":
             UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
 
+        case "setHandoffPath":
+            // Assigned to us so UIKit keeps it current while we're on screen.
+            userActivity?.invalidate()
+            userActivity = Handoff.activity(forPath: body["path"] as? String)
+            userActivity?.becomeCurrent()
+
         case "requestReview":
             // Best-effort native star-rating dialog. Apple rate-limits it
             // (~3×/year) and decides whether to actually show it, so the web

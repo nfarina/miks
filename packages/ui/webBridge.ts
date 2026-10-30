@@ -474,6 +474,9 @@ function webBridge(): MiksBridge {
     onStatus: (listener) => subscribe(statusListeners, listener),
     // The iOS app's keyboard shortcuts (AppDelegate.swift), as the Mac app's menu sends them.
     onCommand: (listener) => subscribe(commandListeners, listener),
+    handoff: (path) => {
+      if (inApp) (window as any).webkit.messageHandlers.default.postMessage({ name: "setHandoffPath", path });
+    },
     pathForFile: () => "",
     sendFiles: async () => [],
     sendClipboardImage: async () => ({ image: false }),

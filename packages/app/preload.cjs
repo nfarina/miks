@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld("miks", {
   copy: (text) => ipcRenderer.send("miks:copy", text),
   /** Brings this window forward (a notification was clicked). */
   focus: () => ipcRenderer.send("miks:focus"),
+  /** Advertises this tab for Handoff (ui/handoff.ts), or nothing. */
+  handoff: (path) => ipcRenderer.send("miks:handoff", path),
+  takeHandoff: () => ipcRenderer.sendSync("miks:takeHandoff"),
+  onHandoff: (listener) => subscribe("miks:handoff", listener),
   /** The path of a dropped file; File.path no longer exists in Electron. */
   pathForFile: (file) => webUtils.getPathForFile(file),
   /** Copies dropped files to a temporary folder (on a remote window's Mac) or the tab's; resolves with where. */

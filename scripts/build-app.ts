@@ -160,6 +160,8 @@ export async function buildApp(): Promise<string> {
       ],
       // miks://update, which `miks update` opens.
       CFBundleURLTypes: [{ CFBundleURLName: "com.nfarina.miks", CFBundleURLSchemes: ["miks"] }],
+      // Handoff with the iOS app, whose activity type this is (main.ts).
+      NSUserActivityTypes: ["com.nfarina.miks.ios.page"],
       ...usageDescriptions,
     },
     afterCopy: [({ buildPath }) => giveOwnUUIDs(path.resolve(buildPath, "../.."))],
