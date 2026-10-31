@@ -433,7 +433,7 @@ export async function serve({
         case "listFiles": {
           const { requestId } = message;
           if (!path.isAbsolute(message.path)) return;
-          void listFiles(message.path).then((list) => send({ type: "fileList", requestId, ...list }));
+          void listFiles(message.path, message.roots).then((list) => send({ type: "fileList", requestId, ...list }));
           return;
         }
         case "readImage": {

@@ -13,7 +13,7 @@ const MAX_MATCHES = 5000;
 /** A line's text is cut to about this around its first match (minified files have very long ones). */
 const MAX_LINE = 300;
 /** ⌘P filters these in the window. */
-const MAX_FILES = 50_000;
+const MAX_FILES = 200_000;
 const SEND_EVERY = 60;
 
 /** Never searched unless you ask for ignored files: repos often forget to ignore them, and folders that aren't repos have no `.gitignore`. */
@@ -142,11 +142,25 @@ function repoRoot(folder: string): string | null {
   }
 }
 
-/** Every file ripgrep would search under `folder`'s repo (or `folder`, outside one), for ⌘P. */
-export function listFiles(folder: string): Promise<{ root: string; paths: string[]; truncated: boolean }> {
-  const root = repoRoot(folder) ?? folder;
+/** The deepest folder holding all of these. */
+function commonFolder(folders: string[]): string {
+  let common = folders[0];
+  while (!folders.every((folder) => folder === common || folder.startsWith(common === "/" ? "/" : `${common}/`))) common = path.dirname(common);
+  return common;
+}
+
+/**
+ * Every file ripgrep would search under `folder`'s repo (or `folder`, outside
+ * one), or under `roots` instead, for ⌘P: relative to the `root` it answers
+ * with, so the paths to match against start where they differ.
+ */
+export function listFiles(folder: string, roots?: string[]): Promise<{ root: string; paths: string[]; truncated: boolean }> {
+  const folders = roots?.map(expand).filter((root) => path.isAbsolute(root) && fs.existsSync(root));
+  if (folders?.length === 0) return Promise.resolve({ root: folder, paths: [], truncated: false });
+  const root = folders ? commonFolder(folders) : (repoRoot(folder) ?? folder);
+  const within = folders && folders.length > 1 ? folders.map((entry) => path.relative(root, entry) || ".") : [];
   return new Promise((resolve) => {
-    const child = spawn(ripgrep(), ["--files", "--no-config", "--no-messages", ...SKIP.flatMap((glob) => ["--glob", glob])], {
+    const child = spawn(ripgrep(), ["--files", "--no-config", "--no-messages", ...SKIP.flatMap((glob) => ["--glob", glob]), "--", ...within], {
       cwd: root,
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -157,7 +171,7 @@ export function listFiles(folder: string): Promise<{ root: string; paths: string
     child.stdout.on("data", (chunk: string) => {
       const lines = (rest + chunk).split("\n");
       rest = lines.pop()!;
-      paths.push(...lines);
+      for (const line of lines) paths.push(line.replace(/^\.\//, ""));
       if (paths.length >= MAX_FILES) {
         truncated = true;
         child.kill();

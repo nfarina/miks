@@ -1,14 +1,27 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
+import { tooltip } from "crosswing/modals/popup";
 import type { Tab } from "miks/shared/protocol";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon } from "./daemon";
 import { FileIcon } from "./fileIcons";
 import { openInPanel } from "./FileView";
+import { useSettings } from "./settings";
 import { terminalScrollbarCSS } from "./TerminalView";
 
 const MAX_SHOWN = 100;
+const SCOPE_KEY = "QuickOpen:scope";
+
+type Scope = "folder" | "all";
+
+function savedScope(): Scope {
+  try {
+    return localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "folder";
+  } catch {
+    return "folder";
+  }
+}
 
 /**
  * How well `query` fits `path`, its letters in order, or null if they
@@ -37,23 +50,37 @@ export function fitScore(query: string, path: string): { score: number; hits: nu
   return { score, hits };
 }
 
-/** ⌘P: finds a file in the tab's repo by a few letters of its path, and opens it in the panel. */
+/** ⌘P: finds a file in the tab's repo, or all your code (Settings), by a few letters of its path, and opens it in the panel. */
 export function QuickOpen({ tab, onClose }: { tab: Tab; onClose: () => void }) {
   const [list, setList] = useState<{ root: string; paths: string[]; truncated: boolean } | null>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const { searchFolders } = useSettings();
+  const canScope = daemon.speaks(21);
+  const [savedChoice, setScopeChoice] = useState(savedScope);
+  const scope = canScope ? savedChoice : "folder";
+
+  function setScope(next: Scope) {
+    setScopeChoice(next);
+    setActive(0);
+    try {
+      localStorage.setItem(SCOPE_KEY, next);
+    } catch {}
+  }
 
   useEffect(() => {
     let current = true;
-    void daemon.listFiles(tab.cwd ?? daemon.getSnapshot().state?.home ?? "/").then(
+    setList(null);
+    const roots = scope === "all" ? searchFolders.split(",").map((root) => root.trim()).filter(Boolean) : undefined;
+    void daemon.listFiles(tab.cwd ?? daemon.getSnapshot().state?.home ?? "/", roots).then(
       (result) => current && setList(result),
       () => current && setList({ root: "", paths: [], truncated: false }),
     );
     return () => {
       current = false;
     };
-  }, []);
+  }, [scope]);
 
   const matches = (list?.paths ?? [])
     .flatMap((path) => {
@@ -70,6 +97,10 @@ export function QuickOpen({ tab, onClose }: { tab: Tab; onClose: () => void }) {
   }
 
   function onKeyDown(event: KeyboardEvent) {
+    if (canScope && event.code === "KeyV" && event.metaKey && event.shiftKey && !event.altKey && !event.ctrlKey) {
+      event.preventDefault();
+      return setScope(scope === "all" ? "folder" : "all");
+    }
     const move = (next: number) => {
       const index = Math.max(0, Math.min(matches.length - 1, next));
       setActive(index);
@@ -87,18 +118,31 @@ export function QuickOpen({ tab, onClose }: { tab: Tab; onClose: () => void }) {
   return (
     <StyledQuickOpen onClick={onClose}>
       <div className="box" onClick={(event) => event.stopPropagation()} onKeyDown={onKeyDown}>
-        <input
-          autoFocus
-          value={query}
-          placeholder="Go to file"
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setActive(0);
-          }}
-        />
+        <div className="field">
+          <input
+            autoFocus
+            value={query}
+            placeholder="Go to file"
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActive(0);
+            }}
+          />
+          {canScope && (
+            // Pressing one leaves the keyboard in the field.
+            <div className="mode" onMouseDown={(event) => event.preventDefault()}>
+              <button data-on={scope === "folder"} onClick={() => setScope("folder")} {...tooltip("This repo", { hotkey: "cmd+shift+v", delay: true })}>
+                This repo
+              </button>
+              <button data-on={scope === "all"} onClick={() => setScope("all")} {...tooltip(searchFolders, { hotkey: "cmd+shift+v", delay: true })}>
+                All code
+              </button>
+            </div>
+          )}
+        </div>
         <div className="list" ref={listRef}>
           {matches.map(({ path, hits }, index) => (
             <div key={path} className="row" data-active={index === active} onClick={() => open(path)} onMouseMove={() => setActive(index)}>
@@ -148,15 +192,50 @@ const StyledQuickOpen = styled.div`
     color: ${colors.text()};
     box-shadow: 0 8px 32px rgb(0 0 0 / 0.3);
 
-    > input {
+    > .field {
       flex-shrink: 0;
-      padding: 10px 14px;
-      border: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-right: 10px;
       border-bottom: 1px solid ${colors.separator()};
-      outline: none;
-      background: none;
-      color: inherit;
-      font: ${fonts.display({ size: 15, line: "22px" })};
+
+      > input {
+        flex: 1;
+        min-width: 0;
+        padding: 10px 14px;
+        border: none;
+        outline: none;
+        background: none;
+        color: inherit;
+        font: ${fonts.display({ size: 15, line: "22px" })};
+      }
+
+      /* Like a file's Preview | Source. */
+      > .mode {
+        flex-shrink: 0;
+        display: flex;
+        padding: 2px;
+        border-radius: 8px;
+        background: ${colors.buttonBackgroundGlow()};
+
+        > button {
+          height: 22px;
+          padding: 0 10px;
+          border: none;
+          border-radius: 6px;
+          background: transparent;
+          color: ${colors.textSecondary()};
+          font: ${fonts.displayMedium({ size: 12, line: "16px" })};
+          cursor: pointer;
+
+          &[data-on="true"] {
+            background: ${colors.textBackground()};
+            color: ${colors.text()};
+            box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+          }
+        }
+      }
     }
 
     > .list {

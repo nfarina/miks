@@ -64,6 +64,15 @@ describe("Search", () => {
     expect(paths).toEqual(["src/a.ts"]);
   });
 
+  it("lists files across folders, relative to what they share", async () => {
+    fs.mkdirSync(path.join(root, "other"));
+    fs.writeFileSync(path.join(root, "other/b.ts"), "");
+    const { root: found, paths } = await listFiles(root, [path.join(root, "src"), path.join(root, "other")]);
+    fs.rmSync(path.join(root, "other"), { recursive: true });
+    expect(found).toBe(root);
+    expect(paths.sort()).toEqual(["other/b.ts", "src/a.ts"]);
+  });
+
   it("lists a folder with folders first, marking what's ignored", async () => {
     const entries = await readFolder(root);
     expect(entries.map((entry) => entry.name)).toEqual(["dist", "node_modules", "src", ".gitignore"]);

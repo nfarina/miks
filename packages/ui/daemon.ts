@@ -268,8 +268,8 @@ class DaemonClient {
   }
 
   /** Every file around a folder, for ⌘P. */
-  listFiles(path: string): Promise<Extract<DaemonMessage, { type: "fileList" }>> {
-    return this.request((requestId) => ({ type: "listFiles", requestId, path }));
+  listFiles(path: string, roots?: string[]): Promise<Extract<DaemonMessage, { type: "fileList" }>> {
+    return this.request((requestId) => ({ type: "listFiles", requestId, path, roots }));
   }
 
   /** Sends a request whose answer has the same `requestId`; an older daemon's never comes. */

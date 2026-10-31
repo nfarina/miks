@@ -573,7 +573,9 @@ resizes); keep it passing.
   (⌘⇧F, `ui/SearchView.tsx`) at the start of its row, which aren't
   `PanelView`s you can close or drag, nor stops for ⌘⇧[ and ⌘⇧]. ⌘⇧C, ⌘⇧E
   and ⌘⇧F each go to their view, and close the panel if the keyboard's
-  already in it (`showView`); ⌥⌘B just opens or closes it. ⌘P (`ui/QuickOpen.tsx`) finds a file in
+  already in it (`showView`); ⌥⌘B just opens or closes it. ⌘⇧V switches ⌘P and
+  Find in files between here and All code, as it does a file's Preview |
+  Source. ⌘P (`ui/QuickOpen.tsx`) finds a file in
   the repo around the tab's folder. All three are the daemon's
   (`server/Search.ts`, since protocol 20), so a remote window's or the iOS
   app's search runs on that Mac. Search is ripgrep, pinned and checksummed in

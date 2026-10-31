@@ -88,6 +88,10 @@ export function SearchView({ tab, onHide }: { tab: Tab; onHide: () => void }) {
   }
 
   function onKeyDown(event: KeyboardEvent) {
+    if (event.code === "KeyV" && event.metaKey && event.shiftKey && !event.altKey && !event.ctrlKey) {
+      event.preventDefault();
+      return set({ scope: options.scope === "all" ? "folder" : "all" });
+    }
     if (event.key === "Escape") {
       // A first Escape in the field empties it, as in VS Code.
       if (query && (event.target as HTMLElement).hasAttribute("data-panel-focus")) setQuery("");
@@ -141,13 +145,13 @@ export function SearchView({ tab, onHide }: { tab: Tab; onHide: () => void }) {
           <Toggle label=".*" hint="Regular expression" on={options.regex} onClick={() => set({ regex: !options.regex })} />
         </div>
         <div className="scope">
-          <button data-on={options.scope === "folder"} onClick={() => set({ scope: "folder" })}>
+          <button data-on={options.scope === "folder"} onClick={() => set({ scope: "folder" })} {...tooltip("Search the tab's folder", { hotkey: "cmd+shift+v", delay: true, placement: "below" })}>
             This folder
           </button>
           <button
             data-on={options.scope === "all"}
             onClick={() => set({ scope: "all" })}
-            {...tooltip(displayPathList(searchFolders), { delay: true, placement: "below" })}
+            {...tooltip(displayPathList(searchFolders), { hotkey: "cmd+shift+v", delay: true, placement: "below" })}
           >
             All code
           </button>

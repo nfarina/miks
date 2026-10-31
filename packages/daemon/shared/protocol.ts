@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 20;
+export const PROTOCOL_VERSION = 21;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -344,8 +344,12 @@ export type ClientMessage =
   /** Searches files: answered by `searchResults`, a few at a time. Since protocol 20. */
   | { type: "search"; requestId: string; options: SearchOptions }
   | { type: "cancelSearch"; requestId: string }
-  /** Every file in the repo around a folder (or that folder), for ⌘P: answered by `fileList`. Since protocol 20. */
-  | { type: "listFiles"; requestId: string; path: string }
+  /**
+   * Every file in the repo around a folder (or that folder), for ⌘P, or with
+   * `roots` (absolute, or from `~`; since protocol 21), in those instead:
+   * answered by `fileList`. Since protocol 20.
+   */
+  | { type: "listFiles"; requestId: string; path: string; roots?: string[] }
   /**
    * Reads an image a markdown file in a panel shows (`path` absolute, on the
    * daemon's Mac, and an image by its extension); answered by `image` with
