@@ -56,6 +56,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // Launched by a link to our URL scheme, or a quick action.
         for context in connectionOptions.urlContexts {
+            if openAppPath(context.url) { continue }
             _ = DevServer.handle(url: context.url, webApp: appDelegate?.webAppController)
         }
         if let shortcutItem = connectionOptions.shortcutItem {
@@ -89,10 +90,24 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {
+            if openAppPath(context.url) { continue }
             if !DevServer.handle(url: context.url, webApp: appDelegate?.webAppController) {
                 log.info("Ignoring URL \(context.url)")
             }
         }
+    }
+
+    /// `sage://open?path=/some/page` opens that page of the web app. The share
+    /// extension uses it to land on the Sage Plus upsell after saving a share
+    /// for someone out of AI actions.
+    private func openAppPath(_ url: URL) -> Bool {
+        guard url.host == "open" else { return false }
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard let path = query.first(where: { $0.name == "path" })?.value, path.hasPrefix("/")
+        else { return true }
+        log.info("Opening app path \(path)")
+        appDelegate?.webAppController?.handleDeepLink(link: path)
+        return true
     }
 
     func windowScene(

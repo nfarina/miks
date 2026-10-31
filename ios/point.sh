@@ -20,6 +20,12 @@
 #                                   # and have the device cache it - so it keeps
 #                                   # working away from this machine. The way to
 #                                   # hand over a build to try.
+#   ios/point.sh --restart …        # restart the app on the iPhone or iPad to
+#                                   # deliver the link, for when it isn't taken
+#                                   # up by the running app
+#
+# Exits nonzero unless the device really switched, which it checks by reading
+# the app's own settings and bundle back off the device.
 
 set -euo pipefail
 
@@ -29,9 +35,14 @@ PROJECT="$(ls -d *.xcodeproj | head -1)"
 APP_NAME="$(basename "$PROJECT" .xcodeproj)"
 
 BUNDLE=0
+RESTART=0
 ARGS=()
 for arg in "$@"; do
-  if [[ "$arg" == "--bundle" ]]; then BUNDLE=1; else ARGS+=("$arg"); fi
+  case "$arg" in
+    --bundle) BUNDLE=1 ;;
+    --restart) RESTART=1 ;;
+    *) ARGS+=("$arg") ;;
+  esac
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
@@ -50,6 +61,92 @@ else
 fi
 
 SCHEME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" "$APP_NAME/Info.plist")"
+
+# The app's bundle id: the shortest in the project, as extensions and the
+# watch app append to it. The first pattern is the JSON format, the second a
+# pbxproj. Files only: `project.*` also matches the project.xcworkspace
+# folder, and grep's error on it ends the script under pipefail.
+BUNDLE_ID="$(find "$PROJECT" -maxdepth 1 -type f -name 'project.*' -exec grep -ohE '"PRODUCT_BUNDLE_IDENTIFIER" *: *"[^"]+"|PRODUCT_BUNDLE_IDENTIFIER = [^;]+;' {} + \
+  | sed -E 's/.*[:=] *"?([^";]+)"?;?$/\1/' | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2)"
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# Copies the app's saved settings to $WORK/prefs.plist, and its cached bundle's
+# manifest to $WORK/bundle.json, removing either that can't be read.
+read_app_state() {
+  rm -f "$WORK/prefs.plist" "$WORK/bundle.json"
+  if [[ -n "$DEVICE" ]]; then
+    for file in "Library/Preferences/$BUNDLE_ID.plist:prefs.plist" "Documents/dist/bundle.json:bundle.json"; do
+      xcrun devicectl device copy from --device "$DEVICE" --domain-type appDataContainer \
+        --domain-identifier "$BUNDLE_ID" --source "${file%%:*}" --destination "$WORK/${file##*:}" >/dev/null 2>&1 || true
+    done
+  else
+    defaults export "$BUNDLE_ID" "$WORK/prefs.plist" 2>/dev/null || true
+    cp "$HOME/Library/Containers/$BUNDLE_ID/Data/Documents/dist/bundle.json" "$WORK/bundle.json" 2>/dev/null || true
+  fi
+}
+
+DEVICE=""
+DEVICE_NAME="the Mac app"
+
+# Settled before anything else, as a build takes a while to end in a question.
+if [[ "$DEVICE_QUERY" != "mac" ]]; then
+  xcrun devicectl list devices --json-output "$WORK/devices.json" >/dev/null 2>&1
+
+  # Same rules as build.sh: a paired, physical iPhone or iPad that's ours.
+  PICKED="$(python3 - "$WORK/devices.json" "$DEVICE_QUERY" "$SERVER" "$BUNDLE" <<'PY'
+import json, sys
+
+path, query, server, bundle = sys.argv[1:]
+devices = json.load(open(path))["result"]["devices"]
+
+def usable(d):
+    hw, conn = d.get("hardwareProperties", {}), d.get("connectionProperties", {})
+    return (
+        hw.get("reality") == "physical"
+        and hw.get("platform") == "iOS"
+        and conn.get("pairingState") == "paired"
+        and conn.get("tunnelState") != "unavailable"
+    )
+
+def name(d):
+    return d.get("deviceProperties", {}).get("name", "?")
+
+matches = [d for d in devices if usable(d)]
+if query:
+    q = query.lower()
+    matches = [d for d in matches if q in name(d).lower() or q in d["identifier"].lower()]
+
+if len(matches) != 1:
+    print("Pick a device:" if matches else "No device found.", file=sys.stderr)
+    for d in matches:
+        args = "--bundle <page>" if bundle == "1" else f"{server} <page>"
+        print(f'  ios/point.sh {args} "{name(d)}"', file=sys.stderr)
+    print('  ios/point.sh ' + ("--bundle <page>" if bundle == "1" else f"{server} <page>") + " mac", file=sys.stderr)
+    sys.exit(1)
+
+print(matches[0]["identifier"])
+print(name(matches[0]))
+PY
+)"
+  DEVICE="${PICKED%%$'\n'*}"
+  DEVICE_NAME="${PICKED##*$'\n'}"
+
+  if xcrun devicectl device info lockState --device "$DEVICE" 2>/dev/null | grep -q "passcodeRequired: true"; then
+    echo "Unlock $DEVICE_NAME first." >&2
+    exit 1
+  fi
+fi
+
+# Links are ignored without Developer mode, and nothing tells you so. Only a
+# build we can read the settings of can be checked (not TestFlight, say).
+read_app_state
+if [[ -f "$WORK/prefs.plist" ]] && ! python3 -c 'import plistlib, sys; sys.exit(not plistlib.load(open(sys.argv[1], "rb")).get("developer_mode"))' "$WORK/prefs.plist"; then
+  echo "Developer mode is off on $DEVICE_NAME. Turn it on in Settings → $APP_NAME, or Developer Settings… (⌥⌘,) in the Mac app." >&2
+  exit 1
+fi
+
 
 # The bundle is served by the app's hosting emulator, which serves its dist
 # folder from disk, so a rebuild needs no restart. `tailscale serve` is
@@ -95,57 +192,71 @@ print(f"{scheme}://dev-server/{name}" + (f"?{urlencode(query)}" if query else ""
 PY
 )"
 
-if [[ "$DEVICE_QUERY" == "mac" ]]; then
-  echo "Opening $URL"
+echo "$URL"
+if [[ -n "$DEVICE" ]]; then
+  echo "Opening on $DEVICE_NAME"
+  LAUNCH_ARGS=()
+  if [[ "$RESTART" == 1 ]]; then LAUNCH_ARGS=(--terminate-existing); fi
+  xcrun devicectl device process launch --device "$DEVICE" ${LAUNCH_ARGS[@]+"${LAUNCH_ARGS[@]}"} --payload-url "$URL" "$BUNDLE_ID" >/dev/null
+else
+  if [[ "$RESTART" == 1 ]]; then echo "--restart only applies to an iPhone or iPad."; fi
+  echo "Opening on $DEVICE_NAME"
   open "$URL"
-  exit 0
 fi
 
-# The app's bundle id: the shortest in the project, as extensions and the
-# watch app append to it. The first pattern is the JSON format, the second a
-# pbxproj. Files only: `project.*` also matches the project.xcworkspace
-# folder, and grep's error on it ends the script under pipefail.
-BUNDLE_ID="$(find "$PROJECT" -maxdepth 1 -type f -name 'project.*' -exec grep -ohE '"PRODUCT_BUNDLE_IDENTIFIER" *: *"[^"]+"|PRODUCT_BUNDLE_IDENTIFIER = [^;]+;' {} + \
-  | sed -E 's/.*[:=] *"?([^";]+)"?;?$/\1/' | awk '{ print length, $0 }' | sort -n | head -1 | cut -d' ' -f2)"
+# What the device should end up with: "" for production.
+case "$SERVER" in
+  production) EXPECTED_SERVER="" ;;
+  *://*) EXPECTED_SERVER="$SERVER" ;;
+  *) EXPECTED_SERVER="$(/usr/libexec/PlistBuddy -c "Print :DevServers" "$APP_NAME/Info.plist" | grep -oE "https?://$SERVER\.[^ ]+" | head -1 || true)" ;;
+esac
+EXPECTED_HASH=""
+if [[ "$BUNDLE" == 1 ]]; then
+  EXPECTED_HASH="$(python3 -c 'import json; print(json.load(open("../packages/app/dist/bundle.json"))["hash"])')"
+fi
 
-DEVICE_JSON="$(mktemp)"
-trap 'rm -f "$DEVICE_JSON"' EXIT
-xcrun devicectl list devices --json-output "$DEVICE_JSON" >/dev/null 2>&1
+# Prints why the device hasn't switched yet, or nothing once it has.
+what_is_left() {
+  python3 - "$WORK" "$EXPECTED_SERVER" "$EXPECTED_HASH" <<'PY'
+import json, plistlib, sys
 
-# Same rules as build.sh: a paired, physical iPhone or iPad that's ours.
-DEVICE="$(python3 - "$DEVICE_JSON" "$DEVICE_QUERY" <<'PY'
-import json, sys
+work, server, bundle_hash = sys.argv[1:]
 
-path, query = sys.argv[1], sys.argv[2]
-devices = json.load(open(path))["result"]["devices"]
+try:
+    prefs = plistlib.load(open(f"{work}/prefs.plist", "rb"))
+except OSError:
+    sys.exit("couldn't read its settings")
 
-def usable(d):
-    hw, conn = d.get("hardwareProperties", {}), d.get("connectionProperties", {})
-    return (
-        hw.get("reality") == "physical"
-        and hw.get("platform") == "iOS"
-        and conn.get("pairingState") == "paired"
-        and conn.get("tunnelState") != "unavailable"
-    )
+current = prefs.get("development_server") if prefs.get("use_development_server") else ""
+if (current or "") != server:
+    sys.exit(f"it's still on {current or 'production'}")
 
-def name(d):
-    return d.get("deviceProperties", {}).get("name", "?")
+if bool(prefs.get("use_cached_web_bundle")) != (bool(bundle_hash) or not server):
+    sys.exit("its bundle caching hasn't changed")
 
-matches = [d for d in devices if usable(d)]
-if query:
-    q = query.lower()
-    matches = [d for d in matches if q in name(d).lower() or q in d["identifier"].lower()]
-
-if len(matches) != 1:
-    print("Pick a device:" if matches else "No device found.", file=sys.stderr)
-    for d in matches:
-        print(f'  ios/point.sh <server> <page> "{name(d)}"', file=sys.stderr)
-    sys.exit(1)
-
-print(matches[0]["identifier"])
-print(f"Opening on {name(matches[0])}", file=sys.stderr)
+if bundle_hash:
+    try:
+        cached = json.load(open(f"{work}/bundle.json"))["hash"]
+    except OSError:
+        cached = "no bundle"
+    if cached != bundle_hash:
+        sys.exit(f"it has {cached}, not {bundle_hash}")
 PY
-)"
+}
 
-echo "$URL"
-xcrun devicectl device process launch --device "$DEVICE" --payload-url "$URL" "$BUNDLE_ID" >/dev/null
+# The bundle download is what takes the time, and it's a few seconds at most.
+LEFT=""
+for _ in $(seq 1 15); do
+  sleep 2
+  read_app_state
+  if LEFT="$(what_is_left 2>&1)"; then
+    echo "$DEVICE_NAME is on ${EXPECTED_SERVER:-production}${EXPECTED_HASH:+, running $EXPECTED_HASH}."
+    exit 0
+  fi
+done
+
+echo "$DEVICE_NAME didn't switch: $LEFT." >&2
+if [[ -n "$DEVICE" && "$RESTART" == 0 ]]; then
+  echo "A running app can miss the link. Try again with --restart." >&2
+fi
+exit 1

@@ -9,16 +9,18 @@ const debug = Debug("useInfiniteScroll");
  *
  * @param loaded Number of items loaded so far.
  * @param options.pageSize The number of items to load for each "chunk".
+ * @param options.minLimit Never ask for fewer items than this, like when jumping to something far back in the list.
  * @param deps Array of mixed values that causes us to reset our internal state.
  * @returns The number of items to load, and the onScroll listener to attach to your container.
  */
 export function useInfiniteScroll(
   loaded: number,
   deps: DependencyList,
-  { pageSize }: { pageSize: number },
+  { pageSize, minLimit = 0 }: { pageSize: number; minLimit?: number },
 ): [limit: number, onScroll: (e: UIEvent<any>) => void] {
   // Current limit. Reset the limit whenever our deps change.
-  const [limit, setLimit] = useResettableState<number>(pageSize, [...deps, pageSize]);
+  const [scrolledLimit, setLimit] = useResettableState<number>(pageSize, [...deps, pageSize]);
+  const limit = Math.max(scrolledLimit, minLimit);
 
   // Last scroll Y value that triggered a load of an additional page. Reset
   // it when our deps change.
