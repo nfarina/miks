@@ -82,7 +82,7 @@ function GeneralSettings() {
       )}
       <LabeledToggle
         label="Open chat for long replies"
-        detail="When Claude finishes a reply of 20 lines or more in the tab you're looking at, the chat panel (⌘⇧C) opens to show it."
+        detail="When Claude finishes a reply of 20 lines or more in the tab you're looking at, the chat panel opens to show it."
         on={settings.chatForLongReplies}
         onClick={() => updateSettings({ chatForLongReplies: !settings.chatForLongReplies })}
       />

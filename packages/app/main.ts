@@ -1029,7 +1029,8 @@ function buildMenu() {
       label: "View",
       submenu: [
         command("toggleSidebar", "CmdOrCtrl+B", "Toggle sidebar"),
-        command("toggleChat", "CmdOrCtrl+Shift+C", "Toggle panel"),
+        command("togglePanel", "CmdOrCtrl+Alt+B", "Toggle panel"),
+        command("toggleChat", "CmdOrCtrl+Shift+C", "Chat"),
         command("toggleExpanded", "CmdOrCtrl+Shift+D", "Panel fills the tab"),
         command("showFiles", "CmdOrCtrl+Shift+E", "Files"),
         command("findInFiles", "CmdOrCtrl+Shift+F", "Find in files"),

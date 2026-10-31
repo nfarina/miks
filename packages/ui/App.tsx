@@ -21,9 +21,9 @@ import {
   hasPanel,
   isChatOpen,
   setChatOpen,
-  showTool,
+  showView,
   stepPanel,
-  toggleChat,
+  togglePanel,
   toggleExpanded,
 } from "./ChatPanel";
 import { closeTab, closeWorkspace } from "./closing";
@@ -656,8 +656,11 @@ function runCommand(command: string) {
 
   switch (command) {
     case "toggleChat": {
-      const tab = tabs[tabIndex];
-      if (tab && hasPanel(tab)) toggleChat(tab);
+      if (tabs[tabIndex]) showView(tabs[tabIndex], "chat");
+      return;
+    }
+    case "togglePanel": {
+      if (tabs[tabIndex]) togglePanel(tabs[tabIndex]);
       return;
     }
     case "toggleExpanded": {
@@ -666,10 +669,10 @@ function runCommand(command: string) {
       return;
     }
     case "showFiles":
-      if (tabs[tabIndex]) showTool(tabs[tabIndex], "files");
+      if (tabs[tabIndex]) showView(tabs[tabIndex], "files");
       return;
     case "findInFiles":
-      if (tabs[tabIndex]) showTool(tabs[tabIndex], "search");
+      if (tabs[tabIndex]) showView(tabs[tabIndex], "search");
       return;
     case "newTab":
       if (workspace) daemon.send({ type: "createTab", workspaceId: workspace.id });

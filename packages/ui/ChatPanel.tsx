@@ -162,7 +162,7 @@ const expandedTabs = tabFlags("ChatPanel:expanded");
 
 /**
  * Which tabs' conversations were closed (the ✕ on Chat), leaving their
- * files and page in the panel. Opening the panel yourself (⌘⇧C) or a new
+ * files and page in the panel. Opening the panel yourself (⌥⌘B or ⌘⇧C) or a new
  * session brings it back.
  */
 const chatClosedTabs = tabFlags("ChatPanel:chatClosed");
@@ -218,11 +218,11 @@ const isTool = (view: PanelView): view is Tool => (TOOLS as readonly string[]).i
 /** What each file or page came on top of, for closing it to go back to. */
 const cameFrom = new Map<PanelView, PanelView>();
 
-/** Each tab's way of bringing up Files or Search, with the keyboard in it. */
-const toolShowers = new Map<string, (tool: Tool) => void>();
+/** Each tab's way of going to its chat, Files or Search, with the keyboard. */
+const viewShowers = new Map<string, (view: Tool | "chat") => void>();
 
-/** ⌘⇧E and ⌘⇧F. */
-export const showTool = (tab: Tab, tool: Tool) => toolShowers.get(tab.id)?.(tool);
+/** ⌘⇧C, ⌘⇧E and ⌘⇧F: to that view, or from it, closing the panel, if the keyboard's already there. */
+export const showView = (tab: Tab, view: Tool | "chat") => viewShowers.get(tab.id)?.(view);
 
 /** The files in a tab's panel; an older daemon has one at most. */
 const openFiles = (tab: Tab): OpenFile[] => tab.files ?? (tab.file ? [tab.file] : []);
@@ -230,8 +230,8 @@ const openFiles = (tab: Tab): OpenFile[] => tab.files ?? (tab.file ? [tab.file] 
 /** Set when you open the panel yourself: the composer takes the keyboard. */
 let focusOnShow = false;
 
-/** Opens or closes a tab's panel (⌘⇧C, or the tab bar's button), moving the keyboard with it. */
-export function toggleChat(tab: Tab) {
+/** Opens or closes a tab's panel (⌥⌘B, or the tab bar's button), moving the keyboard with it. */
+export function togglePanel(tab: Tab) {
   const open = !isChatOpen(tab);
   if (open) {
     focusOnShow = true;
@@ -275,7 +275,7 @@ const layoutRoots = new Map<string, HTMLElement>();
 /** ⌥⌘→: the keyboard into the tab's panel, to what it shows, opening it if it's hidden. */
 export function focusPanelOf(tab: Tab) {
   if (!hasPanel(tab)) return;
-  if (!isChatOpen(tab)) return toggleChat(tab);
+  if (!isChatOpen(tab)) return togglePanel(tab);
   const root = layoutRoots.get(tab.id);
   if (root) focusPanel(root, "composer");
 }
@@ -292,7 +292,7 @@ export function focusTerminalOf(tab: Tab) {
 export function toggleExpanded(tab: Tab) {
   if (!isChatOpen(tab)) {
     expandedTabs.set(tab, true);
-    toggleChat(tab);
+    togglePanel(tab);
   } else {
     expandedTabs.set(tab, !expandedTabs.has(tab));
   }
@@ -313,7 +313,7 @@ export function ChatLayout({
   supported: boolean;
   children: ReactNode;
 }) {
-  // Open or not is the panel's, apart from what's in it: hiding it (⌘⇧C,
+  // Open or not is the panel's, apart from what's in it: hiding it (⌥⌘B,
   // Escape) leaves an open file as it was, unsaved changes and all.
   const panelOpen = useChatOpen(tab);
   const expanded = useExpanded(tab);
@@ -331,7 +331,7 @@ export function ChatLayout({
   const showing: PanelView = views.includes(view) || isTool(view) ? view : (views.at(-1) ?? "files");
   // Bumped by ⌘⇧E, which starts Files again from where the shell is.
   const [filesCenter, setFilesCenter] = useState(0);
-  const [focusTool, setFocusTool] = useState(0);
+  const [focusView, setFocusView] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) layoutRoots.set(tab.id, ref.current);
@@ -341,20 +341,31 @@ export function ChatLayout({
   }, [tab.id]);
 
   useEffect(() => {
-    toolShowers.set(tab.id, (tool) => {
-      if (tool === "files") setFilesCenter((count) => count + 1);
-      setView(tool);
-      if (!isChatOpen(tab)) choosePanel(tab, true);
-      setFocusTool((count) => count + 1);
+    viewShowers.set(tab.id, (target) => {
+      // Without a conversation there's no chat to go to: it's the panel's key then.
+      if (target === "chat" && !tab.agent) return togglePanel(tab);
+
+      const open = isChatOpen(tab);
+      const onShow = open && showing === target;
+      const active = document.activeElement;
+      if (onShow && active?.closest("[data-showing]") && ref.current?.contains(active)) {
+        choosePanel(tab, false);
+        return focusActiveTerminal();
+      }
+      if (target === "chat") chatClosedTabs.set(tab, false);
+      if (target === "files" && !onShow) setFilesCenter((count) => count + 1);
+      setView(target);
+      if (!open) choosePanel(tab, true);
+      setFocusView((count) => count + 1);
     });
     return () => {
-      toolShowers.delete(tab.id);
+      viewShowers.delete(tab.id);
     };
-  }, [tab.id]);
+  });
 
   useEffect(() => {
-    if (focusTool && ref.current) focusPanel(ref.current, "tool");
-  }, [focusTool]);
+    if (focusView && ref.current) focusPanel(ref.current, showing === "chat" ? "composer" : placeOf(showing));
+  }, [focusView]);
 
   // A file or page opening (or opened again) comes to the front, opening
   // the panel if it was closed; and a panel opened for them closes once
@@ -415,7 +426,7 @@ export function ChatLayout({
     focusPanel(ref.current, showing === "chat" ? "composer" : placeOf(showing));
   }, [showing]);
 
-  // Opened yourself (⌘⇧C) with a file or page showing: the keyboard goes to it.
+  // Opened yourself (⌥⌘B) with a file or page showing: the keyboard goes to it.
   useEffect(() => {
     if (!visible || !focusOnShow || showing === "chat" || !ref.current) return;
     focusOnShow = false;
@@ -864,8 +875,9 @@ export function ChatPanel({
   useEffect(() => {
     panelCommands.set(tab.id, {
       step(offset) {
-        const all = [...TOOLS, ...views];
-        const next = all[all.indexOf(showing as (typeof all)[number]) + offset];
+        // Not Files and Search, which every panel has: they have keys of their
+        // own, and stopping at them would keep you from the tab bar's tabs.
+        const next = isTool(showing) ? undefined : views[views.indexOf(showing) + offset];
         if (!hasKeyboard() || !next) return false;
         onShow(next);
         return true;

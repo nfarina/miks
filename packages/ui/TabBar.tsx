@@ -6,7 +6,7 @@ import { Fragment, HTMLAttributes, useEffect, useRef } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { safeAreaTopBar } from "crosswing/safearea";
-import { hasPanel, toggleChat, toggleExpanded, useChatOpen, useExpanded } from "./ChatPanel";
+import { hasPanel, toggleExpanded, togglePanel, useChatOpen, useExpanded } from "./ChatPanel";
 import { closeTab } from "./closing";
 import { daemon } from "./daemon";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
@@ -107,8 +107,8 @@ export function TabBar({ workspace, ...rest }: HTMLAttributes<HTMLDivElement> & 
         <button
           className="chat-toggle"
           data-on={chatOpen}
-          onClick={() => toggleChat(activeTab)}
-          {...tooltip(chatOpen ? "Hide panel" : "Show panel", { hotkey: "cmd+shift+c", delay: true })}
+          onClick={() => togglePanel(activeTab)}
+          {...tooltip(chatOpen ? "Hide panel" : "Show panel", { hotkey: "cmd+alt+b", delay: true })}
         >
           <PanelRight />
         </button>

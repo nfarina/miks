@@ -226,7 +226,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         ]),
         (.view, [
             ("Toggle sidebar", "b", .command, "toggleSidebar"),
-            ("Toggle panel", "c", [.command, .shift], "toggleChat"),
+            ("Toggle panel", "b", [.command, .alternate], "togglePanel"),
+            ("Chat", "c", [.command, .shift], "toggleChat"),
             ("Panel fills the tab", "d", [.command, .shift], "toggleExpanded"),
             ("Files", "e", [.command, .shift], "showFiles"),
             ("Find in files", "f", [.command, .shift], "findInFiles"),

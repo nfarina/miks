@@ -531,7 +531,7 @@ resizes); keep it passing.
   (Revert to saved in its ⋯), except on a touch screen, where tapping one to
   read it would bring up the on-screen keyboard, so there it has Edit. In a Claude tab the panel
   switches Chat | file, both kept mounted (CSS hides one). The panel's
-  open or not apart from the file (⌘⇧C, Escape in the editor once
+  open or not apart from the file (⌥⌘B, Escape in the editor once
   CodeMirror has nothing to close): hidden, the file stays as it was.
   A tab's panel holds up to 5 files (`Tab.files`, each in the switcher,
   every one mounted), and file messages name one by `fileId`. Older Miks
@@ -571,7 +571,9 @@ resizes); keep it passing.
   its screen to search.
 - Every tab's panel has Files (⌘⇧E, `ui/FilesView.tsx`) and Find in files
   (⌘⇧F, `ui/SearchView.tsx`) at the start of its row, which aren't
-  `PanelView`s you can close or drag; ⌘P (`ui/QuickOpen.tsx`) finds a file in
+  `PanelView`s you can close or drag, nor stops for ⌘⇧[ and ⌘⇧]. ⌘⇧C, ⌘⇧E
+  and ⌘⇧F each go to their view, and close the panel if the keyboard's
+  already in it (`showView`); ⌥⌘B just opens or closes it. ⌘P (`ui/QuickOpen.tsx`) finds a file in
   the repo around the tab's folder. All three are the daemon's
   (`server/Search.ts`, since protocol 20), so a remote window's or the iOS
   app's search runs on that Mac. Search is ripgrep, pinned and checksummed in
