@@ -181,6 +181,10 @@ function AdvancedSettings() {
     initialValue: settings.hidePathPrefix || null,
     onValueChange: (_value, text) => updateSettings({ hidePathPrefix: text }),
   });
+  const searchFolders = useInputValue({
+    initialValue: settings.searchFolders || null,
+    onValueChange: (_value, text) => updateSettings({ searchFolders: text }),
+  });
 
   return (
     <SeparatorLayout bordered>
@@ -199,6 +203,15 @@ function AdvancedSettings() {
           </div>
         </div>
         <TextInput newStyle placeholder="~/Code/" {...pathPrefix.props} />
+      </label>
+      <label className="field">
+        <div className="content">
+          <div className="label">All code</div>
+          <div className="detail">
+            The folders Find in files searches for All code, separated by commas. Kept on the Mac, for every window and device on it.
+          </div>
+        </div>
+        <TextInput newStyle placeholder="~/Code" {...searchFolders.props} />
       </label>
     </SeparatorLayout>
   );

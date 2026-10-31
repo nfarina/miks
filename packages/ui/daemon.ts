@@ -2,7 +2,7 @@
 // exposes as `window.miks` (packages/app/preload.cjs). There's one
 // connection per page; components read state with `useDaemon` and terminals
 // subscribe to their pane's stream with `daemon.stream`.
-import { AgentStatus, ChatEntry, ClientInfo, ClientMessage, DaemonMessage, DaemonState, Permission, RunningProgram, VersionInfo } from "miks/shared/protocol";
+import { AgentStatus, ChatEntry, ClientInfo, ClientMessage, DaemonMessage, DaemonState, Permission, RunningProgram, SearchFile, SearchOptions, VersionInfo } from "miks/shared/protocol";
 import type { Settings } from "miks/shared/settings";
 import type { TailnetMac } from "miks/shared/tailscale";
 import { useSyncExternalStore } from "react";
@@ -149,6 +149,8 @@ class DaemonClient {
   private readonly bridge: MiksBridge | undefined = window.miks;
   /** Not crypto.randomUUID(), which a page that isn't a secure context (plain http) doesn't have. */
   private requestCount = 0;
+  private requests = new Map<string, (answer: unknown) => void>();
+  private searches = new Map<string, (files: SearchFile[], end?: { truncated?: boolean; error?: string }) => void>();
 
   constructor() {
     if (!this.bridge) {
@@ -258,6 +260,40 @@ class DaemonClient {
       this.saves.set(fileId, { tabId, resolve });
       this.send({ type: "saveFile", tabId, fileId, content, mtime, force });
     });
+  }
+
+  /** What's in a folder on the daemon's Mac. */
+  readFolder(path: string): Promise<Extract<DaemonMessage, { type: "folder" }>> {
+    return this.request((requestId) => ({ type: "readFolder", requestId, path }));
+  }
+
+  /** Every file around a folder, for ⌘P. */
+  listFiles(path: string): Promise<Extract<DaemonMessage, { type: "fileList" }>> {
+    return this.request((requestId) => ({ type: "listFiles", requestId, path }));
+  }
+
+  /** Sends a request whose answer has the same `requestId`; an older daemon's never comes. */
+  private request<T>(message: (requestId: string) => ClientMessage): Promise<T> {
+    if (!this.snapshot.connected || !this.speaks(20)) return Promise.reject(new Error(OLDER));
+    const requestId = String(++this.requestCount);
+    return new Promise((resolve) => {
+      this.requests.set(requestId, resolve as (answer: unknown) => void);
+      this.send(message(requestId));
+    });
+  }
+
+  /** Searches files on the daemon's Mac; returns what stops it. */
+  search(options: SearchOptions, onResults: (files: SearchFile[], end?: { truncated?: boolean; error?: string }) => void): () => void {
+    if (!this.speaks(20)) {
+      onResults([], { error: OLDER });
+      return () => {};
+    }
+    const requestId = String(++this.requestCount);
+    this.searches.set(requestId, onResults);
+    this.send({ type: "search", requestId, options });
+    return () => {
+      if (this.searches.delete(requestId)) this.send({ type: "cancelSearch", requestId });
+    };
   }
 
   /**
@@ -436,6 +472,19 @@ class DaemonClient {
     switch (message.type) {
       case "state":
         return this.update({ state: message.state });
+      case "folder":
+      case "fileList": {
+        const { requestId } = message;
+        this.requests.get(requestId)?.(message);
+        this.requests.delete(requestId);
+        return;
+      }
+      case "searchResults": {
+        const { requestId, files, done, truncated, error } = message;
+        this.searches.get(requestId)?.(files, done ? { truncated, error } : undefined);
+        if (done) this.searches.delete(requestId);
+        return;
+      }
       case "snapshot":
       case "output":
       case "size": {
@@ -486,6 +535,8 @@ class DaemonClient {
     }
   }
 }
+
+const OLDER = "This tab's Mac has an older Miks. Update it there, and restart its daemon.";
 
 export const daemon = new DaemonClient();
 

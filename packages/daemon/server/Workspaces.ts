@@ -9,6 +9,7 @@ import {
   type Background,
   type ChatEntry,
   type DaemonState,
+  type FileSpot,
   type GatewayState,
   type KeeperState,
   type OpenFile,
@@ -839,7 +840,11 @@ export class Workspaces extends EventEmitter<{
    * (the panel's Done or close, it opening again, or the tab closing);
    * otherwise at once.
    */
-  openFile(tabId: string, file: string, { edit, wait }: { edit: boolean; wait: boolean }): Promise<void> {
+  openFile(
+    tabId: string,
+    file: string,
+    { edit, wait, preview = false, at }: { edit: boolean; wait: boolean; preview?: boolean; at?: FileSpot },
+  ): Promise<void> {
     if (!this.panes.has(tabId)) return Promise.resolve();
 
     const list = this.files.get(tabId) ?? [];
@@ -856,21 +861,31 @@ export class Workspaces extends EventEmitter<{
         edit: already.file.edit || edit,
         wait: edit || wait ? wait : already.file.wait,
         opened: (already.file.opened ?? 0) + 1,
+        // Kept stays kept, and opening one for good keeps it.
+        preview: (already.file.preview && preview) || undefined,
+        at,
       };
       this.emit("change");
       return wait ? new Promise((resolve) => already.waiters.add(resolve)) : Promise.resolve();
     }
 
+    const free = () => list.filter((open) => open.waiters.size === 0 && open.unsaved.size === 0);
+    // The one passing file gives way to the next.
+    const passing = preview ? free().find((open) => open.file.preview) : undefined;
+    if (passing) {
+      list.splice(list.indexOf(passing), 1);
+      this.letGo(passing);
+    }
+
     if (list.length >= MAX_FILES) {
-      const free = list.filter((open) => open.waiters.size === 0 && open.unsaved.size === 0);
-      const oldest = free.sort((a, b) => a.used - b.used)[0];
+      const oldest = free().sort((a, b) => a.used - b.used)[0];
       if (oldest) {
         list.splice(list.indexOf(oldest), 1);
         this.letGo(oldest);
       }
     }
     const open: OpenEntry = {
-      file: { id: randomUUID().slice(0, 8), path: file, edit, wait },
+      file: { id: randomUUID().slice(0, 8), path: file, edit, wait, ...(preview && { preview }), ...(at && { at }) },
       listeners: new Set(),
       waiters: new Set(),
       unsaved: new Set(),
@@ -922,7 +937,14 @@ export class Workspaces extends EventEmitter<{
         open.unsaved.delete(listener);
         this.followFile(tabId, open);
       },
-      unsaved: (unsaved) => void (unsaved ? open.unsaved.add(listener) : open.unsaved.delete(listener)),
+      unsaved: (unsaved) => {
+        if (unsaved) {
+          open.unsaved.add(listener);
+          this.keepFile(tabId, open.file.id);
+        } else {
+          open.unsaved.delete(listener);
+        }
+      },
     };
   }
 
@@ -930,6 +952,14 @@ export class Workspaces extends EventEmitter<{
     const open = this.openEntry(tabId, fileId);
     if (!open) return { error: "The file was closed." };
     return writeFromPanel(open.file.path, content, mtime, force);
+  }
+
+  /** A passing file stays, past the next one opening: you double-clicked it, or changed it. */
+  keepFile(tabId: string, fileId: string) {
+    const open = this.openEntry(tabId, fileId);
+    if (!open?.file.preview) return;
+    open.file = { ...open.file, preview: undefined };
+    this.emit("change");
   }
 
   /** Closes one of the tab's files, and lets whatever waited on it go. */

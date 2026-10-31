@@ -10,8 +10,8 @@ import { PopupMenu, PopupMenuSeparator, PopupMenuText, PopupMenuToggle } from "c
 import { ModalContext } from "crosswing/modals/context";
 import { tooltip } from "crosswing/modals/popup";
 import { usePopup } from "crosswing/modals/popup/usePopup";
-import { Copy, Ellipsis, FolderSearch, WrapText, X } from "lucide-react";
-import type { OpenFile, Tab } from "miks/shared/protocol";
+import { Copy, Ellipsis, FolderSearch, Undo2, WrapText, X } from "lucide-react";
+import type { FileSpot, OpenFile, Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
 import { type KeyboardEvent, use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -24,9 +24,27 @@ import { headingPending, MarkdownView } from "./MarkdownView";
 import { autoFocus, DEVICE_SETTINGS, getSettings, updateSettings, useSettings } from "./settings";
 import { terminalScrollbarCSS } from "./TerminalView";
 
+/** Shown as images: raster ones only ever, and SVGs by default, with their source a click away. */
+const isRaster = (path: string) => /\.(apng|avif|bmp|gif|ico|jpe?g|png|webp)$/i.test(path);
+const isSvg = (path: string) => /\.svg$/i.test(path);
+
+/** The file each tab's waiting to put the keyboard in, once it's on show. */
+const focusWanted = new Map<string, string>();
+
 /**
- * The file `miks open` or `miks edit` put in a tab's panel: read-only until
- * you press Edit (or opened with `miks edit`), saved with ⌘S. The daemon
+ * Opens a file in a tab's panel from the panel (Files, Search, ⌘P), with the
+ * keyboard going to it, so ⌘W closes it rather than the tab.
+ */
+export function openInPanel(tab: Tab, path: string, options: { keep?: boolean; at?: FileSpot } = {}) {
+  focusWanted.set(tab.id, path);
+  daemon.send({ type: "openFile", tabId: tab.id, path, preview: !options.keep, at: options.at });
+}
+
+/**
+ * The file `miks open` or `miks edit` put in a tab's panel, saved with ⌘S.
+ * Editable as it opens, where there's a keyboard to edit it with; on a touch
+ * screen, tapping one to read it shouldn't bring the on-screen one up, so
+ * it's read-only there until you press Edit. The daemon
  * reads and writes it, so it's the file on the tab's Mac, in a window on
  * another Mac too. It follows the file on disk; a change there while you
  * have unsaved ones of your own asks which to keep. A markdown file shows
@@ -68,14 +86,16 @@ export function FileView({
   // What's on disk, as last read or saved: what a save checks it against.
   const [disk, setDisk] = useState<FileEvent | null>(null);
   const diskRef = useRef<FileEvent | null>(null);
-  const [editing, setEditing] = useState(file.edit);
+  const [editing, setEditing] = useState(file.edit || !DEVICE_SETTINGS);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   // Changed on disk while you had changes of your own.
   const [conflict, setConflict] = useState<FileEvent | null>(null);
   const [saving, setSaving] = useState(false);
   const markdown = isMarkdown(file.path);
-  const [preview, setPreview] = useState(markdown && !file.edit);
+  const raster = isRaster(file.path);
+  const svg = isSvg(file.path);
+  const [preview, setPreview] = useState((markdown || svg || raster) && !file.edit);
   const previewRef = useRef(preview);
   // What the preview shows: the editor's text, saved or not.
   const [previewText, setPreviewText] = useState<string | null>(null);
@@ -97,7 +117,7 @@ export function FileView({
   // or it'd be left on what just went hidden.
   const switchFocus = useRef(false);
   function onKeyDown(event: KeyboardEvent) {
-    if (!markdown || !ready || event.code !== "KeyV" || !event.metaKey || !event.shiftKey || event.altKey || event.ctrlKey) return;
+    if (!(markdown || svg) || !ready || event.code !== "KeyV" || !event.metaKey || !event.shiftKey || event.altKey || event.ctrlKey) return;
     event.preventDefault();
     switchFocus.current = true;
     showPreview(!previewRef.current);
@@ -106,7 +126,7 @@ export function FileView({
   useEffect(() => {
     if (!switchFocus.current) return;
     switchFocus.current = false;
-    if (preview) rootRef.current?.querySelector<HTMLElement>(".markdown-view")?.focus({ preventScroll: true });
+    if (preview) rootRef.current?.querySelector<HTMLElement>(".markdown-view, .image-view")?.focus({ preventScroll: true });
     else viewRef.current?.focus();
   }, [preview]);
 
@@ -250,11 +270,40 @@ export function FileView({
     opened.current = file.opened;
     if (markdown && headingPending(tab.id, file.path)) {
       showPreview(true);
-    } else if (file.edit && !editing) {
+    } else if (file.edit && (!editing || previewRef.current)) {
       showPreview(false);
       setEditing(true);
     }
   }, [file.opened]);
+
+  // Opened at a search result: its source, with the match selected. After a
+  // moment, since it's still hidden now and CodeMirror can't scroll that.
+  const spot = file.at;
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!ready || !view || !spot) return;
+    showPreview(false);
+    const timer = setTimeout(() => {
+      const line = view.state.doc.line(Math.min(spot.line, view.state.doc.lines));
+      const from = Math.min(line.from + spot.column, line.to);
+      view.dispatch({
+        selection: { anchor: from, head: Math.min(from + spot.length, view.state.doc.length) },
+        effects: EditorView.scrollIntoView(from, { y: "center" }),
+      });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [ready, file.opened, spot?.line, spot?.column]);
+
+  // After a moment, for the same reason: and the panel's still on what opened it.
+  useEffect(() => {
+    if (!(ready || (raster && disk)) || focusWanted.get(tab.id) !== file.path) return;
+    focusWanted.delete(tab.id);
+    if (!autoFocus()) return;
+    setTimeout(() => {
+      if (previewRef.current) rootRef.current?.querySelector<HTMLElement>(".markdown-view, .image-view")?.focus({ preventScroll: true });
+      else viewRef.current?.focus();
+    }, 60);
+  }, [ready, !!disk, file.id, file.opened]);
 
   /** Saves, asking first if it changed on disk since. Resolves with whether it's saved. */
   async function save(force = false): Promise<boolean> {
@@ -350,6 +399,15 @@ export function FileView({
     return (
       <PopupMenu>
         <PopupMenuToggle icon={<WrapText />} on={wrap} onClick={() => setWrap(!wrap)} hotkeys={{ key: "alt+z" }} children="Word wrap" />
+        <PopupMenuText
+          icon={<Undo2 />}
+          disabled={!dirtyRef.current}
+          onClick={() => {
+            setConflict(null);
+            replaceText(diskRef.current?.content ?? "");
+          }}
+          children="Revert to saved"
+        />
         <PopupMenuSeparator />
         <PopupMenuText icon={<Copy />} onClick={() => window.miks?.copy(file.path)} children="Copy path" />
         <PopupMenuText
@@ -365,7 +423,7 @@ export function FileView({
 
   const controls = (
     <StyledFileControls>
-      {ready && markdown && (
+      {ready && (markdown || svg) && (
         <div className="mode">
           <button data-on={preview} onClick={() => showPreview(true)} {...tooltip("Preview", { hotkey: "cmd+shift+v", delay: true })}>
             Preview
@@ -386,13 +444,13 @@ export function FileView({
           Edit
         </button>
       )}
-      {ready && editing && !file.wait && (
+      {ready && editing && !file.wait && DEVICE_SETTINGS && (
         <button className="action" onClick={() => void cancel()} {...tooltip("Stop editing", { delay: true })}>
           Cancel
         </button>
       )}
-      {ready && editing && !file.wait && (
-        <button className="action" disabled={!dirty || saving} onClick={() => void save()} {...tooltip("Save", { hotkey: "cmd+s", delay: true })}>
+      {ready && editing && !file.wait && dirty && (
+        <button className="action" disabled={saving} onClick={() => void save()} {...tooltip("Save", { hotkey: "cmd+s", delay: true })}>
           Save
         </button>
       )}
@@ -401,7 +459,7 @@ export function FileView({
           Done
         </button>
       )}
-      {ready && (
+      {(ready || (raster && disk)) && (
         <button className="more" onClick={menu.onClick} {...tooltip("More", { delay: true })}>
           <Ellipsis size={15} />
         </button>
@@ -435,13 +493,16 @@ export function FileView({
           <button onClick={() => resolveConflict("mine")}>Keep mine</button>
         </div>
       )}
-      {problem ? (
+      {raster && disk ? (
+        <ImageView path={file.path} mtime={disk.mtime} onHide={onHide} />
+      ) : problem ? (
         <div className="note">{problem}</div>
       ) : (
         <>
           {/* Kept while the preview shows, with whatever you haven't saved. */}
           <div className="editor" ref={editorRef} hidden={preview} />
-          {preview && ready && (
+          {preview && ready && svg && <ImageView path={file.path} mtime={disk?.mtime ?? null} onHide={onHide} />}
+          {preview && ready && markdown && (
             <MarkdownView
               tab={tab}
               file={file}
@@ -453,6 +514,28 @@ export function FileView({
         </>
       )}
     </StyledFileView>
+  );
+}
+
+/** An image file, from its Mac, read again as it changes on disk. */
+function ImageView({ path, mtime, onHide }: { path: string; mtime: number | null; onHide: () => void }) {
+  const [image, setImage] = useState<{ source?: string; error?: string } | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    void daemon.readImage(path).then((result) => {
+      if (current) setImage(result.data ? { source: `data:${result.mime};base64,${result.data}` } : { error: result.error ?? "Can't be read." });
+    });
+    return () => {
+      current = false;
+    };
+  }, [path, mtime]);
+
+  return (
+    <div className="image-view" tabIndex={-1} onKeyDown={(event) => event.key === "Escape" && onHide()}>
+      {image?.source && <img src={image.source} alt="" draggable={false} />}
+      {image?.error && <div className="error">{image.error}</div>}
+    </div>
   );
 }
 
@@ -657,6 +740,27 @@ const StyledFileView = styled.div`
 
   > .editor[hidden] {
     display: none;
+  }
+
+  > .image-view {
+    flex-grow: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: auto;
+    outline: none;
+
+    > img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    > .error {
+      color: ${colors.textSecondary()};
+    }
   }
 
   > .editor {

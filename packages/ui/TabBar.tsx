@@ -95,7 +95,7 @@ export function TabBar({ workspace, ...rest }: HTMLAttributes<HTMLDivElement> & 
           data-on={expanded}
           onClick={() => toggleExpanded(activeTab)}
           {...tooltip(expanded ? "Put the panel beside the terminal" : "Fill the tab with the panel", {
-            hotkey: "cmd+shift+f",
+            hotkey: "cmd+shift+d",
             delay: true,
           })}
         >

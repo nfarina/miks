@@ -3,6 +3,7 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
+import { fetchRipgrep } from "./ripgrep.ts";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -20,3 +21,5 @@ const electron = path.join(root, "node_modules/electron");
 if (!fs.existsSync(path.join(electron, "path.txt"))) {
   execFileSync(process.execPath, [path.join(electron, "install.js")], { stdio: "inherit" });
 }
+
+fetchRipgrep();

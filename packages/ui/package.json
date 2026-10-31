@@ -27,6 +27,7 @@
     "lucide-react": "^1.54.0",
     "marked": "^18.1.1",
     "marked-highlight": "^2.2.4",
+    "material-icon-theme": "5.40.0",
     "miks": "workspace:*",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

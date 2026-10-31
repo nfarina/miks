@@ -52,6 +52,8 @@ export type Settings = {
   /** Whether your other devices on Tailscale can open Miks in a browser (the daemon's gateway). */
   tailnetAccess: boolean;
   keepAvailable: KeepAvailable;
+  /** The folders "All code" searches, comma-separated. */
+  searchFolders: string;
 };
 
 /**
@@ -59,12 +61,13 @@ export type Settings = {
  * iOS app's), in `machine.json`, rather than each window's own: whether its
  * gateway runs, what its directories leave off, and whether it stays awake.
  */
-export const MACHINE_SETTINGS = ["hidePathPrefix", "tailnetAccess", "keepAvailable"] as const;
+export const MACHINE_SETTINGS = ["hidePathPrefix", "tailnetAccess", "keepAvailable", "searchFolders"] as const;
 export type MachineSettings = Pick<Settings, (typeof MACHINE_SETTINGS)[number]>;
 
 export const DEFAULT_SETTINGS: Settings = {
   fontSize: 13,
   hidePathPrefix: "",
+  searchFolders: "~/Code",
   notifications: true,
   sidebarVisible: true,
   chatForLongReplies: true,

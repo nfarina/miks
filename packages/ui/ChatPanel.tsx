@@ -9,7 +9,7 @@ import { HotkeyView, StyledHotkeyView } from "crosswing/modals/popup/HotkeyView"
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { tooltip } from "crosswing/modals/popup";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
-import { ArrowUp, ChevronRight, ChevronUp, ClipboardPaste, LoaderCircle, Mic, Paperclip, Square, TextQuote, X } from "lucide-react";
+import { ArrowUp, ChevronRight, ChevronUp, ClipboardPaste, Files, LoaderCircle, Mic, Paperclip, Search, Square, TextQuote, X } from "lucide-react";
 import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
@@ -30,6 +30,8 @@ import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
 import { padSafeArea, safeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
+import { FilesView } from "./FilesView";
+import { SearchView } from "./SearchView";
 import { useCodeMenu } from "./codeMenu";
 import { daemon } from "./daemon";
 import { useDictation } from "./dictation";
@@ -154,7 +156,7 @@ const openTabs = tabFlags("ChatPanel:open");
 
 /**
  * Which tabs' panels fill the tab, over the terminal, rather than sitting
- * beside it (⌘⇧F). One that does fades in and out instead of sliding.
+ * beside it (⌘⇧D). One that does fades in and out instead of sliding.
  */
 const expandedTabs = tabFlags("ChatPanel:expanded");
 
@@ -205,8 +207,22 @@ export const setChatOpen = openTabs.set;
 export const useChatOpen = openTabs.useFlag;
 export const useExpanded = expandedTabs.useFlag;
 
-/** Whether a tab has anything for its panel to show. */
-export const hasPanel = (tab: Tab | null | undefined) => !!(tab?.agent || tab?.file || tab?.page);
+/** Whether a tab has a panel: all do, with Files and Search if nothing else. */
+export const hasPanel = (tab: Tab | null | undefined) => !!tab;
+
+/** What's always in a panel, kept at the start of its row and never closed. */
+const TOOLS = ["files", "search"] as const;
+type Tool = (typeof TOOLS)[number];
+const isTool = (view: PanelView): view is Tool => (TOOLS as readonly string[]).includes(view);
+
+/** What each file or page came on top of, for closing it to go back to. */
+const cameFrom = new Map<PanelView, PanelView>();
+
+/** Each tab's way of bringing up Files or Search, with the keyboard in it. */
+const toolShowers = new Map<string, (tool: Tool) => void>();
+
+/** ⌘⇧E and ⌘⇧F. */
+export const showTool = (tab: Tab, tool: Tool) => toolShowers.get(tab.id)?.(tool);
 
 /** The files in a tab's panel; an older daemon has one at most. */
 const openFiles = (tab: Tab): OpenFile[] => tab.files ?? (tab.file ? [tab.file] : []);
@@ -264,7 +280,7 @@ export function focusPanelOf(tab: Tab) {
   if (root) focusPanel(root, "composer");
 }
 
-/** ⌥⌘←: the keyboard back to the terminal, which a panel filling the tab (⌘⇧F) makes room for. */
+/** ⌥⌘←: the keyboard back to the terminal, which a panel filling the tab (⌘⇧D) makes room for. */
 export function focusTerminalOf(tab: Tab) {
   if (!expandedTabs.has(tab)) return focusActiveTerminal();
   expandedTabs.set(tab, false);
@@ -272,7 +288,7 @@ export function focusTerminalOf(tab: Tab) {
   setTimeout(focusActiveTerminal);
 }
 
-/** Makes a tab's panel fill the tab, or go back beside the terminal (⌘⇧F); a hidden one comes back filling it. */
+/** Makes a tab's panel fill the tab, or go back beside the terminal (⌘⇧D); a hidden one comes back filling it. */
 export function toggleExpanded(tab: Tab) {
   if (!isChatOpen(tab)) {
     expandedTabs.set(tab, true);
@@ -309,10 +325,13 @@ export function ChatLayout({
   const [view, setView] = useState<PanelView>("page");
   const [order, setOrder] = useState(() => viewOrders.get(tab));
   const views = ordered(panelViews(tab, chatClosed), order);
-  const visible = panelOpen && views.length > 0;
+  const visible = panelOpen;
   // Picked (a click, ⌘⇧[ and ⌘⇧]), it takes the keyboard once it's on show.
   const focusShown = useRef(false);
-  const showing: PanelView = views.includes(view) ? view : (views.at(-1) ?? "chat");
+  const showing: PanelView = views.includes(view) || isTool(view) ? view : (views.at(-1) ?? "files");
+  // Bumped by ⌘⇧E, which starts Files again from where the shell is.
+  const [filesCenter, setFilesCenter] = useState(0);
+  const [focusTool, setFocusTool] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) layoutRoots.set(tab.id, ref.current);
@@ -320,6 +339,22 @@ export function ChatLayout({
       layoutRoots.delete(tab.id);
     };
   }, [tab.id]);
+
+  useEffect(() => {
+    toolShowers.set(tab.id, (tool) => {
+      if (tool === "files") setFilesCenter((count) => count + 1);
+      setView(tool);
+      if (!isChatOpen(tab)) choosePanel(tab, true);
+      setFocusTool((count) => count + 1);
+    });
+    return () => {
+      toolShowers.delete(tab.id);
+    };
+  }, [tab.id]);
+
+  useEffect(() => {
+    if (focusTool && ref.current) focusPanel(ref.current, "tool");
+  }, [focusTool]);
 
   // A file or page opening (or opened again) comes to the front, opening
   // the panel if it was closed; and a panel opened for them closes once
@@ -332,13 +367,16 @@ export function ChatLayout({
     const file = files.find((file) => (before.files.get(file.id) ?? -1) < (file.opened ?? 0));
     const arrived: PanelView | null = page && page.id !== before.page ? "page" : file ? `file:${file.id}` : null;
     if (arrived) {
+      // One that took a passing file's place goes back to where that would have.
+      const from = cameFrom.has(view) ? view : showing;
+      if (from !== arrived) cameFrom.set(arrived, from);
       setView(arrived);
       if (arrived === "page" && page?.fill) expandedTabs.set(tab, true);
       if (!isChatOpen(tab)) {
         openedForContent.current = true;
         setChatOpen(tab, true);
       }
-    } else if (files.length === 0 && !page && (openedForContent.current || chatClosed) && (before.files.size > 0 || before.page)) {
+    } else if (files.length === 0 && !page && !isTool(showing) && (openedForContent.current || chatClosed) && (before.files.size > 0 || before.page)) {
       // With its conversation closed too, there's nothing left: it comes
       // back the next time the panel opens.
       openedForContent.current = false;
@@ -374,14 +412,14 @@ export function ChatLayout({
   useEffect(() => {
     if (!focusShown.current || !ref.current) return;
     focusShown.current = false;
-    focusPanel(ref.current, showing === "chat" ? "composer" : showing === "page" ? "page" : "file");
+    focusPanel(ref.current, showing === "chat" ? "composer" : placeOf(showing));
   }, [showing]);
 
   // Opened yourself (⌘⇧C) with a file or page showing: the keyboard goes to it.
   useEffect(() => {
     if (!visible || !focusOnShow || showing === "chat" || !ref.current) return;
     focusOnShow = false;
-    focusPanel(ref.current, showing === "page" ? "page" : "file");
+    focusPanel(ref.current, placeOf(showing));
   }, [visible]);
 
   useEffect(() => {
@@ -401,6 +439,8 @@ export function ChatLayout({
         const target = event.target as HTMLElement;
         const where = target.closest(".file-view")
           ? "file"
+          : target.closest(".tool-view")
+            ? "tool"
           : target.closest(".page-view")
             ? "page"
             : target.closest(".composer")
@@ -443,6 +483,7 @@ export function ChatLayout({
           visible={visible}
           supported={supported}
           showing={showing}
+          filesCenter={filesCenter}
           onShow={(next) => {
             focusShown.current = true;
             setView(next);
@@ -459,7 +500,7 @@ export function ChatLayout({
 }
 
 /** What a tab's panel can show: its conversation, one of its files, or its page. */
-type PanelView = "chat" | `file:${string}` | "page";
+type PanelView = "chat" | `file:${string}` | "page" | Tool;
 
 /** What a tab's panel has to show, in the order they're offered. */
 const panelViews = (tab: Tab, chatClosed: boolean): PanelView[] => [
@@ -478,7 +519,9 @@ function ordered(views: PanelView[], order: string[]): PanelView[] {
 }
 
 /** Where in a tab's panel the keyboard can be. */
-type PanelPlace = "composer" | "conversation" | "file" | "page";
+type PanelPlace = "composer" | "conversation" | "file" | "page" | "tool";
+
+const placeOf = (view: PanelView): PanelPlace => (view === "page" ? "page" : isTool(view) ? "tool" : "file");
 
 /** Where in its panel each tab had the keyboard last, if it was there. */
 const panelFocus = new Map<string, PanelPlace>();
@@ -492,19 +535,22 @@ function focusPanel(root: HTMLElement, where: PanelPlace) {
   // The one on show, of those there are (each file has its own, hidden or not).
   const shown = <T extends HTMLElement>(selector: string) =>
     [...root.querySelectorAll<T>(selector)].find((element) => element.offsetParent) ?? null;
-  const editor = shown(".file-view .cm-content") ?? shown(".file-view .markdown-view");
+  const editor = shown(".file-view .cm-content") ?? shown(".file-view .markdown-view") ?? shown(".file-view .image-view");
   const page = shown(".page-view webview");
   const composer = shown<HTMLTextAreaElement>(".composer textarea");
   const conversation = shown(".scroller");
+  const tool = shown(".tool-view [data-panel-focus]");
   const usable = composer && !composer.disabled ? composer : null;
   const target =
-    where === "page"
-      ? (page ?? editor ?? usable ?? conversation)
-      : where === "file"
-        ? (editor ?? page ?? usable ?? conversation)
-        : where === "conversation"
-          ? (conversation ?? editor ?? page)
-          : (usable ?? editor ?? page ?? conversation);
+    where === "tool"
+      ? tool
+      : where === "page"
+        ? (page ?? editor ?? usable ?? conversation)
+        : where === "file"
+          ? (editor ?? page ?? usable ?? conversation)
+          : where === "conversation"
+            ? (conversation ?? editor ?? page)
+            : (usable ?? editor ?? page ?? conversation ?? tool);
   if (autoFocus()) target?.focus({ preventScroll: true });
 }
 
@@ -600,10 +646,16 @@ const StyledViewTab = styled.div`
   flex-shrink: 0;
   display: flex;
   box-sizing: border-box;
-  max-width: 60%;
+  /* Past that, the row scrolls: a file's controls can leave it little room. */
+  max-width: max(60%, 160px);
   padding: 0 1px;
   cursor: default;
   user-select: none;
+
+  /* Passing through: the next file takes its place. */
+  &&[data-preview="true"] .label {
+    font-style: italic;
+  }
 
   > .box {
     flex-grow: 1;
@@ -633,6 +685,7 @@ const StyledViewTab = styled.div`
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+
       white-space: nowrap;
       font: ${fonts.displayMedium({ size: 12, line: "16px" })};
     }
@@ -732,6 +785,7 @@ export function ChatPanel({
   visible,
   supported,
   showing,
+  filesCenter,
   onShow,
   onHide,
   focusFile,
@@ -744,6 +798,8 @@ export function ChatPanel({
   supported: boolean;
   /** The conversation, the tab's file or its page; each stays put while another shows. */
   showing: PanelView;
+  /** Changes when Files should start again from where the shell is. */
+  filesCenter: number;
   onShow: (showing: PanelView) => void;
   /** Hides the panel (Escape in the file), leaving what's in it as it is. */
   onHide: () => void;
@@ -754,10 +810,12 @@ export function ChatPanel({
   const [pageTitle, setPageTitle] = useState("");
   // Files with changes not yet saved, marked in their tabs.
   const [unsaved, setUnsaved] = useState<Record<string, boolean>>({});
-  // With more than one thing in it, each has a tab, and the one showing has
-  // its controls beside them, here, rather than a header of its own.
+  // Each thing in it has a tab, and the one showing has its controls beside
+  // them, here, rather than a header of its own.
   const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null);
-  const tabbed = views.length > 1;
+  // Mounted once they've been shown, and kept: a search stays as you left it.
+  const [toolsUsed, setToolsUsed] = useState<Tool[]>([]);
+  if (isTool(showing) && !toolsUsed.includes(showing)) setToolsUsed([...toolsUsed, showing]);
   const files = openFiles(tab);
   const fileOf = (view: PanelView) => files.find((file) => view === `file:${file.id}`);
   const label = (view: PanelView) =>
@@ -789,8 +847,14 @@ export function ChatPanel({
     if (view === "chat" && views.length > 1) chatClosedTabs.set(tab, true);
     if (view === "page") daemon.send({ type: "closePage", tabId: tab.id });
 
+    // Where it was opened from, if that's still there.
+    let back = cameFrom.get(view);
+    for (let hops = 0; back && !isTool(back) && !views.includes(back) && hops < 10; hops++) back = cameFrom.get(back);
+    if (back && back !== view && !isTool(back) && !views.includes(back)) back = undefined;
+    cameFrom.delete(view);
+
     const index = views.indexOf(view);
-    const next = views[index + 1] ?? views[index - 1];
+    const next = back && back !== view ? back : (views[index + 1] ?? views[index - 1]);
     if (!next) onHide();
     else if (view === showing) onShow(next);
   }
@@ -800,14 +864,16 @@ export function ChatPanel({
   useEffect(() => {
     panelCommands.set(tab.id, {
       step(offset) {
-        const next = views[views.indexOf(showing) + offset];
+        const all = [...TOOLS, ...views];
+        const next = all[all.indexOf(showing as (typeof all)[number]) + offset];
         if (!hasKeyboard() || !next) return false;
         onShow(next);
         return true;
       },
       close() {
         if (!hasKeyboard()) return false;
-        void close(showing);
+        if (isTool(showing)) onHide();
+        else void close(showing);
         return true;
       },
     });
@@ -824,48 +890,59 @@ export function ChatPanel({
       data-showing={showing.startsWith("file:") ? "file" : showing}
       style={{ "--font-scale": fontSize / DEFAULT_SETTINGS.fontSize } as CSSProperties}
     >
-      {tabbed && (
-        <div className="switcher">
-          <div className="views" data-draggable-root>
-            <ViewDropTarget data-draggable-target="top" data-draggable-group={group} />
-            {views.map((view) => (
-              <Fragment key={view}>
-                <StyledViewTab
-                  data-draggable-id={view}
-                  data-draggable-group={group}
-                  data-on={showing === view}
-                  onClick={() => onShow(view)}
-                  onAuxClick={(event) => event.button === 1 && close(view)}
-                  {...tooltip(hint(view), { delay: true, placement: "below" })}
-                >
-                  <div className="box">
-                    {fileOf(view) && unsaved[fileOf(view)!.id] && <span className="unsaved" />}
-                    <span className="label">{label(view)}</span>
-                    <button
-                      className="close"
-                      // Not a drag: closing should work on a quick click.
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        close(view);
-                      }}
-                      {...tooltip("Close", { delay: true })}
-                    >
-                      <X />
-                    </button>
-                  </div>
-                </StyledViewTab>
-                <ViewDropTarget
-                  data-draggable-target={`after:${view}`}
-                  data-draggable-group={group}
-                  data-draggable-related-id={view}
-                />
-              </Fragment>
-            ))}
-          </div>
-          <div className="tools" ref={setToolbar} />
+      <div className="switcher">
+        <div className="tool-tabs">
+          <button data-on={showing === "files"} onClick={() => onShow("files")} {...tooltip("Files", { hotkey: "cmd+shift+e", delay: true, placement: "below" })}>
+            <Files />
+          </button>
+          <button data-on={showing === "search"} onClick={() => onShow("search")} {...tooltip("Find in files", { hotkey: "cmd+shift+f", delay: true, placement: "below" })}>
+            <Search />
+          </button>
         </div>
-      )}
+        <div className="views" data-draggable-root>
+          <ViewDropTarget data-draggable-target="top" data-draggable-group={group} />
+          {views.map((view) => (
+            <Fragment key={view}>
+              <StyledViewTab
+                data-draggable-id={view}
+                data-draggable-group={group}
+                data-on={showing === view}
+                data-preview={fileOf(view)?.preview}
+                onClick={() => onShow(view)}
+                onDoubleClick={() => {
+                  const file = fileOf(view);
+                  if (file?.preview) daemon.send({ type: "keepFile", tabId: tab.id, fileId: file.id });
+                }}
+                onAuxClick={(event) => event.button === 1 && close(view)}
+                {...tooltip(hint(view), { delay: true, placement: "below" })}
+              >
+                <div className="box">
+                  {fileOf(view) && unsaved[fileOf(view)!.id] && <span className="unsaved" />}
+                  <span className="label">{label(view)}</span>
+                  <button
+                    className="close"
+                    // Not a drag: closing should work on a quick click.
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      close(view);
+                    }}
+                    {...tooltip("Close", { delay: true })}
+                  >
+                    <X />
+                  </button>
+                </div>
+              </StyledViewTab>
+              <ViewDropTarget
+                data-draggable-target={`after:${view}`}
+                data-draggable-group={group}
+                data-draggable-related-id={view}
+              />
+            </Fragment>
+          ))}
+        </div>
+        <div className="tools" ref={setToolbar} />
+      </div>
       {tab.agent && supported && <Conversation tab={tab} visible={visible} showing={showing === "chat"} />}
       {tab.agent && !supported && (
         <div className="note">This tab's Mac has an older Miks. Update it there to see conversations here.</div>
@@ -875,7 +952,7 @@ export function ChatPanel({
           <FileView
             tab={tab}
             file={file}
-            toolbar={tabbed ? (showing === `file:${file.id}` ? toolbar : null) : undefined}
+            toolbar={showing === `file:${file.id}` ? toolbar : null}
             focusOnOpen={focusFile && file.edit}
             onHide={onHide}
             onUnsaved={(value) => setUnsaved((current) => ({ ...current, [file.id]: value }))}
@@ -884,7 +961,17 @@ export function ChatPanel({
       ))}
       {tab.page && (
         <div className="page-view">
-          <BrowseView tab={tab} page={tab.page} closable={!tabbed} onTitle={setPageTitle} />
+          <BrowseView tab={tab} page={tab.page} closable={false} onTitle={setPageTitle} />
+        </div>
+      )}
+      {toolsUsed.includes("files") && (
+        <div className="tool-view" hidden={showing !== "files"}>
+          <FilesView tab={tab} showing={visible && showing === "files"} center={filesCenter} onHide={onHide} />
+        </div>
+      )}
+      {toolsUsed.includes("search") && (
+        <div className="tool-view" hidden={showing !== "search"}>
+          <SearchView tab={tab} onHide={onHide} />
         </div>
       )}
     </StyledChatPanel>
@@ -1633,7 +1720,8 @@ const StyledChatPanel = styled.div`
   &:not([data-showing="chat"]) > .scroller,
   &:not([data-showing="chat"]) > .composer,
   &:not([data-showing="chat"]) > .note,
-  > .file-view[hidden] {
+  > .file-view[hidden],
+  > .tool-view[hidden] {
     display: none;
   }
 
@@ -1647,6 +1735,7 @@ const StyledChatPanel = styled.div`
   }
 
   > .file-view,
+  > .tool-view,
   > .page-view {
     flex-grow: 1;
     min-height: 0;
@@ -1662,6 +1751,35 @@ const StyledChatPanel = styled.div`
     gap: 8px;
     padding: 7px 10px 7px 12px;
     border-bottom: 1px solid ${colors.separator()};
+
+    > .tool-tabs {
+      flex-shrink: 0;
+      display: flex;
+      gap: 2px;
+
+      > button {
+        width: 28px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 6px;
+        background: none;
+        color: ${colors.textSecondary()};
+        cursor: pointer;
+
+        &[data-on="true"] {
+          background: ${colors.buttonBackgroundGlow()};
+          color: ${colors.text()};
+        }
+
+        > svg {
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
 
     > .views {
       flex-grow: 1;

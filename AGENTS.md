@@ -527,7 +527,9 @@ resizes); keep it passing.
   closing). The daemon reads, watches (`fs.watchFile`: git and editors
   replace files) and saves it, so a remote window edits that Mac's file. A
   save is refused if the file's mtime moved since the editor's copy, unless
-  forced (`saveFile`); the editor then asks. In a Claude tab the panel
+  forced (`saveFile`); the editor then asks. It's editable as it opens
+  (Revert to saved in its ⋯), except on a touch screen, where tapping one to
+  read it would bring up the on-screen keyboard, so there it has Edit. In a Claude tab the panel
   switches Chat | file, both kept mounted (CSS hides one). The panel's
   open or not apart from the file (⌘⇧C, Escape in the editor once
   CodeMirror has nothing to close): hidden, the file stays as it was.
@@ -567,6 +569,30 @@ resizes); keep it passing.
   `@xterm/addon-search`, and CodeMirror keeps its own (a focused `.cm-editor`).
   Only ⌘, not ⌃F, a program's. A full-screen program (Claude Code) has only
   its screen to search.
+- Every tab's panel has Files (⌘⇧E, `ui/FilesView.tsx`) and Find in files
+  (⌘⇧F, `ui/SearchView.tsx`) at the start of its row, which aren't
+  `PanelView`s you can close or drag; ⌘P (`ui/QuickOpen.tsx`) finds a file in
+  the repo around the tab's folder. All three are the daemon's
+  (`server/Search.ts`, since protocol 20), so a remote window's or the iOS
+  app's search runs on that Mac. Search is ripgrep, pinned and checksummed in
+  `scripts/ripgrep.ts`, fetched by postinstall to
+  `packages/daemon/ripgrep/build/rg` (ignored) and copied into the bundle;
+  Homebrew's links to its own PCRE2. All code searches the Mac's
+  `searchFolders`. `node_modules` is excluded by name as well as ripgrep's
+  `.gitignore` handling, which needs a repo. Its offsets are bytes; the
+  results' are characters. A click in either passes through a file
+  (`OpenFile.preview`, an italic tab, which the next takes the place of) and
+  a double click or changing it keeps it (`keepFile`). A result opens at
+  `OpenFile.at`, in the source of a markdown file, and the keyboard goes
+  to whatever these open (`openInPanel`), so ⌘W closes it. Their icons are
+  Material Icon Theme's (`ui/fileIcons.tsx`), the package's manifest and
+  SVGs in a chunk of their own (`ui/fileIconData.ts`), loaded on first use,
+  with every folder the plain one, as VS Code has. Closing a file goes back
+  to what it came on top of (`cameFrom`). An image file shows as one
+  (`readImage`), an SVG with Preview | Source. Files reads a folder as
+  it opens and when it comes on show: nothing watches the tree. In `yarn
+  dev`, hot reloading `ChatPanel.tsx` can empty `toolShowers`, so ⌘⇧F does
+  nothing until the page reloads.
 - A click on code in a chat message (`ui/codeMenu.tsx`; not in a block or
   a link) shows a menu: Copy, and for one that's there on the tab's Mac
   (`findPaths`, from the tab's folder), Open (a file in the panel, a folder
@@ -623,7 +649,7 @@ resizes); keep it passing.
   one. A history file stays while ⌘⇧T could bring its tab back. Closing a
   workspace's last tab closes it, so that's remembered as the workspace.
   `state.json` keeps each tab's files now too.
-- ⌘⇧F (or the tab bar's button beside the panel's) has the panel fill the
+- ⌘⇧D (or the tab bar's button beside the panel's) has the panel fill the
   tab, per tab like open or not: CSS over the same PanelLayout (nothing
   remounts, so a page keeps its state), the terminal keeping its full size
   under it (no SIGWINCH), and showing or hiding it fades rather than

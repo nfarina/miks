@@ -7,6 +7,7 @@ import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientInfo, ClientMessage, DaemonMessage } from "../shared/protocol.ts";
 import { fetchImageForPanel, findPaths, readImageForPanel, showFolder } from "./Files.ts";
+import { listFiles, readFolder, searchFiles } from "./Search.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
 import { browseUrl } from "../shared/browse.ts";
@@ -250,6 +251,9 @@ export async function serve({
     const chats = new Map<string, () => void>();
     const files = new Map<string, ReturnType<Workspaces["watchFile"]>>();
 
+    // This window's searches running, by request: what stops each.
+    const searches = new Map<string, () => void>();
+
     const sendPermissions = async () =>
       send({ type: "permissions", app: await permissionsApp(), permissions: await checkPermissions() });
 
@@ -399,7 +403,39 @@ export async function serve({
           return workspaces.closeFileByHand(message.tabId, message.fileId);
         case "openFile":
           if (!path.isAbsolute(message.path)) return;
-          return void workspaces.openFile(message.tabId, message.path, { edit: false, wait: false });
+          return void workspaces.openFile(message.tabId, message.path, { edit: false, wait: false, preview: message.preview, at: message.at });
+        case "keepFile":
+          return workspaces.keepFile(message.tabId, message.fileId);
+        case "readFolder": {
+          const { requestId } = message;
+          if (!path.isAbsolute(message.path)) return send({ type: "folder", requestId, error: "The path must be absolute." });
+          void readFolder(message.path).then(
+            (entries) => send({ type: "folder", requestId, entries }),
+            (error) => send({ type: "folder", requestId, error: String(error?.message ?? error) }),
+          );
+          return;
+        }
+        case "search": {
+          const { requestId } = message;
+          searches.set(
+            requestId,
+            searchFiles(message.options, (files, end) => {
+              if (end) searches.delete(requestId);
+              send({ type: "searchResults", requestId, files, ...end });
+            }),
+          );
+          return;
+        }
+        case "cancelSearch":
+          searches.get(message.requestId)?.();
+          searches.delete(message.requestId);
+          return;
+        case "listFiles": {
+          const { requestId } = message;
+          if (!path.isAbsolute(message.path)) return;
+          void listFiles(message.path).then((list) => send({ type: "fileList", requestId, ...list }));
+          return;
+        }
         case "readImage": {
           const { requestId } = message;
           if (!path.isAbsolute(message.path)) return send({ type: "image", requestId, error: "The path must be absolute." });
@@ -459,6 +495,7 @@ export async function serve({
     });
 
     socket.on("close", () => {
+      for (const stop of searches.values()) stop();
       sockets.delete(socket);
       clients.delete(socket);
       devices.delete(socket);

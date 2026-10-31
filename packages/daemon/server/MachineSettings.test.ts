@@ -24,7 +24,7 @@ const start = async () => (daemon = await serve({ socketPath: path.join(home, "m
 test("a Mac's settings start from settings.json's, and any window changes them for every window", async () => {
   fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ hidePathPrefix: "~/Code/", fontSize: 15 }));
   const { workspaces } = await start();
-  expect(workspaces.getState().machine).toEqual({ hidePathPrefix: "~/Code/", tailnetAccess: false, keepAvailable: "off" });
+  expect(workspaces.getState().machine).toEqual({ hidePathPrefix: "~/Code/", searchFolders: "~/Code", tailnetAccess: false, keepAvailable: "off" });
 
   const states: DaemonMessage[] = [];
   const socket = connectDaemon(path.join(home, "miks.sock"));
@@ -34,12 +34,12 @@ test("a Mac's settings start from settings.json's, and any window changes them f
   socket.send(JSON.stringify({ type: "machineSettings", changes: { tailnetAccess: true, hidePathPrefix: 7, keepAvailable: "always" } }));
   await expect
     .poll(() => states.findLast((message) => message.type === "state")?.state.machine)
-    .toEqual({ hidePathPrefix: "~/Code/", tailnetAccess: true, keepAvailable: "off" });
+    .toEqual({ hidePathPrefix: "~/Code/", searchFolders: "~/Code", tailnetAccess: true, keepAvailable: "off" });
   socket.close();
 
   // Kept, in a file of the daemon's own.
-  expect(JSON.parse(fs.readFileSync(path.join(home, "machine.json"), "utf8"))).toEqual({ hidePathPrefix: "~/Code/", tailnetAccess: true, keepAvailable: "off" });
+  expect(JSON.parse(fs.readFileSync(path.join(home, "machine.json"), "utf8"))).toEqual({ hidePathPrefix: "~/Code/", searchFolders: "~/Code", tailnetAccess: true, keepAvailable: "off" });
   fs.writeFileSync(path.join(home, "settings.json"), JSON.stringify({ hidePathPrefix: "elsewhere" }));
   await daemon!.close();
-  expect((await start()).workspaces.getMachineSettings()).toEqual({ hidePathPrefix: "~/Code/", tailnetAccess: true, keepAvailable: "off" });
+  expect((await start()).workspaces.getMachineSettings()).toEqual({ hidePathPrefix: "~/Code/", searchFolders: "~/Code", tailnetAccess: true, keepAvailable: "off" });
 });

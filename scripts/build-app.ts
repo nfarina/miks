@@ -6,6 +6,7 @@ import { execFileSync } from "child_process";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { fetchRipgrep } from "./ripgrep.ts";
 
 export const root = path.resolve(import.meta.dirname, "..");
 export const bundleId = "com.nfarina.miks";
@@ -60,6 +61,8 @@ export async function buildApp(): Promise<string> {
   console.log("Building the keeper…");
   fs.mkdirSync(path.join(stage, "packages/daemon/keeper/build"), { recursive: true });
   run("swiftc", ["-O", path.join(root, "packages/daemon/keeper/Keeper.swift"), "-o", path.join(stage, "packages/daemon/keeper/build/miks-keeper")]);
+  fetchRipgrep();
+  copy("packages/daemon/ripgrep");
   copy("packages/ui/dist");
   for (const name of ["node-pty", "ws", "@xterm/headless", "@xterm/addon-serialize"]) {
     copy(`node_modules/${name}`);

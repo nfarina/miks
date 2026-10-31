@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -92,6 +92,35 @@ export type OpenFile = {
   wait: boolean;
   /** Goes up each time it's opened again while open, which brings it to the front. Since protocol 10. */
   opened?: number;
+  /** Only passing through (a click in Files or Search): the next one takes its place, until it's kept. Since protocol 20. */
+  preview?: boolean;
+  /** Where it was last opened at (a search result), to show and select: 1-based, with the match's offset in the line and length. Since protocol 20. */
+  at?: FileSpot;
+};
+
+export type FileSpot = { line: number; column: number; length: number };
+
+/** What's in a folder, for the panel's Files. */
+export type FolderEntry = { name: string; folder: boolean; ignored?: boolean };
+
+/** A Find in files. Lists of globs are comma-separated. */
+export type SearchOptions = {
+  query: string;
+  /** Absolute, or from `~`. */
+  roots: string[];
+  regex: boolean;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  /** Ignored and hidden files too. */
+  everything: boolean;
+  include: string;
+  exclude: string;
+};
+
+/** A file's matches: `ranges` are the hits in `text`, which is the line cut to size. */
+export type SearchFile = {
+  path: string;
+  matches: { line: number; column: number; length: number; text: string; ranges: [number, number][] }[];
 };
 
 /** Why a file's contents aren't there to show. */
@@ -307,7 +336,16 @@ export type ClientMessage =
    * link in a markdown file. `path` is absolute, on the daemon's Mac. Since
    * protocol 10.
    */
-  | { type: "openFile"; tabId: string; path: string }
+  | { type: "openFile"; tabId: string; path: string; preview?: boolean; at?: FileSpot }
+  /** Keeps a passing file open: it isn't replaced by the next. Since protocol 20. */
+  | { type: "keepFile"; tabId: string; fileId: string }
+  /** What's in a folder (absolute): answered by `folder`. Since protocol 20. */
+  | { type: "readFolder"; requestId: string; path: string }
+  /** Searches files: answered by `searchResults`, a few at a time. Since protocol 20. */
+  | { type: "search"; requestId: string; options: SearchOptions }
+  | { type: "cancelSearch"; requestId: string }
+  /** Every file in the repo around a folder (or that folder), for ⌘P: answered by `fileList`. Since protocol 20. */
+  | { type: "listFiles"; requestId: string; path: string }
   /**
    * Reads an image a markdown file in a panel shows (`path` absolute, on the
    * daemon's Mac, and an image by its extension); answered by `image` with
@@ -399,6 +437,12 @@ export type DaemonMessage =
   | { type: "image"; requestId: string; data?: string; mime?: string; mtime?: number; unchanged?: boolean; error?: string }
   /** A `findPaths`'s answer, in its order: each one's absolute path, or null if it isn't there. */
   | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] }
+  /** A `readFolder`'s answer. */
+  | { type: "folder"; requestId: string; entries?: FolderEntry[]; error?: string }
+  /** More of a `search`'s results; `done` on the last. */
+  | { type: "searchResults"; requestId: string; files: SearchFile[]; done?: boolean; truncated?: boolean; error?: string }
+  /** A `listFiles`'s answer: paths relative to `root`. */
+  | { type: "fileList"; requestId: string; root: string; paths: string[]; truncated: boolean }
   /** A `running`'s answer. */
   | { type: "running"; requestId: string; running: RunningProgram[] }
   /** A `version`'s answer. */

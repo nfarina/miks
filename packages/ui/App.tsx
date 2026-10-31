@@ -21,6 +21,7 @@ import {
   hasPanel,
   isChatOpen,
   setChatOpen,
+  showTool,
   stepPanel,
   toggleChat,
   toggleExpanded,
@@ -35,6 +36,8 @@ import { listenForFind } from "./find";
 import { StyledTabBar, TabBar } from "./TabBar";
 import { StatusDot } from "./StatusDot";
 import { SettingsDialog, type SettingsTab } from "./SettingsDialog";
+import { QuickOpen } from "./QuickOpen";
+import { focusActiveTerminal } from "./TerminalView";
 import { VersionDialog } from "./VersionDialog";
 import { KeyBar } from "./KeyBar";
 import { useHandoff } from "./handoff";
@@ -70,6 +73,13 @@ export function App() {
 
   const versionDialog = useDialog(() => <VersionDialog onClose={versionDialog.hide} />);
 
+  // ⌘P, over the tab on screen.
+  const [quickOpen, setQuickOpen] = useState(false);
+  const closeQuickOpen = () => {
+    setQuickOpen(false);
+    focusActiveTerminal();
+  };
+
   useEffect(() => {
     const handle = (command: string) => {
       if (command === "settings" || command === "settingsRemotes") {
@@ -78,6 +88,7 @@ export function App() {
       }
       // About Miks, and the Mac switcher's Versions… in the iOS app.
       if (command === "versions") return versionDialog.show();
+      if (command === "quickOpen") return setQuickOpen(true);
       runCommand(command);
     };
 
@@ -118,6 +129,7 @@ export function App() {
   }
 
   const activeWorkspace = state.workspaces.find((w) => w.id === state.activeWorkspaceId) ?? null;
+  const activeTab = activeWorkspace?.tabs.find((tab) => tab.id === activeWorkspace.activeTabId);
 
   return (
     <StyledApp style={keyboardStyle} data-stale={reconnecting && (stuck ? "stuck" : "true")}>
@@ -178,6 +190,7 @@ export function App() {
         <Sidebar workspaces={state.workspaces} activeWorkspaceId={state.activeWorkspaceId} home={state.home} />
       </PanelLayout>
       <KeyBar />
+      {quickOpen && activeTab && <QuickOpen key={activeTab.id} tab={activeTab} onClose={closeQuickOpen} />}
       {reconnecting && (
         <Reconnecting
           name={macs.find((mac) => mac.active)?.name ?? target?.name ?? null}
@@ -643,7 +656,6 @@ function runCommand(command: string) {
 
   switch (command) {
     case "toggleChat": {
-      // Only for a tab with something to show: Claude Code, a file or a page.
       const tab = tabs[tabIndex];
       if (tab && hasPanel(tab)) toggleChat(tab);
       return;
@@ -653,6 +665,12 @@ function runCommand(command: string) {
       if (tab && hasPanel(tab)) toggleExpanded(tab);
       return;
     }
+    case "showFiles":
+      if (tabs[tabIndex]) showTool(tabs[tabIndex], "files");
+      return;
+    case "findInFiles":
+      if (tabs[tabIndex]) showTool(tabs[tabIndex], "search");
+      return;
     case "newTab":
       if (workspace) daemon.send({ type: "createTab", workspaceId: workspace.id });
       else daemon.send({ type: "createWorkspace" });

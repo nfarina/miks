@@ -227,7 +227,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         (.view, [
             ("Toggle sidebar", "b", .command, "toggleSidebar"),
             ("Toggle panel", "c", [.command, .shift], "toggleChat"),
-            ("Panel fills the tab", "f", [.command, .shift], "toggleExpanded"),
+            ("Panel fills the tab", "d", [.command, .shift], "toggleExpanded"),
+            ("Files", "e", [.command, .shift], "showFiles"),
+            ("Find in files", "f", [.command, .shift], "findInFiles"),
+            ("Go to file…", "p", .command, "quickOpen"),
             ("Focus terminal", UIKeyCommand.inputLeftArrow, [.command, .alternate], "focusTerminal"),
             ("Focus panel", UIKeyCommand.inputRightArrow, [.command, .alternate], "focusPanel"),
             ("Bigger text", "=", .command, "fontBigger"),

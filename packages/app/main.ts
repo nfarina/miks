@@ -1030,7 +1030,10 @@ function buildMenu() {
       submenu: [
         command("toggleSidebar", "CmdOrCtrl+B", "Toggle sidebar"),
         command("toggleChat", "CmdOrCtrl+Shift+C", "Toggle panel"),
-        command("toggleExpanded", "CmdOrCtrl+Shift+F", "Panel fills the tab"),
+        command("toggleExpanded", "CmdOrCtrl+Shift+D", "Panel fills the tab"),
+        command("showFiles", "CmdOrCtrl+Shift+E", "Files"),
+        command("findInFiles", "CmdOrCtrl+Shift+F", "Find in files"),
+        command("quickOpen", "CmdOrCtrl+P", "Go to file…"),
         command("focusTerminal", "CmdOrCtrl+Alt+Left", "Focus terminal"),
         command("focusPanel", "CmdOrCtrl+Alt+Right", "Focus panel"),
         { type: "separator" },

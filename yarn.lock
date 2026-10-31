@@ -2061,6 +2061,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"chroma-js@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "chroma-js@npm:3.2.0"
+  checksum: 10c0/6ff6213d234e096ad3536291b1e1f11a506ea0fccfe163dd8eff69afa5f4f8a905b31a4a7ebc22b7eb722590887fed77073805ce89485f6d563edd1ea2d0a1db
+  languageName: node
+  linkType: hard
+
 "codemirror@npm:^6.0.2":
   version: 6.0.2
   resolution: "codemirror@npm:6.0.2"
@@ -2946,6 +2953,15 @@ __metadata:
   bin:
     marked: bin/marked.js
   checksum: 10c0/650d37ef22d39cc28e9afb194517dc7a23baa7c93971ccd518583907ac9b61ce90affb654e0f37b1505f7809988b6c35e45fbb8023bc03a33104bcdfe26324b1
+  languageName: node
+  linkType: hard
+
+"material-icon-theme@npm:5.40.0":
+  version: 5.40.0
+  resolution: "material-icon-theme@npm:5.40.0"
+  dependencies:
+    chroma-js: "npm:^3.2.0"
+  checksum: 10c0/85e254c73213877f62a215905f16aff6000ba265dae476542a233a1686c417b95328f2ff745651ac4744dcb5bf9ee177913aa6e2546008f3157b772eb0c3ed61
   languageName: node
   linkType: hard
 
@@ -3854,6 +3870,7 @@ __metadata:
     lucide-react: "npm:^1.54.0"
     marked: "npm:^18.1.1"
     marked-highlight: "npm:^2.2.4"
+    material-icon-theme: "npm:5.40.0"
     miks: "workspace:*"
     react: "npm:^19.3.0"
     react-dom: "npm:^19.3.0"
