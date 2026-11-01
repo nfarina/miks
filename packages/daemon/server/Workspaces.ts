@@ -27,10 +27,13 @@ import { loadMachineSettings, only, saveMachineSettings } from "./MachineSetting
 /** What survives a daemon restart, in `state.json`. */
 /** How long a finished turn waits for its session to end before it's `done`. */
 const DONE_DELAY = 1000;
+const MAX_RECENT_FILES = 500;
 
 export type SavedState = {
   version: 1;
   activeWorkspace: number;
+  /** Files opened in a panel, latest first. */
+  recentFiles?: string[];
   workspaces: {
     title: string | null;
     cwd: string;
@@ -152,6 +155,8 @@ export class Workspaces extends EventEmitter<{
   private readonly historyIds = new Map<string, string>();
   /** What's been closed, for ⌘⇧T, the latest last. */
   private readonly closed: Closed[] = [];
+  /** Every file opened lately, latest first, for ⌘P. */
+  recentFiles: string[] = [];
   /** Each tab's shell's directory, as of the last `pollCwds`. */
   private readonly cwds = new Map<string, string>();
   private dark = true;
@@ -687,6 +692,7 @@ export class Workspaces extends EventEmitter<{
     return {
       version: 1,
       activeWorkspace: Math.max(0, this.workspaces.findIndex((w) => w.id === this.activeWorkspaceId)),
+      recentFiles: this.recentFiles,
       workspaces,
     };
   }
@@ -697,6 +703,7 @@ export class Workspaces extends EventEmitter<{
    * moment, not your agents.
    */
   restore(saved: SavedState) {
+    this.recentFiles = saved.recentFiles ?? [];
     for (const savedWorkspace of saved.workspaces) {
       if (savedWorkspace.tabs.length === 0) continue;
 
@@ -847,6 +854,7 @@ export class Workspaces extends EventEmitter<{
   ): Promise<void> {
     if (!this.panes.has(tabId)) return Promise.resolve();
 
+    this.recentFiles = [file, ...this.recentFiles.filter((path) => path !== file)].slice(0, MAX_RECENT_FILES);
     const list = this.files.get(tabId) ?? [];
     this.files.set(tabId, list);
     const already = list.find((open) => open.file.path === file);

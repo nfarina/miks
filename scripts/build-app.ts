@@ -64,7 +64,8 @@ export async function buildApp(): Promise<string> {
   fetchRipgrep();
   copy("packages/daemon/ripgrep");
   copy("packages/ui/dist");
-  for (const name of ["node-pty", "ws", "@xterm/headless", "@xterm/addon-serialize"]) {
+  // Its language server, for jumping to definitions (server/Language.ts).
+  for (const name of ["node-pty", "ws", "@xterm/headless", "@xterm/addon-serialize", "@typescript/typescript-darwin-arm64"]) {
     copy(`node_modules/${name}`);
   }
   // The app imports the daemon's shared code as the `miks` package. In the repo

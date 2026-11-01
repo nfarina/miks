@@ -6,11 +6,14 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 import { daemon } from "./daemon";
 import { FileIcon } from "./fileIcons";
+import { fitScore } from "./fitScore";
 import { openInPanel } from "./FileView";
 import { useSettings } from "./settings";
 import { terminalScrollbarCSS } from "./TerminalView";
 
 const MAX_SHOWN = 100;
+/** What being opened before is worth: about a few letters' fit, and the latest first among equals. */
+const RECENT_SCORE = 6;
 const SCOPE_KEY = "QuickOpen:scope";
 
 type Scope = "folder" | "all";
@@ -24,35 +27,12 @@ function savedScope(): Scope {
 }
 
 /**
- * How well `query` fits `path`, its letters in order, or null if they
- * aren't all there. Higher for runs of letters, for starts of words, and for
- * landing in the file's name; a little lower for a longer path.
+ * ⌘P: finds a file in the tab's repo, or all your code (Settings), by a few
+ * letters of its path, and opens it in the panel. Files you've opened before
+ * come first, and count even if ignored, which is how to get to those.
  */
-export function fitScore(query: string, path: string): { score: number; hits: number[] } | null {
-  const lower = path.toLowerCase();
-  const nameStart = path.lastIndexOf("/") + 1;
-  const hits: number[] = [];
-  let score = -path.length / 100;
-  let at = 0;
-  for (const char of query.toLowerCase()) {
-    if (char === " ") continue;
-    // The last place it fits from the end for the first letter would be
-    // better still, but in order from the left is close and much cheaper.
-    const found = lower.indexOf(char, at);
-    if (found === -1) return null;
-    const before = path[found - 1];
-    if (hits.at(-1) === found - 1) score += 4;
-    if (found === 0 || "/._-".includes(before ?? "") || (/[A-Z]/.test(path[found]) && /[a-z]/.test(before ?? ""))) score += 3;
-    if (found >= nameStart) score += 2;
-    hits.push(found);
-    at = found + 1;
-  }
-  return { score, hits };
-}
-
-/** ⌘P: finds a file in the tab's repo, or all your code (Settings), by a few letters of its path, and opens it in the panel. */
 export function QuickOpen({ tab, onClose }: { tab: Tab; onClose: () => void }) {
-  const [list, setList] = useState<{ root: string; paths: string[]; truncated: boolean } | null>(null);
+  const [list, setList] = useState<{ root: string; paths: string[]; recent?: string[]; truncated: boolean } | null>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -82,10 +62,12 @@ export function QuickOpen({ tab, onClose }: { tab: Tab; onClose: () => void }) {
     };
   }, [scope]);
 
-  const matches = (list?.paths ?? [])
-    .flatMap((path) => {
+  const recent = list?.recent ?? [];
+  const matches = [...new Set([...recent, ...(list?.paths ?? [])])]
+    .flatMap((path, index) => {
       const fit = fitScore(query, path);
-      return fit ? [{ path, ...fit }] : [];
+      if (!fit) return [];
+      return [{ ...fit, path, score: fit.score + (index < recent.length ? RECENT_SCORE - index / recent.length : 0) }];
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_SHOWN);

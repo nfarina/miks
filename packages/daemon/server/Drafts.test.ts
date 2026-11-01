@@ -67,3 +67,8 @@ test("a window that was away hears that a draft was sent (emptied) while it was 
   await expect.poll(() => phone.drafts).toEqual([{ tabId, text: "" }]);
   for (const each of [mac, phone]) each.socket.close();
 });
+
+test("the files you've opened outlast a restart", async () => {
+  daemon.workspaces.recentFiles = ["/a", "/b"];
+  expect((await daemon.workspaces.save()).recentFiles).toEqual(["/a", "/b"]);
+});

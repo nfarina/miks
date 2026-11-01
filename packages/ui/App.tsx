@@ -23,6 +23,7 @@ import {
   setChatOpen,
   showView,
   stepPanel,
+  revealFile,
   togglePanel,
   toggleExpanded,
 } from "./ChatPanel";
@@ -670,6 +671,9 @@ function runCommand(command: string) {
     }
     case "showFiles":
       if (tabs[tabIndex]) showView(tabs[tabIndex], "files");
+      return;
+    case "revealFile":
+      if (tabs[tabIndex]) revealFile(tabs[tabIndex]);
       return;
     case "findInFiles":
       if (tabs[tabIndex]) showView(tabs[tabIndex], "search");

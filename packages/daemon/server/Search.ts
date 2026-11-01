@@ -135,7 +135,7 @@ export function searchFiles(
 }
 
 /** The folder a path's repo starts at, if it's in one. */
-function repoRoot(folder: string): string | null {
+export function repoRoot(folder: string): string | null {
   for (let at = folder; ; at = path.dirname(at)) {
     if (fs.existsSync(path.join(at, ".git"))) return at;
     if (at === path.dirname(at)) return null;
@@ -152,13 +152,22 @@ function commonFolder(folders: string[]): string {
 /**
  * Every file ripgrep would search under `folder`'s repo (or `folder`, outside
  * one), or under `roots` instead, for ⌘P: relative to the `root` it answers
- * with, so the paths to match against start where they differ.
+ * with, so the paths to match against start where they differ. `recent` is
+ * those of `opened` (latest first) that are in there, ignored or not.
  */
-export function listFiles(folder: string, roots?: string[]): Promise<{ root: string; paths: string[]; truncated: boolean }> {
+export function listFiles(
+  folder: string,
+  roots?: string[],
+  opened: string[] = [],
+): Promise<{ root: string; paths: string[]; recent: string[]; truncated: boolean }> {
   const folders = roots?.map(expand).filter((root) => path.isAbsolute(root) && fs.existsSync(root));
-  if (folders?.length === 0) return Promise.resolve({ root: folder, paths: [], truncated: false });
+  if (folders?.length === 0) return Promise.resolve({ root: folder, paths: [], recent: [], truncated: false });
   const root = folders ? commonFolder(folders) : (repoRoot(folder) ?? folder);
   const within = folders && folders.length > 1 ? folders.map((entry) => path.relative(root, entry) || ".") : [];
+  // Whatever ripgrep would skip too: having opened one is reason enough.
+  const recent = opened
+    .filter((file) => (folders ?? [root]).some((top) => file.startsWith(`${top}/`)) && fs.existsSync(file))
+    .map((file) => path.relative(root, file));
   return new Promise((resolve) => {
     const child = spawn(ripgrep(), ["--files", "--no-config", "--no-messages", ...SKIP.flatMap((glob) => ["--glob", glob]), "--", ...within], {
       cwd: root,
@@ -177,8 +186,8 @@ export function listFiles(folder: string, roots?: string[]): Promise<{ root: str
         child.kill();
       }
     });
-    child.on("error", () => resolve({ root, paths: [], truncated: false }));
-    child.on("close", () => resolve({ root, paths: paths.slice(0, MAX_FILES), truncated }));
+    child.on("error", () => resolve({ root, paths: [], recent, truncated: false }));
+    child.on("close", () => resolve({ root, paths: paths.slice(0, MAX_FILES), recent, truncated }));
   });
 }
 

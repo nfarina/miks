@@ -11,7 +11,7 @@ import { fonts } from "crosswing/fonts";
 import { DialogView } from "crosswing/modals/dialog";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { usePopup } from "crosswing/modals/popup/usePopup";
-import { Check, Minus, Monitor, Plus, ShieldAlert, X } from "lucide-react";
+import { Check, CircleAlert, Minus, Monitor, Plus, ShieldAlert, X } from "lucide-react";
 import type { Permission } from "miks/shared/protocol";
 import type { KeepAvailable, Remote } from "miks/shared/settings";
 import type { TailnetMac } from "miks/shared/tailscale";
@@ -448,7 +448,7 @@ function RemoteSettings() {
     const macs = (found.macs ?? []).filter((mac) => mac.mine && !added.has(mac.name.toLowerCase()));
     return (
       <PopupMenu>
-        {found.error && <PopupMenuText disabled children={found.error} />}
+        {found.error && <PopupMenuText disabled icon={<CircleAlert />} children={found.error} />}
         {macs.map((mac) => (
           <PopupMenuText
             key={mac.name}
@@ -458,9 +458,9 @@ function RemoteSettings() {
             children={mac.name}
           />
         ))}
-        {!found.error && macs.length === 0 && <PopupMenuText disabled children="No other Macs of yours on Tailscale" />}
+        {!found.error && macs.length === 0 && <PopupMenuText disabled icon={<Monitor />} children="No other Macs of yours on Tailscale" />}
         <PopupMenuSeparator />
-        <PopupMenuText onClick={() => add()} children="Another…" />
+        <PopupMenuText icon={<Plus />} onClick={() => add()} children="Another…" />
       </PopupMenu>
     );
   });

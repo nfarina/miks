@@ -573,10 +573,14 @@ resizes); keep it passing.
   (⌘⇧F, `ui/SearchView.tsx`) at the start of its row, which aren't
   `PanelView`s you can close or drag, nor stops for ⌘⇧[ and ⌘⇧]. ⌘⇧C, ⌘⇧E
   and ⌘⇧F each go to their view, and close the panel if the keyboard's
-  already in it (`showView`); ⌥⌘B just opens or closes it. ⌘⇧V switches ⌘P and
+  already in it (`showView`); ⌥⌘B just opens or closes it. ⌘⇧\ shows the file on
+  show in Files, opening the folders down to it. ⌘⇧V switches ⌘P and
   Find in files between here and All code, as it does a file's Preview |
   Source. ⌘P (`ui/QuickOpen.tsx`) finds a file in
-  the repo around the tab's folder. All three are the daemon's
+  the repo around the tab's folder: each word fits by itself, in any order, as
+  in VS Code (`ui/fitScore.ts`), and files opened before come first, ignored or
+  not (`Workspaces.recentFiles`, every `openFile`, the last 500, saved in
+  `state.json`), which is how to reach ignored ones. All three are the daemon's
   (`server/Search.ts`, since protocol 20), so a remote window's or the iOS
   app's search runs on that Mac. Search is ripgrep, pinned and checksummed in
   `scripts/ripgrep.ts`, fetched by postinstall to
@@ -584,9 +588,15 @@ resizes); keep it passing.
   Homebrew's links to its own PCRE2. All code searches the Mac's
   `searchFolders`. `node_modules` is excluded by name as well as ripgrep's
   `.gitignore` handling, which needs a repo. Its offsets are bytes; the
-  results' are characters. A click in either passes through a file
+  results' are characters. A click on a result passes through its file
   (`OpenFile.preview`, an italic tab, which the next takes the place of) and
-  a double click or changing it keeps it (`keepFile`). A result opens at
+  a double click or changing it keeps it (`keepFile`). Files only selects on a
+  click, opening on a double click or ⌘↓ (a tap passes through, on a touch
+  screen, with no double click to go by), and ⌘↑ goes up a folder. Typing there
+  filters it (`ui/filterTree.ts`), by name, every file under its root, opened or
+  not (`listFiles`) plus what's been read (so ignored ones it's shown), the
+  folders down to each match open; Escape ends it, and picking a folder shows it
+  in the whole tree. A result opens at
   `OpenFile.at`, in the source of a markdown file, and the keyboard goes
   to whatever these open (`openInPanel`), so ⌘W closes it. Their icons are
   Material Icon Theme's (`ui/fileIcons.tsx`), the package's manifest and
@@ -595,8 +605,23 @@ resizes); keep it passing.
   to what it came on top of (`cameFrom`). An image file shows as one
   (`readImage`), an SVG with Preview | Source. Files reads a folder as
   it opens and when it comes on show: nothing watches the tree. In `yarn
-  dev`, hot reloading `ChatPanel.tsx` can empty `toolShowers`, so ⌘⇧F does
+  dev`, hot reloading `ChatPanel.tsx` can empty `viewShowers`, so ⌘⇧F does
   nothing until the page reloads.
+- ⌘-click or F12 in a file's editor goes to a definition, opening it as a
+  passing file, and ⌃- goes back (`jumps` in `ui/FileView.tsx`). It's
+  `server/Language.ts` (since protocol 22), a table of language servers with
+  one so far: TypeScript 7's compiler, `tsc --lsp --stdio`, the platform
+  package's binary, bundled. So a remote window's or the iOS app's jump runs on
+  that Mac. A server's per repo, started on the first jump, under a second even
+  in a big repo, and stopped 5 idle minutes later or past 3 GB: its memory only
+  grows (past 2 GB in Denada, under stress, not returned idle; `GOMEMLIMIT`
+  saved little and made it 20× slower). `show` hands it the editor's text, one
+  file at a time, opening the next before closing the last or it could drop
+  the project. Declaring no `didChangeWatchedFiles` is deliberate: it then finds
+  changes on disk by itself, within 300ms, so agents' edits count with nothing
+  of ours watching. With that capability it waits to be told. It exits when
+  stdin closes, so a daemon dying leaves none behind.
+
 - A click on code in a chat message (`ui/codeMenu.tsx`; not in a block or
   a link) shows a menu: Copy, and for one that's there on the tab's Mac
   (`findPaths`, from the tab's folder), Open (a file in the panel, a folder

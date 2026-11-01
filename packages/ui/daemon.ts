@@ -272,6 +272,11 @@ class DaemonClient {
     return this.request((requestId) => ({ type: "listFiles", requestId, path, roots }));
   }
 
+  /** Where a symbol is defined, by the language server on the daemon's Mac. Since protocol 22. */
+  findDefinition(path: string, text: string, line: number, column: number): Promise<Extract<DaemonMessage, { type: "definition" }>> {
+    return this.request((requestId) => ({ type: "findDefinition", requestId, path, text, line, column }));
+  }
+
   /** Sends a request whose answer has the same `requestId`; an older daemon's never comes. */
   private request<T>(message: (requestId: string) => ClientMessage): Promise<T> {
     if (!this.snapshot.connected || !this.speaks(20)) return Promise.reject(new Error(OLDER));
@@ -473,7 +478,8 @@ class DaemonClient {
       case "state":
         return this.update({ state: message.state });
       case "folder":
-      case "fileList": {
+      case "fileList":
+      case "definition": {
         const { requestId } = message;
         this.requests.get(requestId)?.(message);
         this.requests.delete(requestId);

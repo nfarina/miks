@@ -11,7 +11,7 @@ import { ModalContext } from "crosswing/modals/context";
 import { tooltip } from "crosswing/modals/popup";
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { Copy, Ellipsis, FolderSearch, Undo2, WrapText, X } from "lucide-react";
-import type { FileSpot, OpenFile, Tab } from "miks/shared/protocol";
+import { type FileSpot, hasDefinitions, type OpenFile, type Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
 import { type KeyboardEvent, use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -39,6 +39,17 @@ export function openInPanel(tab: Tab, path: string, options: { keep?: boolean; a
   focusWanted.set(tab.id, path);
   daemon.send({ type: "openFile", tabId: tab.id, path, preview: !options.keep, at: options.at });
 }
+
+/** Finder only where Finder is, a Miks window on this Mac: why not, if it isn't here. */
+export function whyNoFinder(): string | null {
+  if (DEVICE_SETTINGS) return "Only in Miks on the Mac";
+  if (isRemote()) return "Only for files on this Mac";
+  return daemon.speaks(18) ? null : "Update Miks on this Mac first";
+}
+
+/** Where each tab's jumps to a definition came from, for ⌃- to go back through. */
+const jumps = new Map<string, { path: string; spot: FileSpot }[]>();
+const MAX_JUMPS = 50;
 
 /**
  * The file `miks open` or `miks edit` put in a tab's panel, saved with ⌘S.
@@ -192,10 +203,28 @@ export function FileView({
                 return true;
               },
             },
+            {
+              key: "F12",
+              run: (view) => {
+                if (!hasDefinitions(file.path)) return false;
+                void goToDefinition(view, view.state.selection.main.head);
+                return true;
+              },
+            },
+            { key: "Ctrl--", run: goBack },
           ]),
           // ⌥Z, as VS Code's. By the key, not the character: on a Mac it
           // types Ω, and CodeMirror leaves ⌥ and a letter alone there.
           EditorView.domEventHandlers({
+            // ⌘-click, which CodeMirror would take for adding a cursor.
+            mousedown: (event, view) => {
+              if (!event.metaKey || event.button !== 0 || !hasDefinitions(file.path)) return false;
+              const pos = view.posAtCoords(event);
+              if (pos === null || !view.state.wordAt(pos)) return false;
+              event.preventDefault();
+              void goToDefinition(view, pos);
+              return true;
+            },
             keydown: (event) => {
               if (event.code !== "KeyZ" || !event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return false;
               event.preventDefault();
@@ -354,6 +383,34 @@ export function FileView({
     if (markdown) showPreview(true);
   }
 
+  /** Goes to where the symbol at `pos` is defined, in this editor's text as it is. */
+  async function goToDefinition(view: EditorView, pos: number) {
+    if (!daemon.speaks(22)) {
+      showToast({ title: "Couldn't go to the definition", message: "Restart this tab's Mac's daemon first (Miks → Restart daemon…).", destructive: true });
+      return;
+    }
+    const line = view.state.doc.lineAt(pos);
+    const { found, error } = await daemon.findDefinition(file.path, view.state.doc.toString(), line.number, pos - line.from);
+    if (error) showToast({ title: "Couldn't go to the definition", message: error, destructive: true });
+    if (error || !found) {
+      if (!error) showToast({ title: "No definition found" });
+      return;
+    }
+    const head = view.state.selection.main.head;
+    const from = view.state.doc.lineAt(head);
+    const list = jumps.get(tab.id) ?? [];
+    list.push({ path: file.path, spot: { line: from.number, column: head - from.from, length: 0 } });
+    jumps.set(tab.id, list.slice(-MAX_JUMPS));
+    openInPanel(tab, found.path, { at: { line: found.line, column: found.column, length: found.length } });
+  }
+
+  /** ⌃-: back to where the last jump started. */
+  function goBack() {
+    const last = jumps.get(tab.id)?.pop();
+    if (last) openInPanel(tab, last.path, { at: last.spot });
+    return last !== undefined;
+  }
+
   /** A link in the preview to another file: it opens beside this one. */
   function openLinked(path: string) {
     if (!daemon.speaks(10)) {
@@ -389,13 +446,7 @@ export function FileView({
           : null;
 
   const menu = usePopup(() => {
-    // Finder only where Finder is: a Miks window on this Mac.
-    const finder = !DEVICE_SETTINGS && !isRemote() && daemon.speaks(18);
-    const finderMissing = DEVICE_SETTINGS
-      ? "Only in Miks on the Mac"
-      : isRemote()
-        ? "Only for files on this Mac"
-        : "Update Miks on this Mac first";
+    const finderMissing = whyNoFinder();
     return (
       <PopupMenu>
         <PopupMenuToggle icon={<WrapText />} on={wrap} onClick={() => setWrap(!wrap)} hotkeys={{ key: "alt+z" }} children="Word wrap" />
@@ -412,8 +463,8 @@ export function FileView({
         <PopupMenuText icon={<Copy />} onClick={() => window.miks?.copy(file.path)} children="Copy path" />
         <PopupMenuText
           icon={<FolderSearch />}
-          disabled={!finder}
-          detail={!finder && finderMissing}
+          disabled={!!finderMissing}
+          detail={finderMissing}
           onClick={() => daemon.send({ type: "showFolder", path: file.path, reveal: true })}
           children="Reveal in Finder"
         />

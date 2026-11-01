@@ -7,6 +7,7 @@ import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
 import type { ClientInfo, ClientMessage, DaemonMessage } from "../shared/protocol.ts";
 import { fetchImageForPanel, findPaths, readImageForPanel, showFolder } from "./Files.ts";
+import { findDefinition, stopLanguageServers } from "./Language.ts";
 import { listFiles, readFolder, searchFiles } from "./Search.ts";
 import type { PaneViewer } from "./Pane.ts";
 import { checkPermissions, permissionsApp, requestPermission } from "./Permissions.ts";
@@ -433,7 +434,16 @@ export async function serve({
         case "listFiles": {
           const { requestId } = message;
           if (!path.isAbsolute(message.path)) return;
-          void listFiles(message.path, message.roots).then((list) => send({ type: "fileList", requestId, ...list }));
+          void listFiles(message.path, message.roots, workspaces.recentFiles).then((list) => send({ type: "fileList", requestId, ...list }));
+          return;
+        }
+        case "findDefinition": {
+          const { requestId } = message;
+          if (!path.isAbsolute(message.path)) return send({ type: "definition", requestId, error: "The path must be absolute." });
+          void findDefinition(message.path, message.text, message.line, message.column).then(
+            (found) => send({ type: "definition", requestId, found: found ?? undefined }),
+            (error) => send({ type: "definition", requestId, error: String(error?.message ?? error) }),
+          );
           return;
         }
         case "readImage": {
@@ -522,6 +532,7 @@ export async function serve({
       clearInterval(cwdPoll);
       clearInterval(foregroundPoll);
       push.close();
+      stopLanguageServers();
       clearInterval(devicePing);
       await persistence?.final();
       await workspaces.killAll();

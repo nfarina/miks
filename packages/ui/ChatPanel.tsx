@@ -224,6 +224,11 @@ const viewShowers = new Map<string, (view: Tool | "chat") => void>();
 /** ⌘⇧C, ⌘⇧E and ⌘⇧F: to that view, or from it, closing the panel, if the keyboard's already there. */
 export const showView = (tab: Tab, view: Tool | "chat") => viewShowers.get(tab.id)?.(view);
 
+const fileRevealers = new Map<string, () => void>();
+
+/** ⌘⇧\: finds the file on show in the panel in Files. */
+export const revealFile = (tab: Tab) => fileRevealers.get(tab.id)?.();
+
 /** The files in a tab's panel; an older daemon has one at most. */
 const openFiles = (tab: Tab): OpenFile[] => tab.files ?? (tab.file ? [tab.file] : []);
 
@@ -331,6 +336,8 @@ export function ChatLayout({
   const showing: PanelView = views.includes(view) || isTool(view) ? view : (views.at(-1) ?? "files");
   // Bumped by ⌘⇧E, which starts Files again from where the shell is.
   const [filesCenter, setFilesCenter] = useState(0);
+  // What ⌘⇧\ last asked Files for.
+  const [reveal, setReveal] = useState<{ path: string; count: number } | null>(null);
   const [focusView, setFocusView] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -358,8 +365,17 @@ export function ChatLayout({
       if (!open) choosePanel(tab, true);
       setFocusView((count) => count + 1);
     });
+    fileRevealers.set(tab.id, () => {
+      const file = files.find((entry) => showing === `file:${entry.id}`);
+      if (!file) return;
+      setReveal({ path: file.path, count: (reveal?.count ?? 0) + 1 });
+      setView("files");
+      if (!isChatOpen(tab)) choosePanel(tab, true);
+      setFocusView((count) => count + 1);
+    });
     return () => {
       viewShowers.delete(tab.id);
+      fileRevealers.delete(tab.id);
     };
   });
 
@@ -495,6 +511,7 @@ export function ChatLayout({
           supported={supported}
           showing={showing}
           filesCenter={filesCenter}
+          reveal={reveal}
           onShow={(next) => {
             focusShown.current = true;
             setView(next);
@@ -797,6 +814,7 @@ export function ChatPanel({
   supported,
   showing,
   filesCenter,
+  reveal,
   onShow,
   onHide,
   focusFile,
@@ -811,6 +829,7 @@ export function ChatPanel({
   showing: PanelView;
   /** Changes when Files should start again from where the shell is. */
   filesCenter: number;
+  reveal: { path: string; count: number } | null;
   onShow: (showing: PanelView) => void;
   /** Hides the panel (Escape in the file), leaving what's in it as it is. */
   onHide: () => void;
@@ -978,7 +997,7 @@ export function ChatPanel({
       )}
       {toolsUsed.includes("files") && (
         <div className="tool-view" hidden={showing !== "files"}>
-          <FilesView tab={tab} showing={visible && showing === "files"} center={filesCenter} onHide={onHide} />
+          <FilesView tab={tab} showing={visible && showing === "files"} center={filesCenter} reveal={reveal} onHide={onHide} />
         </div>
       )}
       {toolsUsed.includes("search") && (

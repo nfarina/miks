@@ -73,6 +73,15 @@ describe("Search", () => {
     expect(paths.sort()).toEqual(["other/b.ts", "src/a.ts"]);
   });
 
+  it("lists what's been opened there, even if ignored", async () => {
+    fs.mkdirSync(path.join(root, "dist"), { recursive: true });
+    fs.writeFileSync(path.join(root, "dist/out.js"), "");
+    const opened = [path.join(root, "dist/out.js"), path.join(root, "dist/gone.js"), "/somewhere/else.ts", path.join(root, "src/a.ts")];
+    const { paths, recent } = await listFiles(root, undefined, opened);
+    expect(paths).not.toContain("dist/out.js");
+    expect(recent).toEqual(["dist/out.js", "src/a.ts"]);
+  });
+
   it("lists a folder with folders first, marking what's ignored", async () => {
     const entries = await readFolder(root);
     expect(entries.map((entry) => entry.name)).toEqual(["dist", "node_modules", "src", ".gitignore"]);

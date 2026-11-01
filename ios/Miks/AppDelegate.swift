@@ -230,6 +230,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             ("Chat", "c", [.command, .shift], "toggleChat"),
             ("Panel fills the tab", "d", [.command, .shift], "toggleExpanded"),
             ("Files", "e", [.command, .shift], "showFiles"),
+            ("Reveal file in Files", "\\", [.command, .shift], "revealFile"),
             ("Find in files", "f", [.command, .shift], "findInFiles"),
             ("Go to file…", "p", .command, "quickOpen"),
             ("Focus terminal", UIKeyCommand.inputLeftArrow, [.command, .alternate], "focusTerminal"),

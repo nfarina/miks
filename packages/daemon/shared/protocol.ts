@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -99,6 +99,12 @@ export type OpenFile = {
 };
 
 export type FileSpot = { line: number; column: number; length: number };
+
+/** Where a symbol is defined: `line` from 1, as in `FileSpot`. */
+export type Definition = FileSpot & { path: string };
+
+/** Files a language server answers for. */
+export const hasDefinitions = (path: string) => /\.[cm]?[jt]sx?$/i.test(path);
 
 /** What's in a folder, for the panel's Files. */
 export type FolderEntry = { name: string; folder: boolean; ignored?: boolean };
@@ -351,6 +357,11 @@ export type ClientMessage =
    */
   | { type: "listFiles"; requestId: string; path: string; roots?: string[] }
   /**
+   * Where the symbol at `line` and `column` of a file is defined, `text` being
+   * the file as its editor has it, answered by `definition`. Since protocol 22.
+   */
+  | { type: "findDefinition"; requestId: string; path: string; text: string; line: number; column: number }
+  /**
    * Reads an image a markdown file in a panel shows (`path` absolute, on the
    * daemon's Mac, and an image by its extension); answered by `image` with
    * the same `requestId`. With `mtime`, the one the window has: if the file's
@@ -445,8 +456,10 @@ export type DaemonMessage =
   | { type: "folder"; requestId: string; entries?: FolderEntry[]; error?: string }
   /** More of a `search`'s results; `done` on the last. */
   | { type: "searchResults"; requestId: string; files: SearchFile[]; done?: boolean; truncated?: boolean; error?: string }
-  /** A `listFiles`'s answer: paths relative to `root`. */
-  | { type: "fileList"; requestId: string; root: string; paths: string[]; truncated: boolean }
+  /** A `listFiles`'s answer: paths relative to `root`; `recent`, those opened before, latest first (since protocol 22), which `paths` may not have. */
+  | { type: "fileList"; requestId: string; root: string; paths: string[]; recent?: string[]; truncated: boolean }
+  /** A `findDefinition`'s answer: `found` left out if there's none. */
+  | { type: "definition"; requestId: string; found?: Definition; error?: string }
   /** A `running`'s answer. */
   | { type: "running"; requestId: string; running: RunningProgram[] }
   /** A `version`'s answer. */

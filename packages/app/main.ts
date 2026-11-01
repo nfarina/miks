@@ -1033,6 +1033,7 @@ function buildMenu() {
         command("toggleChat", "CmdOrCtrl+Shift+C", "Chat"),
         command("toggleExpanded", "CmdOrCtrl+Shift+D", "Panel fills the tab"),
         command("showFiles", "CmdOrCtrl+Shift+E", "Files"),
+        command("revealFile", "CmdOrCtrl+Shift+\\", "Reveal file in Files"),
         command("findInFiles", "CmdOrCtrl+Shift+F", "Find in files"),
         command("quickOpen", "CmdOrCtrl+P", "Go to file…"),
         command("focusTerminal", "CmdOrCtrl+Alt+Left", "Focus terminal"),
