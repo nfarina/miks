@@ -116,6 +116,12 @@ function MacSettings() {
         onClick={() => updateSettings({ antigravityHooks: !settings.antigravityHooks })}
       />
       <LabeledToggle
+        label="Grok status"
+        detail="Adds hooks to ~/.grok/hooks/miks.json so Miks can follow grok too. Outside Miks they do nothing."
+        on={settings.grokHooks}
+        onClick={() => updateSettings({ grokHooks: !settings.grokHooks })}
+      />
+      <LabeledToggle
         label="Keep terminals running"
         detail="After Miks quits, so they're all still there when it opens again."
         on={settings.keepDaemonRunning}

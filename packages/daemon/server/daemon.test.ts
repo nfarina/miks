@@ -1165,6 +1165,71 @@ test("Antigravity: its hooks set the tab's agent, and a restore resumes the conv
   await waitFor(() => paneText(restored.id).then((text) => text.includes("AGY-RESUMING --conversation 324ba9ac-d5cf")));
 });
 
+test("grok: its hooks set the tab's agent, Claude Code's hooks inside it don't, and a restore resumes it", async () => {
+  await daemon.close();
+  const statePath = path.join(home, "state.json");
+  const socketPath = path.join(home, "miks.sock");
+  const commands = { claudeCommand: "echo CLAUDE-RESUMING", grokCommand: "echo GROK-RESUMING" };
+
+  const first = await serve({ socketPath, statePath, command: COMMAND, ...commands });
+  const workspaceId = first.workspaces.createWorkspace({ cwd: home });
+  const tab = first.workspaces.createTab(workspaceId)!;
+  const agent = () => first.workspaces.getState().workspaces[0].tabs.find((each) => each.id === tab)?.agent;
+
+  // In front, or the shell being there would end the session. See the Codex test for why it's signed.
+  const fake = path.join(home, "grok");
+  fs.copyFileSync("/bin/sleep", fake);
+  execFileSync("codesign", ["-f", "-s", "-", fake], { stdio: "ignore" });
+  first.workspaces.getPane(tab)!.write(`'${fake}' 30\n`);
+  await waitFor(() => first.workspaces.getPane(tab)!.running() === "grok");
+
+  // As it sends them: Claude Code's names beside its own.
+  const route = "/api/hook/grok";
+  const folder = path.join(home, "grok-session");
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, "chat_history.jsonl"), "");
+  const session = "01a19e3c-fbe8-7d13-95fe-840c34b9994f";
+  const common = { session_id: session, sessionId: session, cwd: home, transcript_path: path.join(folder, "updates.jsonl") };
+  await postHook(tab, { ...common, hook_event_name: "SessionStart", source: "new" }, route);
+  await postHook(tab, { ...common, hook_event_name: "UserPromptSubmit" }, route);
+  expect(agent()).toMatchObject({ kind: "grok", status: "working" });
+
+  // Ctrl+C.
+  await postHook(tab, { ...common, hook_event_name: "StopCancelled", reason: "user_interrupt" }, route);
+  expect(agent()?.status).toBe("idle");
+
+  await postHook(tab, { ...common, hook_event_name: "UserPromptSubmit" }, route);
+  await postHook(tab, { ...common, hook_event_name: "Notification", notification_type: "permission_prompt", message: "Run it?" }, route);
+  expect(agent()).toMatchObject({ status: "waiting", message: "Run it?" });
+  await postHook(tab, { ...common, hook_event_name: "PostToolUse" }, route);
+  await postHook(tab, { ...common, hook_event_name: "Stop", reason: "end_turn", last_assistant_message: "All done" }, route);
+  await waitFor(() => agent()?.status === "done");
+  expect(agent()?.reply).toBe("All done");
+
+  // A subagent's events aren't the tab's.
+  await postHook(tab, { ...common, session_id: "child", hook_event_name: "UserPromptSubmit", subagentType: "explore" }, route);
+  expect(agent()?.status).toBe("done");
+
+  // Quitting fires a Stop that isn't a turn's.
+  await postHook(tab, { ...common, hook_event_name: "UserPromptSubmit" }, route);
+  await postHook(tab, { ...common, hook_event_name: "Stop", reason: "shutdown" }, route);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  expect(agent()?.status).toBe("working");
+
+  await first.close();
+  const saved = JSON.parse(fs.readFileSync(statePath, "utf8"));
+  expect(saved.workspaces[0].tabs.at(-1).session).toEqual({
+    agent: "grok",
+    id: session,
+    transcriptPath: path.join(folder, "chat_history.jsonl"),
+  });
+
+  daemon = await serve({ socketPath, statePath, command: COMMAND, ...commands });
+  const restored = daemon.workspaces.getState().workspaces[0].tabs.at(-1)!;
+  expect(restored).toMatchObject({ agent: { kind: "grok", status: "idle", restored: true }, kept: true });
+  await waitFor(() => paneText(restored.id).then((text) => text.includes(`GROK-RESUMING --resume ${session}`)));
+});
+
 test("a new Codex session has its panel before any hook, and hands over to the real one", async () => {
   const fake = path.join(home, "codex");
   // A program by that name. Copied, /bin/sleep's signature no longer fits it, and macOS kills it.

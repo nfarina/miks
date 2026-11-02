@@ -779,6 +779,27 @@ its arguments): a line per step. Rewinding wrote a step again under its index,
 so a step at or before the last replaces what's past it; a rewind past that
 hasn't been tried. `PreToolUse` isn't used: its answer is a permission decision.
 
+grok (`hooks/grok-hook.sh`, `/api/hook/grok`, `server/Grok.ts`) keeps hooks in
+`~/.grok/hooks/*.json`; Miks's is `miks.json` (`packages/app/grokHooks.ts`).
+It also runs the hooks in `~/.claude/settings.json`, and sets
+`GROK_HOOK_EVENT` for every hook, so `claude-hook.sh` exits on that, or a
+grok session was saved as Claude's (and a restore ran `claude --resume` with
+grok's ID). Hooks, yours included, run only in a folder grok's been told to
+trust, which it asks once per folder. Payloads carry Claude Code's
+snake_case fields beside grok's camelCase ones; `grokHook` maps the rest.
+Verified live: `SessionStart` comes at launch (`source` `new` or `load`);
+Ctrl+C mid-turn is `StopCancelled` (Esc never cancels); quitting fires
+`SessionEnd` and another `Stop` with `reason` "shutdown", which isn't a turn;
+only `end_turn` is. `transcript_path` is the session's `updates.jsonl`, and the
+first hooks carry none: the transcript is `chat_history.jsonl` beside it, in
+`~/.grok/sessions/<cwd, URI-encoded>/<id>/`. That's a chat API's messages, a
+line each, with no times; your prompts are `user` lines with a
+`prompt_index`, wrapped in `<user_query>`. Resuming is `grok --resume <id>`.
+Its title spins braille while working, as Codex's does. Its process is named
+`grok-<version>-…`, not `grok`. Not tried: permission prompts
+(`Notification` `permission_prompt`; it was set to always approve), a
+rewind, subagents (their events carry `subagentType` and are dropped).
+
 # Style
 
 Comments in Sentence case, ending with a period; UI text in Sentence case. No

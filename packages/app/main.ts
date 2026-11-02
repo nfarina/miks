@@ -15,6 +15,7 @@ import os from "os";
 import type { WebSocket } from "ws";
 import { browsePartition, isBrowsePartition } from "./browse.ts";
 import { syncAntigravityHooks } from "./antigravityHooks.ts";
+import { syncGrokHooks } from "./grokHooks.ts";
 import { syncClaudeHooks } from "./claudeHooks.ts";
 import { syncCodexHooks } from "./codexHooks.ts";
 import { checkRemote, remoteSocket, stopAllRemotes, stopRemote } from "./remotes.ts";
@@ -861,6 +862,7 @@ ipcMain.on("miks:setSettings", (_event, changes: Partial<Settings>) => {
   if ("claudeHooks" in changes) updateClaudeHooks();
   if ("codexHooks" in changes) updateCodexHooks();
   if ("antigravityHooks" in changes) updateAntigravityHooks();
+  if ("grokHooks" in changes) updateGrokHooks();
   if ("remotes" in changes) remotesChanged(previous);
 });
 
@@ -920,6 +922,21 @@ function updateAntigravityHooks() {
     });
   } catch (error) {
     console.error("Couldn't update Antigravity's hooks:", error);
+  }
+}
+
+function updateGrokHooks() {
+  // A scratch Miks (MIKS_HOME) leaves the real grok's alone too.
+  if (process.env.MIKS_HOME) return;
+  try {
+    syncGrokHooks({
+      enabled: settings.grokHooks,
+      bundledScript: path.join(root, "packages/daemon/hooks/grok-hook.sh"),
+      installedScript: path.join(miksHome(), "grok-hook.sh"),
+      grokHome: path.join(os.homedir(), ".grok"),
+    });
+  } catch (error) {
+    console.error("Couldn't update grok's hooks:", error);
   }
 }
 
@@ -1138,6 +1155,7 @@ app.whenReady().then(() => {
   updateClaudeHooks();
   updateCodexHooks();
   updateAntigravityHooks();
+  updateGrokHooks();
   startUpdates(confirmQuitForUpdate);
 
   app.on("activate", () => {

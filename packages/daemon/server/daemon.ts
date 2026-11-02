@@ -41,6 +41,7 @@ const HOOK_ROUTES: Record<string, AgentKind | undefined> = {
   "/api/hook": "claude",
   "/api/hook/codex": "codex",
   "/api/hook/antigravity": "antigravity",
+  "/api/hook/grok": "grok",
 };
 
 export async function serve({
@@ -50,6 +51,7 @@ export async function serve({
   claudeCommand,
   codexCommand,
   agyCommand,
+  grokCommand,
   onStop,
 }: {
   socketPath: string;
@@ -63,6 +65,8 @@ export async function serve({
   codexCommand?: string;
   /** What resumes an Antigravity conversation. For tests. */
   agyCommand?: string;
+  /** What resumes a grok session. For tests. */
+  grokCommand?: string;
   /**
    * Asked to stop: when the last window left after its Mac's Miks quit, or
    * to restart (Restart daemon… from any window, this Mac's or another's,
@@ -78,7 +82,7 @@ export async function serve({
   fs.mkdirSync(path.dirname(socketPath), { recursive: true, mode: 0o700 });
   await removeStaleSocket(socketPath);
 
-  const workspaces = new Workspaces({ socketPath, command, claudeCommand, codexCommand, agyCommand });
+  const workspaces = new Workspaces({ socketPath, command, claudeCommand, codexCommand, agyCommand, grokCommand });
 
   const saved = statePath ? readSavedState(statePath) : null;
   const restored = !!saved?.workspaces.some((w) => w.tabs.length > 0);

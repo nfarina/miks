@@ -21,6 +21,7 @@ import {
 import { type FileContents, readForPanel, writeFromPanel } from "./Files.ts";
 import { Pane } from "./Pane.ts";
 import { BackgroundTasks } from "./BackgroundTasks.ts";
+import { GrokTranscript, grokHook } from "./Grok.ts";
 import { AGY_ASKING, AGY_BUSY, AGY_READY, AgyTranscript, agyHook, agyReply, agyTranscriptPath, findAgyConversation } from "./Antigravity.ts";
 import { ClaudeTranscript } from "./ClaudeTranscript.ts";
 import { findCodexSession } from "./CodexSessions.ts";
@@ -192,6 +193,7 @@ export class Workspaces extends EventEmitter<{
   private readonly claudeCommand: string;
   private readonly codexCommand: string;
   private readonly agyCommand: string;
+  private readonly grokCommand: string;
 
   constructor({
     socketPath,
@@ -199,6 +201,7 @@ export class Workspaces extends EventEmitter<{
     claudeCommand = "claude",
     codexCommand = "codex",
     agyCommand = "agy",
+    grokCommand = "grok",
   }: {
     socketPath: string;
     command?: string[];
@@ -208,6 +211,8 @@ export class Workspaces extends EventEmitter<{
     codexCommand?: string;
     /** What resumes an Antigravity conversation; tests substitute something harmless. */
     agyCommand?: string;
+    /** What resumes a grok session; tests substitute something harmless. */
+    grokCommand?: string;
   }) {
     super();
     this.socketPath = socketPath;
@@ -215,6 +220,7 @@ export class Workspaces extends EventEmitter<{
     this.claudeCommand = claudeCommand;
     this.codexCommand = codexCommand;
     this.agyCommand = agyCommand;
+    this.grokCommand = grokCommand;
     this.machine = loadMachineSettings(path.dirname(socketPath));
   }
 
@@ -620,6 +626,8 @@ export class Workspaces extends EventEmitter<{
   applyHook(tabId: string, payload: any, kind: AgentKind = "claude") {
     if (!this.panes.has(tabId)) return;
     if (kind === "antigravity") payload = agyHook(payload);
+    if (kind === "grok") payload = grokHook(payload);
+    if (!payload) return;
     // A Codex subagent's session isn't the tab's.
     if (kind === "codex" && payload?.agent_id) return;
 
@@ -925,6 +933,7 @@ export class Workspaces extends EventEmitter<{
   private resumeCommand({ agent, id }: NonNullable<SavedTab["session"]>): string {
     if (agent === "codex") return `${this.codexCommand} resume ${id}`;
     if (agent === "antigravity") return `${this.agyCommand} --conversation ${id}`;
+    if (agent === "grok") return `${this.grokCommand} --resume ${id}`;
     return `${this.claudeCommand} --resume ${id}`;
   }
 
@@ -1000,6 +1009,7 @@ export class Workspaces extends EventEmitter<{
   private transcriptFormat(agent: AgentKind | undefined): TranscriptFormat {
     if (agent === "codex") return new CodexTranscript();
     if (agent === "antigravity") return new AgyTranscript();
+    if (agent === "grok") return new GrokTranscript();
     return new ClaudeTranscript();
   }
 
