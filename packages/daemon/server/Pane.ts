@@ -37,6 +37,8 @@ const INHERITED_ENV_BLOCKLIST = [
   // can't be resumed), or one that refuses to start inside "another" one.
   // Settings you keep in your shell profile come back with the login shell.
   /^CLAUDE/,
+  // And Codex's, for one launched from inside Codex.
+  /^CODEX_/,
   // Miks's own: each pane sets its own MIKS_PANE_ID and MIKS_SOCKET, and the
   // dev build's MIKS_UI_URL would point any Miks.app launched from a pane at
   // the dev server.

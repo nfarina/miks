@@ -15,6 +15,7 @@ import os from "os";
 import type { WebSocket } from "ws";
 import { browsePartition, isBrowsePartition } from "./browse.ts";
 import { syncClaudeHooks } from "./claudeHooks.ts";
+import { syncCodexHooks } from "./codexHooks.ts";
 import { checkRemote, remoteSocket, stopAllRemotes, stopRemote } from "./remotes.ts";
 import { checkForUpdates, startUpdates, updateFromShell } from "./updates.ts";
 
@@ -857,6 +858,7 @@ ipcMain.on("miks:setSettings", (_event, changes: Partial<Settings>) => {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send("miks:settings", settings);
   if ("claudeHooks" in changes) updateClaudeHooks();
+  if ("codexHooks" in changes) updateCodexHooks();
   if ("remotes" in changes) remotesChanged(previous);
 });
 
@@ -891,6 +893,17 @@ function updateClaudeHooks() {
   } catch (error) {
     console.error("Couldn't update Claude Code's hooks:", error);
   }
+}
+
+function updateCodexHooks() {
+  // A scratch Miks (MIKS_HOME) mustn't rewire the real Codex's hooks either.
+  if (process.env.MIKS_HOME) return;
+  void syncCodexHooks({
+    enabled: settings.codexHooks,
+    bundledScript: path.join(root, "packages/daemon/hooks/codex-hook.sh"),
+    installedScript: path.join(miksHome(), "codex-hook.sh"),
+    codexHome: path.join(os.homedir(), ".codex"),
+  }).catch((error) => console.error("Couldn't update Codex's hooks:", error));
 }
 
 //
@@ -1106,6 +1119,7 @@ app.whenReady().then(() => {
   reopenRemotes();
   restoreFrontWindow();
   updateClaudeHooks();
+  updateCodexHooks();
   startUpdates(confirmQuitForUpdate);
 
   app.on("activate", () => {

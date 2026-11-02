@@ -30,13 +30,35 @@ export function syncClaudeHooks({
   installedScript: string;
   claudeSettingsPath: string;
 }) {
+  syncHooks({ enabled, bundledScript, installedScript, settingsPath: claudeSettingsPath, events: EVENTS, isOurs });
+}
+
+/**
+ * The same for any agent whose settings hold hooks as Claude Code's do, in a
+ * JSON file's `hooks`.
+ */
+export function syncHooks({
+  enabled,
+  bundledScript,
+  installedScript,
+  settingsPath,
+  events,
+  isOurs,
+}: {
+  enabled: boolean;
+  bundledScript: string;
+  installedScript: string;
+  settingsPath: string;
+  events: string[];
+  isOurs: (hook: any) => boolean;
+}) {
   if (enabled) {
     fs.mkdirSync(path.dirname(installedScript), { recursive: true, mode: 0o700 });
     const script = fs.readFileSync(bundledScript, "utf8");
     if (readOrNull(installedScript) !== script) fs.writeFileSync(installedScript, script, { mode: 0o755 });
   }
 
-  const text = readOrNull(claudeSettingsPath);
+  const text = readOrNull(settingsPath);
   let settings: any = {};
   if (text !== null) {
     try {
@@ -57,7 +79,7 @@ export function syncClaudeHooks({
     else delete hooks[event];
   }
   if (enabled) {
-    for (const event of EVENTS) {
+    for (const event of events) {
       hooks[event] = [...(hooks[event] ?? []), { hooks: [{ type: "command", command: hookCommand(installedScript) }] }];
     }
   }
@@ -68,10 +90,10 @@ export function syncClaudeHooks({
   if (text !== null && JSON.stringify(JSON.parse(text)) === JSON.stringify(next)) return;
   if (text === null && !enabled) return;
 
-  fs.mkdirSync(path.dirname(claudeSettingsPath), { recursive: true });
-  const temporary = `${claudeSettingsPath}.miks.tmp`;
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  const temporary = `${settingsPath}.miks.tmp`;
   fs.writeFileSync(temporary, updated);
-  fs.renameSync(temporary, claudeSettingsPath);
+  fs.renameSync(temporary, settingsPath);
 }
 
 function readOrNull(file: string): string | null {

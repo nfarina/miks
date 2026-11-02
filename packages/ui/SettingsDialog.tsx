@@ -104,6 +104,12 @@ function MacSettings() {
         onClick={() => updateSettings({ claudeHooks: !settings.claudeHooks })}
       />
       <LabeledToggle
+        label="Codex status"
+        detail="Adds hooks to ~/.codex/hooks.json, and marks them trusted, so Miks can follow Codex too. Outside Miks they do nothing."
+        on={settings.codexHooks}
+        onClick={() => updateSettings({ codexHooks: !settings.codexHooks })}
+      />
+      <LabeledToggle
         label="Keep terminals running"
         detail="After Miks quits, so they're all still there when it opens again."
         on={settings.keepDaemonRunning}

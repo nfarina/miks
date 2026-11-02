@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process";
 import headless from "@xterm/headless";
 import fs from "fs";
 import os from "os";
@@ -330,7 +331,7 @@ test("a session with no transcript isn't resumed", async () => {
   await first.close();
 
   const saved = JSON.parse(fs.readFileSync(statePath, "utf8"));
-  expect(saved.workspaces[0].tabs.map((tab: any) => tab.claudeSessionId)).toEqual([undefined, "used"]);
+  expect(saved.workspaces[0].tabs.map((tab: any) => tab.session?.id)).toEqual([undefined, "used"]);
   daemon = await serve({ socketPath, statePath, command: COMMAND });
 });
 
@@ -1050,13 +1051,13 @@ async function apiPost(apiPath: string): Promise<number> {
   });
 }
 
-async function postHook(tabId: string, payload: any) {
+async function postHook(tabId: string, payload: any, route = "/api/hook") {
   const http = await import("http");
   await new Promise<void>((resolve, reject) => {
     const req = http.request(
       {
         socketPath: path.join(home, "miks.sock"),
-        path: `/api/hook?pane=${tabId}`,
+        path: `${route}?pane=${tabId}`,
         method: "POST",
       },
       (res) => {
@@ -1068,6 +1069,99 @@ async function postHook(tabId: string, payload: any) {
     req.end(JSON.stringify(payload));
   });
 }
+
+test("Codex: its hooks set the tab's agent, a restore resumes it with Codex, and older state still means Claude", async () => {
+  await daemon.close();
+  const statePath = path.join(home, "state.json");
+  const socketPath = path.join(home, "miks.sock");
+  const commands = { claudeCommand: "echo CLAUDE-RESUMING", codexCommand: "echo CODEX-RESUMING" };
+
+  const first = await serve({ socketPath, statePath, command: COMMAND, ...commands });
+  const workspaceId = first.workspaces.createWorkspace({ cwd: home });
+  const tab = first.workspaces.createTab(workspaceId)!;
+  const agent = () => first.workspaces.getState().workspaces[0].tabs.find((each) => each.id === tab)?.agent;
+
+  const route = "/api/hook/codex";
+  const session = "01a19983-ff98-7eb0-b23a-463e853971ce";
+  await postHook(tab, { hook_event_name: "SessionStart", session_id: session }, route);
+  await postHook(tab, { hook_event_name: "UserPromptSubmit", session_id: session }, route);
+  expect(agent()).toMatchObject({ kind: "codex", status: "working" });
+
+  // A subagent's session is no business of the tab's.
+  await postHook(tab, { hook_event_name: "SessionStart", session_id: "subagent", agent_id: "a" }, route);
+  expect(first.workspaces.getState().workspaces[0].tabs.find((each) => each.id === tab)?.agent?.kind).toBe("codex");
+
+  // One the auto-reviewer settles right away never shows as waiting on you.
+  await postHook(tab, { hook_event_name: "PermissionRequest", session_id: session }, route);
+  await postHook(tab, { hook_event_name: "PostToolUse", session_id: session }, route);
+  expect(agent()?.status).toBe("working");
+
+  // Its title says when it's really asking, and when that's over.
+  const title = (text: string) => first.workspaces.getPane(tab)!.write(`printf '\\033]0;${text}\\007'\n`);
+  title("⠋ Fixing | repo");
+  title("[ ! ] Action Required | Fixing | repo");
+  await waitFor(() => agent()?.status === "waiting");
+  title("[ . ] Action Required | Fixing | repo");
+  title("⠙ Fixing | repo");
+  await waitFor(() => agent()?.status === "working");
+  // Esc: the spinner stops, and no hook says so.
+  title("Fixing | repo");
+  await waitFor(() => agent()?.status === "idle");
+
+  await first.close();
+  const saved = JSON.parse(fs.readFileSync(statePath, "utf8"));
+  expect(saved.workspaces[0].tabs.map((each: any) => each.session?.agent).filter(Boolean)).toEqual(["codex"]);
+
+  // An older Miks's state: Claude is the only agent it knew.
+  const old = saved.workspaces[0].tabs.find((each: any) => each.session);
+  delete old.session;
+  saved.workspaces[0].tabs.push({ ...old, historyId: undefined, claudeSessionId: "1234abcd" });
+  old.session = { agent: "codex", id: session };
+  fs.writeFileSync(statePath, JSON.stringify(saved));
+
+  daemon = await serve({ socketPath, statePath, command: COMMAND, ...commands });
+  const tabs = daemon.workspaces.getState().workspaces[0].tabs;
+  // Known from the start: Codex's hooks wait for the first prompt.
+  expect(tabs.at(-2)).toMatchObject({ agent: { kind: "codex", status: "idle", restored: true }, kept: true });
+  await waitFor(() => paneText(tabs.at(-2)!.id).then((text) => text.includes(`CODEX-RESUMING resume ${session}`)));
+  await waitFor(() => paneText(tabs.at(-1)!.id).then((text) => text.includes("CLAUDE-RESUMING --resume 1234abcd")));
+});
+
+test("a new Codex session has its panel before any hook, and hands over to the real one", async () => {
+  const fake = path.join(home, "codex");
+  // A program by that name. Copied, /bin/sleep's signature no longer fits it, and macOS kills it.
+  fs.copyFileSync("/bin/sleep", fake);
+  execFileSync("codesign", ["-f", "-s", "-", fake], { stdio: "ignore" });
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const tabId = activeTab(daemon.workspaces.getState());
+  const tab = () => daemon.workspaces.getState().workspaces.flatMap((each) => each.tabs).find((each) => each.id === tabId);
+  const sessions: (string | null)[] = [];
+  const stop = daemon.workspaces.watchChat(tabId, (chat) => sessions.push(chat.session));
+
+  const pane = daemon.workspaces.getPane(tabId)!;
+  pane.write(`'${fake}' 30\n`);
+  await waitFor(() => {
+    daemon.workspaces.pollForeground();
+    return pane.running() === "codex";
+  });
+  // No title of its own yet: a trust screen or a picker, for all we know.
+  daemon.workspaces.pollForeground();
+  expect(tab()?.agent).toBeNull();
+
+  (pane as any).terminal.write("\x1b]0;my-project\x07");
+  await waitFor(() => {
+    daemon.workspaces.pollForeground();
+    return tab()?.agent?.status === "idle";
+  });
+  await waitFor(() => sessions.at(-1) === "new");
+  // Nothing to resume yet.
+  expect(tab()?.kept).toBe(false);
+
+  await postHook(tabId, { hook_event_name: "UserPromptSubmit", session_id: "real-id", transcript_path: path.join(home, "rollout.jsonl") }, "/api/hook/codex");
+  await waitFor(() => sessions.at(-1) === "real-id");
+  expect(tab()?.agent).toMatchObject({ kind: "codex", status: "working" });
+  stop();
+});
 
 async function waitFor(check: () => Promise<boolean> | boolean, timeout = 5000) {
   const start = Date.now();

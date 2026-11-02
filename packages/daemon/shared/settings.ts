@@ -38,6 +38,8 @@ export type Settings = {
   keepDaemonRunning: boolean;
   /** Whether Miks keeps its hooks in Claude Code's settings, for agent status. */
   claudeHooks: boolean;
+  /** The same for Codex, in ~/.codex/hooks.json. */
+  codexHooks: boolean;
   /** Whether the file editor wraps long lines (⌥Z). */
   wordWrap: boolean;
   /** Whether Option sends Meta (⌥A as Escape-A, for zsh bindings) instead of typing å. */
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chatForLongReplies: true,
   keepDaemonRunning: false,
   claudeHooks: true,
+  codexHooks: true,
   wordWrap: true,
   optionAsMeta: true,
   browser: "",

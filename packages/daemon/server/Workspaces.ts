@@ -5,6 +5,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import {
+  type AgentKind,
   type AgentState,
   type Background,
   type ChatEntry,
@@ -20,6 +21,9 @@ import {
 import { type FileContents, readForPanel, writeFromPanel } from "./Files.ts";
 import { Pane } from "./Pane.ts";
 import { BackgroundTasks } from "./BackgroundTasks.ts";
+import { ClaudeTranscript } from "./ClaudeTranscript.ts";
+import { findCodexSession } from "./CodexSessions.ts";
+import { CodexTranscript } from "./CodexTranscript.ts";
 import { Transcript } from "./Transcript.ts";
 import type { MachineSettings } from "../shared/settings.ts";
 import { loadMachineSettings, only, saveMachineSettings } from "./MachineSettings.ts";
@@ -27,6 +31,12 @@ import { loadMachineSettings, only, saveMachineSettings } from "./MachineSetting
 /** What survives a daemon restart, in `state.json`. */
 /** How long a finished turn waits for its session to end before it's `done`. */
 const DONE_DELAY = 1000;
+
+/** A Codex session too new to have an ID: the chat panel's open, with nothing to read yet. */
+const NEW_SESSION = "new";
+
+/** How long a permission request can be settled in without you. */
+const WAITING_DELAY = 5000;
 const MAX_RECENT_FILES = 500;
 
 export type SavedState = {
@@ -45,6 +55,9 @@ export type SavedState = {
 /** A tab as it was: enough to bring it back, after a restart or closing it. */
 export type SavedTab = {
   cwd: string;
+  /** The agent session to resume. */
+  session?: { agent: AgentKind; id: string; transcriptPath?: string };
+  /** What older Miks saved instead of `session`. */
   claudeSessionId?: string;
   historyId?: string;
   keep?: string;
@@ -114,8 +127,11 @@ export class Workspaces extends EventEmitter<{
   private activeWorkspaceId: string | null = null;
   private readonly panes = new Map<string, Pane>();
   private readonly agents = new Map<string, AgentState>();
-  /** The Claude Code session in each tab, from its hooks, for resuming it. */
-  private readonly claudeSessions = new Map<string, { id: string; transcriptPath?: string }>();
+  /** The agent session in each tab, from its hooks, for resuming it. */
+  private readonly sessions = new Map<
+    string,
+    { agent: AgentKind; id: string; transcriptPath?: string; seenRunning?: boolean }
+  >();
   /** Tabs a restore started a session in (resumed, or a kept command's), until it ends. */
   private readonly restoredSessions = new Set<string>();
   /**
@@ -133,13 +149,17 @@ export class Workspaces extends EventEmitter<{
   private readonly backgrounds = new Map<string, BackgroundTasks>();
   /** A finished turn waits a moment before it's `done` (see applyHook). */
   private readonly pendingDone = new Map<string, NodeJS.Timeout>();
+  /** The title each tab's Codex was last looked up by, so it's once per title. */
+  private readonly codexLookups = new Map<string, string>();
+  /** A permission request waits a moment before it's `waiting` (see applyHook). */
+  private readonly pendingWaiting = new Map<string, { timer: NodeJS.Timeout; message?: string }>();
   /**
    * The conversation in each tab someone's watching (the chat panel), read
-   * from its Claude session's transcript while there's one.
+   * from its agent session's transcript while there's one.
    */
   private readonly chats = new Map<
     string,
-    { transcript: Transcript | null; ready: boolean; listeners: Set<ChatListener> }
+    { transcript: Transcript | null; ready: boolean; session: string | null; listeners: Set<ChatListener> }
   >();
   /**
    * The files in each tab's panel (`miks open`, `miks edit`), in the order
@@ -166,21 +186,26 @@ export class Workspaces extends EventEmitter<{
   private readonly socketPath: string;
   private readonly command?: string[];
   private readonly claudeCommand: string;
+  private readonly codexCommand: string;
 
   constructor({
     socketPath,
     command,
     claudeCommand = "claude",
+    codexCommand = "codex",
   }: {
     socketPath: string;
     command?: string[];
     /** What resumes a Claude session; tests substitute something harmless. */
     claudeCommand?: string;
+    /** What resumes a Codex session; tests substitute something harmless. */
+    codexCommand?: string;
   }) {
     super();
     this.socketPath = socketPath;
     this.command = command;
     this.claudeCommand = claudeCommand;
+    this.codexCommand = codexCommand;
     this.machine = loadMachineSettings(path.dirname(socketPath));
   }
 
@@ -286,14 +311,14 @@ export class Workspaces extends EventEmitter<{
     workspaceId: string,
     {
       cwd,
-      resumeClaudeSession,
+      resume,
       keep,
       historyId = randomUUID(),
       after,
       screen,
     }: {
       cwd?: string;
-      resumeClaudeSession?: string;
+      resume?: SavedTab["session"];
       keep?: string;
       historyId?: string;
       after?: string;
@@ -307,12 +332,8 @@ export class Workspaces extends EventEmitter<{
     const pane = new Pane({
       id,
       cwd: cwd ?? workspace.cwd,
-      // A kept command first: a Claude session in such a tab is one it ran.
-      command: keep
-        ? this.thenShell(keep)
-        : resumeClaudeSession
-          ? this.thenShell(`${this.claudeCommand} --resume ${resumeClaudeSession}`)
-          : this.command,
+      // A kept command first: an agent session in such a tab is one it ran.
+      command: keep ? this.thenShell(keep) : resume ? this.thenShell(this.resumeCommand(resume)) : this.command,
       dark: this.dark,
       ...screen,
       env: { MIKS_PANE_ID: id, MIKS_SOCKET: this.socketPath, MIKS_HISTORY: this.historyFile(historyId) },
@@ -320,7 +341,13 @@ export class Workspaces extends EventEmitter<{
     this.panes.set(id, pane);
     this.historyIds.set(id, historyId);
     if (keep) this.keeps.set(id, { command: keep, seenRunning: false });
-    if (keep || resumeClaudeSession) this.restoredSessions.add(id);
+    if (keep || resume) this.restoredSessions.add(id);
+    // Codex says nothing until the first prompt, by when another restart
+    // would have lost it, and the chat panel would have been empty till then.
+    if (resume?.agent === "codex") {
+      this.sessions.set(id, { ...resume, seenRunning: false });
+      this.agents.set(id, { kind: "codex", status: "idle", since: Date.now() });
+    }
     // After the tab named, or at the end.
     const index = after ? workspace.tabIds.indexOf(after) : -1;
     workspace.tabIds.splice(index === -1 ? workspace.tabIds.length : index + 1, 0, id);
@@ -402,7 +429,7 @@ export class Workspaces extends EventEmitter<{
   private reopenTab(workspace: WorkspaceRecord, tab: ClosedTab): string | undefined {
     const tabId = this.createTab(workspace.id, {
       cwd: tab.cwd,
-      resumeClaudeSession: tab.claudeSessionId,
+      resume: tab.session,
       keep: tab.keep,
       historyId: tab.historyId,
       screen: tab.screen,
@@ -425,7 +452,7 @@ export class Workspaces extends EventEmitter<{
   /** A tab about to close, as it is: in the directory it was last polled in (lsof would hold the close up). */
   private closingTab(tabId: string, workspaceCwd: string): ClosedTab {
     const tab = this.savedTab(tabId, this.cwds.get(tabId) ?? workspaceCwd);
-    const drawsItself = tab.claudeSessionId || tab.keep;
+    const drawsItself = tab.session || tab.keep;
     return drawsItself ? tab : { ...tab, screen: this.panes.get(tabId)?.snapshot() };
   }
 
@@ -433,7 +460,7 @@ export class Workspaces extends EventEmitter<{
     const files = this.files.get(tabId)?.map((open) => open.file.path);
     return {
       cwd,
-      claudeSessionId: this.resumableSession(tabId),
+      session: this.resumableSession(tabId),
       historyId: this.historyIds.get(tabId),
       keep: this.keeps.get(tabId)?.command,
       page: this.pages.get(tabId)?.url,
@@ -497,6 +524,34 @@ export class Workspaces extends EventEmitter<{
       }
     }
 
+    // Quitting Codex can leave its thread with a daemon of its own, which
+    // never ends the session, so it's over here when the shell's back.
+    for (const [tabId, session] of this.sessions) {
+      if (session.agent !== "codex") continue;
+      if (this.panes.get(tabId)?.running()) session.seenRunning = true;
+      if (this.panes.get(tabId)?.running() || !session.seenRunning) continue;
+      this.endSession(tabId);
+      changed = true;
+    }
+
+    for (const [tabId, pane] of this.panes) {
+      const known = this.sessions.get(tabId);
+      if (pane.running() !== "codex" || (known && known.id !== NEW_SESSION)) continue;
+      const title = pane.displayTitle;
+      if (this.codexLookups.get(tabId) === title) continue;
+      this.codexLookups.set(tabId, title);
+
+      // Until it's past any trust screen or resume picker, Codex has set no
+      // title of its own. Then it's a thread you resumed, or a new one, which
+      // has no ID to know until the first prompt's hooks bring it.
+      const session = findCodexSession(title) ?? (title && title !== "codex" ? { id: NEW_SESSION } : undefined);
+      if (!session || (known && session.id === NEW_SESSION)) continue;
+      this.sessions.set(tabId, { agent: "codex", ...session, seenRunning: true });
+      this.agents.set(tabId, { kind: "codex", status: "idle", since: Date.now() });
+      this.updateChat(tabId);
+      changed = true;
+    }
+
     if (changed) this.emit("change");
   }
 
@@ -546,28 +601,32 @@ export class Workspaces extends EventEmitter<{
   }
 
   /**
-   * Applies a Claude Code hook event, posted by the hook script with the
-   * hook's own JSON payload (see `hooks/claude-hook.sh`).
+   * Applies an agent's hook event, posted by its hook script with the hook's
+   * own JSON payload (see `hooks/`). Codex's are Claude Code's, nearly to the
+   * field, with `PermissionRequest` for `Notification`.
    */
-  applyHook(tabId: string, payload: any) {
+  applyHook(tabId: string, payload: any, kind: AgentKind = "claude") {
     if (!this.panes.has(tabId)) return;
+    // A Codex subagent's session isn't the tab's.
+    if (kind === "codex" && payload?.agent_id) return;
 
     const event: string | undefined = payload?.hook_event_name;
     // Session IDs are UUIDs; anything else isn't one we'd put in a command.
     const sessionId = payload?.session_id;
     if (typeof sessionId === "string" && /^[\w-]+$/.test(sessionId)) {
       const transcriptPath = typeof payload?.transcript_path === "string" ? payload.transcript_path : undefined;
-      this.claudeSessions.set(tabId, { id: sessionId, transcriptPath });
+      this.sessions.set(tabId, { agent: kind, id: sessionId, transcriptPath, seenRunning: true });
       this.updateChat(tabId);
-      if (transcriptPath) this.followBackground(tabId, transcriptPath);
+      if (transcriptPath && kind === "claude") this.followBackground(tabId, transcriptPath);
     }
 
     const set = (status: AgentState["status"], message?: string) =>
-      this.agents.set(tabId, { kind: "claude", status, message, since: Date.now() });
+      this.agents.set(tabId, { kind, status, message, since: Date.now() });
 
     // Whatever comes next supersedes a turn waiting to be `done`.
     clearTimeout(this.pendingDone.get(tabId));
     this.pendingDone.delete(tabId);
+    this.cancelWaiting(tabId);
 
     switch (event) {
       case "SessionStart":
@@ -590,6 +649,21 @@ export class Workspaces extends EventEmitter<{
         }
         set("waiting", payload?.message);
         break;
+      case "PermissionRequest": {
+        // Fires for what Codex's own auto-reviewer settles too, with nobody
+        // asked. Its title says when you are (applyTitle), and failing that
+        // (it can be configured away), one still open after a moment is yours.
+        const message = typeof payload?.tool_input?.description === "string" ? payload.tool_input.description : undefined;
+        const timer = setTimeout(() => {
+          this.pendingWaiting.delete(tabId);
+          if (!this.agents.has(tabId)) return;
+          this.agents.set(tabId, { kind, status: "waiting", message, since: Date.now() });
+          this.emit("change");
+        }, WAITING_DELAY);
+        timer.unref();
+        this.pendingWaiting.set(tabId, { timer, message });
+        return;
+      }
       case "Stop": {
         const reply = payload?.last_assistant_message;
         const replyLines = typeof reply === "string" ? reply.split("\n").length : undefined;
@@ -601,7 +675,7 @@ export class Workspaces extends EventEmitter<{
         const timer = setTimeout(() => {
           this.pendingDone.delete(tabId);
           if (!this.agents.has(tabId)) return;
-          this.agents.set(tabId, { kind: "claude", status: "done", since: Date.now(), replyLines, reply: replyStart });
+          this.agents.set(tabId, { kind, status: "done", since: Date.now(), replyLines, reply: replyStart });
           this.emit("change");
         }, DONE_DELAY);
         timer.unref();
@@ -609,13 +683,7 @@ export class Workspaces extends EventEmitter<{
         return;
       }
       case "SessionEnd":
-        // Claude Code takes its background work with it.
-        this.backgrounds.get(tabId)?.close();
-        this.backgrounds.delete(tabId);
-        this.agents.delete(tabId);
-        this.claudeSessions.delete(tabId);
-        this.restoredSessions.delete(tabId);
-        this.updateChat(tabId);
+        this.endSession(tabId);
         break;
       default:
         return;
@@ -625,11 +693,14 @@ export class Workspaces extends EventEmitter<{
   }
 
   /**
-   * Claude Code animates its title (◐ ◑) while a turn runs and shows ✳ when
-   * it stops. Interrupting with Esc fires no hook at all, so the spinner
-   * stopping is how we hear about it: the turn is over, and since you ended
-   * it yourself there's nothing new to see. Only the change from spinning to
-   * ✳ counts, never a ✳ on its own, which can trail a prompt just submitted.
+   * Claude Code and Codex both animate their titles while a turn runs (◐ ◑,
+   * or braille), and Claude Code shows ✳ when it stops. Interrupting with Esc
+   * fires no hook at all, so the spinner stopping is how we hear about it: the
+   * turn is over, and since you ended it yourself there's nothing new to see.
+   * Only the change from spinning to stopped counts, never a ✳ on its own,
+   * which can trail a prompt just submitted. Codex's title also says when it
+   * has asked you something, which is what `waiting` needs and no hook tells:
+   * a permission request or a question, blinking `[ . ]` and `[ ! ]`.
    */
   getMachineSettings(): MachineSettings {
     return this.machine;
@@ -655,6 +726,22 @@ export class Workspaces extends EventEmitter<{
     this.emit("change");
   }
 
+  private endSession(tabId: string) {
+    // The agent takes its background work with it.
+    this.backgrounds.get(tabId)?.close();
+    this.backgrounds.delete(tabId);
+    this.agents.delete(tabId);
+    this.sessions.delete(tabId);
+    this.codexLookups.delete(tabId);
+    this.restoredSessions.delete(tabId);
+    this.updateChat(tabId);
+  }
+
+  private cancelWaiting(tabId: string) {
+    clearTimeout(this.pendingWaiting.get(tabId)?.timer);
+    this.pendingWaiting.delete(tabId);
+  }
+
   private followBackground(tabId: string, transcriptPath: string) {
     let background = this.backgrounds.get(tabId);
     if (!background) {
@@ -667,15 +754,29 @@ export class Workspaces extends EventEmitter<{
 
   private applyTitle(tabId: string, title: string, previous: string) {
     const agent = this.agents.get(tabId);
-    if (agent?.status !== "working") return;
-    if (!CLAUDE_IDLE_TITLE.test(title) || !CLAUDE_WORKING_TITLE.test(previous)) return;
+    if (agent?.kind === "codex" && CODEX_ASKING_TITLE.test(title)) {
+      if (agent.status === "waiting") return;
+      const message = this.pendingWaiting.get(tabId)?.message;
+      this.cancelWaiting(tabId);
+      this.agents.set(tabId, { ...agent, status: "waiting", message, since: Date.now() });
+      return;
+    }
+    if (agent?.kind === "codex" && agent.status === "waiting" && CODEX_ASKING_TITLE.test(previous)) {
+      // Answered: it carries on, or (Esc) that's the end of the turn.
+      const status = WORKING_TITLE.test(title) ? "working" : "idle";
+      this.agents.set(tabId, { ...agent, status, message: undefined, since: Date.now() });
+      return;
+    }
+    if (agent?.status !== "working" || !WORKING_TITLE.test(previous)) return;
+    if (agent.kind === "claude" ? !CLAUDE_IDLE_TITLE.test(title) : WORKING_TITLE.test(title)) return;
 
+    this.cancelWaiting(tabId);
     this.agents.set(tabId, { ...agent, status: "idle", message: undefined, since: Date.now() });
   }
 
   /**
    * The layout as it stands, with each tab's current directory (where its
-   * shell has cd'ed to, not where it started) and its Claude session, if any.
+   * shell has cd'ed to, not where it started) and its agent session, if any.
    */
   async save(): Promise<SavedState> {
     const workspaces = await Promise.all(
@@ -699,7 +800,7 @@ export class Workspaces extends EventEmitter<{
 
   /**
    * Rebuilds a saved layout with fresh shells, each in its tab's directory.
-   * A tab that had a Claude session resumes it, so a daemon restart costs a
+   * A tab that had an agent session resumes it, so a daemon restart costs a
    * moment, not your agents.
    */
   restore(saved: SavedState) {
@@ -719,7 +820,7 @@ export class Workspaces extends EventEmitter<{
       for (const tab of savedWorkspace.tabs) {
         const tabId = this.createTab(workspace.id, {
           cwd: tab.cwd,
-          resumeClaudeSession: tab.claudeSessionId,
+          resume: tab.session ?? (tab.claudeSessionId ? { agent: "claude", id: tab.claudeSessionId } : undefined),
           keep: tab.keep,
           historyId: tab.historyId,
         });
@@ -757,19 +858,23 @@ export class Workspaces extends EventEmitter<{
   }
 
   /**
-   * The tab's Claude session, if there's anything to resume. Claude Code only
+   * The tab's agent session, if there's anything to resume. Claude Code only
    * writes a transcript once the session has a message (and never for a child
    * session); resuming one without fails with "No conversation found".
    */
-  private resumableSession(tabId: string): string | undefined {
-    const session = this.claudeSessions.get(tabId);
-    if (!session) return;
+  private resumableSession(tabId: string): SavedTab["session"] {
+    const session = this.sessions.get(tabId);
+    if (!session || session.id === NEW_SESSION) return;
     if (session.transcriptPath && !fs.existsSync(session.transcriptPath)) return;
-    return session.id;
+    return { agent: session.agent, id: session.id, transcriptPath: session.transcriptPath };
+  }
+
+  private resumeCommand({ agent, id }: NonNullable<SavedTab["session"]>): string {
+    return agent === "codex" ? `${this.codexCommand} resume ${id}` : `${this.claudeCommand} --resume ${id}`;
   }
 
   /**
-   * Resumes a Claude session, then leaves you in an ordinary shell when it
+   * Resumes an agent session, then leaves you in an ordinary shell when it
    * exits. Interactive as well as login, so the shell reads .zshrc, which is
    * often where `claude` gets onto the PATH.
    */
@@ -779,7 +884,7 @@ export class Workspaces extends EventEmitter<{
   }
 
   /**
-   * Follows a tab's Claude Code conversation, through every session it has
+   * Follows a tab's agent conversation, through every session it has
    * (`/clear` starts another), until the returned function is called.
    */
   watchChat(tabId: string, listener: ChatListener): () => void {
@@ -787,7 +892,7 @@ export class Workspaces extends EventEmitter<{
 
     let chat = this.chats.get(tabId);
     if (!chat) {
-      chat = { transcript: null, ready: false, listeners: new Set() };
+      chat = { transcript: null, ready: false, session: null, listeners: new Set() };
       this.chats.set(tabId, chat);
       this.updateChat(tabId);
     }
@@ -808,18 +913,21 @@ export class Workspaces extends EventEmitter<{
     const chat = this.chats.get(tabId);
     if (!chat) return;
 
-    const file = this.claudeSessions.get(tabId)?.transcriptPath ?? null;
+    const session = this.sessions.get(tabId);
+    const file = session?.transcriptPath ?? null;
     // Already following it (or, with no session, already said so).
-    if ((chat.transcript?.file ?? null) === file && (chat.transcript || chat.ready)) return;
+    const unchanged = (chat.transcript?.file ?? null) === file && (chat.transcript || chat.ready);
+    if (unchanged && chat.session === this.chatSession(tabId)) return;
 
     chat.transcript?.close();
-    const transcript = file ? new Transcript(file) : null;
+    const transcript = file ? new Transcript(file, session?.agent === "codex" ? new CodexTranscript() : new ClaudeTranscript()) : null;
     chat.transcript = transcript;
     chat.ready = false;
 
-    const session = this.chatSession(tabId);
+    const chatSession = this.chatSession(tabId);
+    chat.session = chatSession;
     const tell = (entries: ChatEntry[], reset: boolean) => {
-      for (const listener of chat.listeners) listener({ session, entries, reset });
+      for (const listener of chat.listeners) listener({ session: chatSession, entries, reset });
     };
     // All of it at once when it's been read (a long one takes a moment),
     // rather than an empty conversation that then fills in.
@@ -835,7 +943,9 @@ export class Workspaces extends EventEmitter<{
   }
 
   private chatSession(tabId: string): string | null {
-    return this.chats.get(tabId)?.transcript ? (this.claudeSessions.get(tabId)?.id ?? null) : null;
+    const session = this.sessions.get(tabId);
+    if (session?.id === NEW_SESSION) return NEW_SESSION;
+    return this.chats.get(tabId)?.transcript ? (session?.id ?? null) : null;
   }
 
   /**
@@ -1067,7 +1177,7 @@ export class Workspaces extends EventEmitter<{
     for (const chat of this.chats.values()) chat.transcript?.close();
     for (const background of this.backgrounds.values()) background.close();
     for (const tabId of [...this.files.keys()]) this.closeFiles(tabId);
-    for (const timer of this.pendingDone.values()) clearTimeout(timer);
+    for (const timer of [...this.pendingDone.values(), ...[...this.pendingWaiting.values()].map((each) => each.timer)]) clearTimeout(timer);
     const exited = [...this.panes.values()].map((pane) => new Promise<void>((resolve) => pane.once("exit", () => resolve())));
     for (const pane of this.panes.values()) pane.kill();
     return Promise.race([Promise.all(exited).then(() => {}), new Promise<void>((resolve) => setTimeout(resolve, wait).unref())]);
@@ -1100,9 +1210,11 @@ export class Workspaces extends EventEmitter<{
     this.keeps.delete(tabId);
     clearTimeout(this.pendingDone.get(tabId));
     this.pendingDone.delete(tabId);
+    this.cancelWaiting(tabId);
     this.panes.delete(tabId);
     this.agents.delete(tabId);
-    this.claudeSessions.delete(tabId);
+    this.sessions.delete(tabId);
+    this.codexLookups.delete(tabId);
     this.restoredSessions.delete(tabId);
     this.chats.get(tabId)?.transcript?.close();
     this.chats.delete(tabId);
@@ -1148,10 +1260,12 @@ export class Workspaces extends EventEmitter<{
   }
 }
 
-// Claude Code's title glyphs: half circles while working (braille in older
-// versions), ✳ when idle.
-const CLAUDE_WORKING_TITLE = /^[◐◑◒◓\u2800-\u28ff]/u;
+// Agents' title glyphs while working: Claude Code's half circles (braille in
+// older versions), Codex's braille. Claude Code's ✳ when idle; Codex's title
+// just loses the glyph.
+const WORKING_TITLE = /^[◐◑◒◓\u2800-\u28ff]/u;
 const CLAUDE_IDLE_TITLE = /^✳/u;
+const CODEX_ASKING_TITLE = /^\[ [.!] \] Action Required/;
 
 /** The working directory of each process, by pid, in one `lsof` call. */
 function shellCwds(pids: number[]): Promise<Map<number, string>> {

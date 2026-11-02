@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseTranscriptLine } from "./Transcript.ts";
+import { ClaudeTranscript, parseTranscriptLine } from "./ClaudeTranscript.ts";
 
 const line = (record: object) => JSON.stringify({ uuid: "u1", timestamp: "2026-10-20T12:00:00.000Z", ...record });
 
@@ -95,7 +95,7 @@ test("a rewound conversation shows the path it took, and a compaction carries on
     ].join("\n"),
   );
 
-  const transcript = new Transcript(file);
+  const transcript = new Transcript(file, new ClaudeTranscript());
   await transcript.ready;
   transcript.close();
   expect(transcript.entries.map((entry) => ("text" in entry ? entry.text : ""))).toEqual(["One", "Two", "Three", "Four", "Instead"]);

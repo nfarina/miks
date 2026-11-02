@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 // Several waits in a row, on a loaded machine.
 vi.setConfig({ testTimeout: 40_000 });
 import { BackgroundTasks } from "./BackgroundTasks.ts";
+import { ClaudeTranscript } from "./ClaudeTranscript.ts";
 import { Transcript } from "./Transcript.ts";
 
 let dir: string;
@@ -52,7 +53,7 @@ async function waitFor(check: () => boolean) {
 }
 
 test("keeps following after the chat panel on the same transcript closes", async () => {
-  const chat = new Transcript(transcript);
+  const chat = new Transcript(transcript, new ClaudeTranscript());
   await chat.ready;
   chat.close();
 

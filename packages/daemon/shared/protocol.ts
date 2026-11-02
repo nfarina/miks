@@ -20,8 +20,13 @@ export const PROTOCOL_VERSION = 22;
  */
 export type AgentStatus = "working" | "waiting" | "done" | "idle";
 
+/** The agents Miks follows. Older windows only ever saw `claude`, and don't look at it. */
+export type AgentKind = "claude" | "codex";
+
+export const AGENT_NAMES: Record<AgentKind, string> = { claude: "Claude Code", codex: "Codex" };
+
 export type AgentState = {
-  kind: "claude";
+  kind: AgentKind;
   status: AgentStatus;
   /** The agent's own words for why it's waiting, when it gave any. */
   message?: string;
@@ -36,11 +41,11 @@ export type AgentState = {
 };
 
 /**
- * One thing in a tab's Claude Code conversation, as the chat panel shows it,
+ * One thing in a tab's agent conversation, as the chat panel shows it,
  * read from the session's transcript. Since protocol 5.
  *
  * - `prompt`: what you sent.
- * - `reply`: Claude's text, as markdown.
+ * - `reply`: the agent's text, as markdown.
  * - `tool`: a tool call: its name, a line saying what it did, and, when
  *   there's more to it, the details (a command, an edit).
  */
@@ -65,7 +70,7 @@ export type Tab = {
   agent: AgentState | null;
   /** The program in front of the tab's shell, which closing it would stop; missing before protocol 2. */
   running?: string | null;
-  /** Whether a restore brings back what's running (`miks keep`, or a Claude session). Since protocol 3. */
+  /** Whether a restore brings back what's running (`miks keep`, or an agent session). Since protocol 3. */
   kept?: boolean;
   /** A file shown in the tab's panel (`miks open`, `miks edit`): the latest of `files`. Since protocol 8. */
   file?: OpenFile;
@@ -289,7 +294,7 @@ export type ClientMessage =
   | { type: "attach"; tabId: string; cols?: number; rows?: number }
   | { type: "detach"; tabId: string }
   /**
-   * Starts sending the tab's Claude Code conversation: one `chat` with all of
+   * Starts sending the tab's agent conversation: one `chat` with all of
    * it, then a `chat` with each new entry. Since protocol 5.
    */
   | { type: "watchChat"; tabId: string }
@@ -435,7 +440,7 @@ export type DaemonMessage =
   /**
    * Entries in the tab's conversation. With `reset`, the whole of it (on
    * watching, or when the tab's session changes); otherwise more to append.
-   * `session` is the Claude Code session's ID, or null when the tab has none.
+   * `session` is the agent session's ID, or null when the tab has none.
    */
   | { type: "chat"; tabId: string; session: string | null; entries: ChatEntry[]; reset: boolean }
   /** `app` is what macOS calls the daemon in its dialogs ("Miks Helper"), if anything. */

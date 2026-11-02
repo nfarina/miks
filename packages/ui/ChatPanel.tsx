@@ -10,7 +10,7 @@ import { usePopup } from "crosswing/modals/popup/usePopup";
 import { tooltip } from "crosswing/modals/popup";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { ArrowUp, ChevronRight, ChevronUp, ClipboardPaste, Files, LoaderCircle, Mic, Paperclip, Search, Square, TextQuote, X } from "lucide-react";
-import type { ChatEntry, OpenFile, Tab } from "miks/shared/protocol";
+import { AGENT_NAMES, type ChatEntry, type OpenFile, type Tab } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
   type DragEvent,
@@ -1104,6 +1104,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
   const loaded = useRef(false);
   const { showToast } = use(ModalContext);
   const status = tab.agent?.status;
+  const agentKind = tab.agent?.kind ?? "claude";
 
   // Only while it's showing; a hidden panel needn't follow anything.
   useEffect(() => {
@@ -1414,8 +1415,8 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
   }
 
   function placeholder(): string {
-    if (!session) return "No Claude Code session";
-    if (asking) return "Claude is asking something in the terminal";
+    if (!session) return "No agent session";
+    if (asking) return `${AGENT_NAMES[agentKind]} is asking something in the terminal`;
     if (status === "working") return "Queue a message";
     return "Reply";
   }
@@ -1467,7 +1468,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
       >
         <div className="conversation" ref={conversationRef}>
           {chat && !session && (
-            <div className="note">Start Claude Code in this tab, and its conversation shows up here.</div>
+            <div className="note">Start Claude Code or Codex in this tab, and its conversation shows up here.</div>
           )}
           {chat && session && chat.entries.length === 0 && <div className="note">Nothing said yet.</div>}
           {group(chat?.entries ?? [], status === "working").map((item) =>

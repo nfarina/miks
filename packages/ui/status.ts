@@ -27,8 +27,9 @@ export function workspaceTitle(workspace: Workspace): string {
 
 export function tabTitle(tab: Tab): string {
   // Claude Code prefixes its title with a status glyph (◐ ◑ while working,
-  // ✳ when idle), and other programs do similar; our dot already says it.
-  return tab.title.replace(/^\p{So}\s+/u, "") || "Terminal";
+  // ✳ when idle), Codex blinks one while it's asking you something, and other
+  // programs do similar; our dot already says it.
+  return tab.title.replace(/^\[ [.!] \] Action Required \| /, "").replace(/^\p{So}\s+/u, "") || "Terminal";
 }
 
 export const STATUS_LABELS: Record<AgentStatus, string> = {

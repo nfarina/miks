@@ -41,6 +41,7 @@ export async function serve({
   statePath,
   command,
   claudeCommand,
+  codexCommand,
   onStop,
 }: {
   socketPath: string;
@@ -50,6 +51,8 @@ export async function serve({
   command?: string[];
   /** What resumes a Claude session. For tests. */
   claudeCommand?: string;
+  /** What resumes a Codex session. For tests. */
+  codexCommand?: string;
   /**
    * Asked to stop: when the last window left after its Mac's Miks quit, or
    * to restart (Restart daemon… from any window, this Mac's or another's,
@@ -65,7 +68,7 @@ export async function serve({
   fs.mkdirSync(path.dirname(socketPath), { recursive: true, mode: 0o700 });
   await removeStaleSocket(socketPath);
 
-  const workspaces = new Workspaces({ socketPath, command, claudeCommand });
+  const workspaces = new Workspaces({ socketPath, command, claudeCommand, codexCommand });
 
   const saved = statePath ? readSavedState(statePath) : null;
   const restored = !!saved?.workspaces.some((w) => w.tabs.length > 0);
@@ -198,10 +201,10 @@ export async function serve({
       );
     }
 
-    if (req.method === "POST" && url.pathname === "/api/hook") {
+    if (req.method === "POST" && (url.pathname === "/api/hook" || url.pathname === "/api/hook/codex")) {
       const pane = url.searchParams.get("pane");
       return readJson(req).then((payload) => {
-        if (pane) workspaces.applyHook(pane, payload);
+        if (pane) workspaces.applyHook(pane, payload, url.pathname.endsWith("/codex") ? "codex" : "claude");
         json(res, 200, { ok: true });
       });
     }

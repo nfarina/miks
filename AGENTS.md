@@ -726,6 +726,38 @@ real `claude` in a pane: start it in a trusted folder or it stops at the trust
 prompt, and send a prompt's text and its Enter as separate writes, or Claude
 Code takes the Enter as part of a paste.
 
+Codex (`hooks/codex-hook.sh`, its own route `/api/hook/codex`, so a daemon too
+old to know it 404s rather than saving Codex's IDs as Claude sessions) has
+nearly Claude Code's hooks and payloads, in `~/.codex/hooks.json`
+(`packages/app/codexHooks.ts`). New hooks wait behind a review screen, which
+also swallows the first thing typed, so main has `codex app-server` (over stdio,
+through a login shell for PATH) list them (`hooks/list`: `currentHash`,
+`trustStatus`) and trust ours alone (`config/batchWrite` to
+`hooks.state."<key>".trusted_hash`). Verified live, without
+`--dangerously-bypass-hook-trust`. Differences from Claude Code, all from real
+runs: `SessionStart` waits for the first prompt, so a restored tab starts with
+its saved session (`transcriptPath` included) rather than waiting for hooks;
+a `codex resume` you run yourself (a picker's has no ID in its arguments, and no
+rollout open) is found by its title's thread name in `session_index.jsonl`
+(`CodexSessions.ts`), so the panel shows before any prompt, and any other Codex
+with a title of its own (none yet at a trust screen or picker) is a new thread,
+with no ID until those hooks (`NEW_SESSION`), its panel and composer live meanwhile; quitting says
+"Disconnected from this task" and fires no `SessionEnd` (the thread
+stays with Codex's daemon), so a session ends when the pane's shell is back in
+front (`pollForeground`); `PermissionRequest` fires for what the auto-reviewer
+settles too, with nobody asked, so `waiting` comes from the title (`[ . ]` and
+`[ ! ] Action Required | …`, blinking, for a question as well), with a 5s timer
+for a title configured away; no hook for Esc, and the braille spinner stopping
+ends the turn, as with Claude Code. Testing: `CODEX_HOME` is stripped from panes
+(`/^CODEX_/`) only as the daemon's, so it can be typed in one, and a folder's
+first run stops at "Trust this folder?", whose Quit is what typed text picks.
+Transcripts are `server/Transcript.ts` (the follower) with a format:
+`ClaudeTranscript.ts` or `CodexTranscript.ts`, whose rollouts carry the
+conversation twice: `event_msg` `item_completed` is the one to read, since
+`response_item`'s command can be a script the model ran. Rolling back is
+`thread_rolled_back`, whole turns off the end. Finished rollouts get compressed
+to `.jsonl.zst` by Codex; following one isn't handled, nor tested.
+
 # Style
 
 Comments in Sentence case, ending with a period; UI text in Sentence case. No
