@@ -277,7 +277,7 @@
       <div class="wrap hero">
         <h1>A terminal for a bunch of agents at once<span class="cursor" aria-hidden="true"></span></h1>
         <p class="lede">
-          Miks replaces Terminal.app with <strong>workspaces, tabs, and every Claude Code session's status at a glance.</strong>
+          Miks replaces Terminal.app with <strong>workspaces, tabs, and every agent's status at a glance</strong>, whether it's Claude Code, Codex or Antigravity.
           Walk away from your Mac and keep going on your iPhone or iPad. Open the Mac Studio in the basement from your laptop.
         </p>
         <div class="actions">
@@ -308,8 +308,8 @@
             <span class="eyebrow">On your Mac</span>
             <h2>See which agent needs you without looking at each one</h2>
             <p>
-              Every workspace in the sidebar says what its agent is doing, from Claude Code's own hooks. Start five sessions, switch to
-              something else, and come back to the one that's ready.
+              Every workspace in the sidebar says what its agent is doing: Claude Code, Codex or Antigravity's CLI, each reported by the agent
+              itself. Start five sessions, switch to something else, and come back to the one that's ready.
             </p>
             <ul class="statuses">
               <li class="working"><i class="dot"></i><div><b>Working</b> <span>with what it has running in the background: “1 shell, 1 monitor”.</span></div></li>
@@ -325,7 +325,7 @@
         <div class="facts">
           <div>
             <h3>Comes back where you left it</h3>
-            <p>Quit and relaunch: the layout, each tab's folder and shell history, and its Claude session, resumed.</p>
+            <p>Quit and relaunch: the layout, each tab's folder and shell history, and its agent's session, resumed.</p>
           </div>
           <div>
             <h3>A chat panel beside the terminal</h3>
@@ -405,7 +405,7 @@
             </p>
             <p>
               <strong>It behaves as if that Mac were in front of you.</strong> Copying lands on the Mac you're actually using. Dropped files and
-              pasted screenshots are sent over, so Claude Code there can see them. <code>miks browse localhost:3000</code> opens that Mac's dev
+              pasted screenshots are sent over, so the agent there can see them. <code>miks browse localhost:3000</code> opens that Mac's dev
               server with no tunnel to set up.
             </p>
             <p>Run <code>miks update</code> in a remote window to update Miks on that Mac.</p>
@@ -420,7 +420,7 @@
         <div class="copy">
           <span class="eyebrow"><i class="dot" style="color: var(--done)"></i>In every tab</span>
           <h2>A few commands of its own</h2>
-          <p>Miks's shell adds a <code>miks</code> command. You can use it, and so can Claude.</p>
+          <p>Miks's shell adds a <code>miks</code> command. You can use it, and so can your agents.</p>
         </div>
         <div class="commands">
           <div class="command">
@@ -437,7 +437,7 @@
           </div>
           <div class="command">
             <code>miks keep npm run dev</code>
-            <p>Runs it, and runs it again when Miks restores the tab, just as Claude sessions are resumed.</p>
+            <p>Runs it, and runs it again when Miks restores the tab, just as agent sessions are resumed.</p>
           </div>
           <div class="command">
             <code>miks update</code>
@@ -489,7 +489,7 @@
           </div>
           <div>
             <h3>Open source</h3>
-            <p>MIT licensed. Agent status comes from hooks Miks adds to Claude Code's settings, and turning them off takes them back out.</p>
+            <p>MIT licensed. Agent status comes from hooks Miks adds to each agent's settings, and turning them off takes them back out.</p>
             <a class="button quiet" href="https://github.com/nfarina/miks">Source on GitHub</a>
           </div>
         </div>

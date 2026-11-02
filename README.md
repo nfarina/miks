@@ -4,24 +4,24 @@
 
 Yo dawg, I heard you like terminals, so I made a terminal for your terminals!
 
-Miks is a replacement for `Terminal.app` designed for running a bunch of coding agents (like Claude Code) at once. Inspired by `cmux`, Miks has "workspaces" in a sidebar, tabs in each, and your agent's status at a glance: working, needs you, or done.
+Miks is a replacement for `Terminal.app` designed for running a bunch of coding agents (Claude Code, Codex, or Antigravity's CLI, `agy`) at once. Inspired by `cmux`, Miks has "workspaces" in a sidebar, tabs in each, and your agent's status at a glance: working, needs you, or done.
 
 I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundled a browser, computer use and an 8 GB repo; Miks is the part of it I actually used.
 
 - Workspaces and tabs, drag to reorder; ⌘1–9, ⌘⌃[ ] (or ⌘⌃← →) and ⌘⇧[ ] (on into the next workspace) to get around
-- Live Claude Code status in the sidebar, plus a notification when an agent
+- Live agent status in the sidebar, plus a notification when an agent
   finishes or needs you (unless you're already looking)
-- What each session has going in the background (shells, monitors, agents),
-  next to its status
+- What each Claude Code session has going in the background (shells,
+  monitors, agents), next to its status
 - Your iPad or phone can use it in a browser, over [Tailscale](https://tailscale.com):
   only your own devices, and only when you turn it on
 - Terminals live in a background daemon, so reloading the UI never touches
   a session. Quitting ends them like any terminal app (asking first if
   anything's running), or turn on "Keep terminals running"
 - Comes back where you left it: layout, each tab's folder and history, and
-  its Claude session, resumed. `miks keep <command>` brings back your own
+  its agent's session, resumed. `miks keep <command>` brings back your own
   long-running commands the same way
-- A chat panel (⌘⇧C) beside the terminal: the tab's Claude Code
+- A chat panel (⌘⇧C) beside the terminal: the tab's agent
   conversation in proportional type with real markdown, and a box to write
   the next message in. It opens on its own for long replies
 - `miks open <file>` and `miks edit <file>` show a file in that panel, with
@@ -29,7 +29,7 @@ I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundle
   that, so git's commit messages and Claude Code's ⌃G open there too
 - `miks browse <url>` shows a web page in that panel, loaded from the Mac the
   terminal is on: in a remote window, `miks browse localhost:3000` is that
-  Mac's dev server, every port of it, with no tunnels to set up. ⌘⇧F has
+  Mac's dev server, every port of it, with no tunnels to set up. ⌘⇧D has
   the panel fill the tab
 - Follows light and dark mode, and tells Claude Code when it changes
 - Remote windows: a window on another Mac's terminals, over Tailscale, with
@@ -49,9 +49,10 @@ macOS 13+, Apple Silicon.
 Or browse [all releases](https://github.com/nfarina/miks/releases). Miks
 updates itself (Miks → Check for updates…).
 
-Agent status works by adding hooks to `~/.claude/settings.json` that tell
-Miks what Claude is up to. Outside Miks they do nothing. Turn them off in
-Settings (⌘,) and Miks takes them back out.
+Agent status works by adding hooks to `~/.claude/settings.json`,
+`~/.codex/hooks.json` and `~/.gemini/config/hooks.json` that tell Miks what
+each agent is up to. Outside Miks they do nothing. Turn them off in Settings
+(⌘,) and Miks takes them back out.
 
 ## Build
 
