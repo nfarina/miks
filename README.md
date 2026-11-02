@@ -4,7 +4,7 @@
 
 Yo dawg, I heard you like terminals, so I made a terminal for your terminals!
 
-Miks is a replacement for `Terminal.app` designed for running a bunch of coding agents (Claude Code, Codex, or Antigravity's CLI, `agy`) at once. Inspired by `cmux`, Miks has "workspaces" in a sidebar, tabs in each, and your agent's status at a glance: working, needs you, or done.
+Miks is a replacement for `Terminal.app` designed for running a bunch of coding agents (Claude Code, Codex, Antigravity's CLI `agy`, or Grok's CLI `grok`) at once. Inspired by `cmux`, Miks has "workspaces" in a sidebar, tabs in each, and your agent's status at a glance: working, needs you, or done.
 
 I enjoyed [cmux](https://github.com/manaflow-ai/cmux) until I realized it bundled a browser, computer use and an 8 GB repo; Miks is the part of it I actually used.
 
@@ -50,8 +50,8 @@ Or browse [all releases](https://github.com/nfarina/miks/releases). Miks
 updates itself (Miks → Check for updates…).
 
 Agent status works by adding hooks to `~/.claude/settings.json`,
-`~/.codex/hooks.json` and `~/.gemini/config/hooks.json` that tell Miks what
-each agent is up to. Outside Miks they do nothing. Turn them off in Settings
+`~/.codex/hooks.json`, `~/.gemini/config/hooks.json` and
+`~/.grok/hooks/miks.json` that tell Miks what each agent is up to. Outside Miks they do nothing. Turn them off in Settings
 (⌘,) and Miks takes them back out.
 
 ## Build
