@@ -1127,6 +1127,44 @@ test("Codex: its hooks set the tab's agent, a restore resumes it with Codex, and
   await waitFor(() => paneText(tabs.at(-1)!.id).then((text) => text.includes("CLAUDE-RESUMING --resume 1234abcd")));
 });
 
+test("Antigravity: its hooks set the tab's agent, and a restore resumes the conversation", async () => {
+  await daemon.close();
+  const statePath = path.join(home, "state.json");
+  const socketPath = path.join(home, "miks.sock");
+  const commands = { agyCommand: "echo AGY-RESUMING" };
+
+  const first = await serve({ socketPath, statePath, command: COMMAND, ...commands });
+  const workspaceId = first.workspaces.createWorkspace({ cwd: home });
+  const tab = first.workspaces.createTab(workspaceId)!;
+  const agent = () => first.workspaces.getState().workspaces[0].tabs.find((each) => each.id === tab)?.agent;
+
+  // In front, or the shell being there would end the session. See the Codex test for why it's signed.
+  const fake = path.join(home, "agy");
+  fs.copyFileSync("/bin/sleep", fake);
+  execFileSync("codesign", ["-f", "-s", "-", fake], { stdio: "ignore" });
+  first.workspaces.getPane(tab)!.write(`'${fake}' 30\n`);
+  await waitFor(() => first.workspaces.getPane(tab)!.running() === "agy");
+
+  const route = "/api/hook/antigravity";
+  const transcript = path.join(home, "transcript_full.jsonl");
+  fs.writeFileSync(transcript, JSON.stringify({ step_index: 1, type: "PLANNER_RESPONSE", content: "All done" }) + "\n");
+  const common = { conversationId: "324ba9ac-d5cf", transcriptPath: transcript };
+  await postHook(tab, common, route);
+  await postHook(tab, { ...common, invocationNum: 0 }, route);
+  expect(agent()).toMatchObject({ kind: "antigravity", status: "working" });
+
+  // Its reply is in the transcript, not the hook.
+  await postHook(tab, { ...common, terminationReason: "NO_TOOL_CALL" }, route);
+  await waitFor(() => agent()?.status === "done");
+  expect(agent()?.reply).toBe("All done");
+
+  await first.close();
+  daemon = await serve({ socketPath, statePath, command: COMMAND, ...commands });
+  const restored = daemon.workspaces.getState().workspaces[0].tabs.at(-1)!;
+  expect(restored).toMatchObject({ agent: { kind: "antigravity", status: "idle", restored: true }, kept: true });
+  await waitFor(() => paneText(restored.id).then((text) => text.includes("AGY-RESUMING --conversation 324ba9ac-d5cf")));
+});
+
 test("a new Codex session has its panel before any hook, and hands over to the real one", async () => {
   const fake = path.join(home, "codex");
   // A program by that name. Copied, /bin/sleep's signature no longer fits it, and macOS kills it.

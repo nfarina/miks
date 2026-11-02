@@ -21,9 +21,9 @@ export const PROTOCOL_VERSION = 22;
 export type AgentStatus = "working" | "waiting" | "done" | "idle";
 
 /** The agents Miks follows. Older windows only ever saw `claude`, and don't look at it. */
-export type AgentKind = "claude" | "codex";
+export type AgentKind = "claude" | "codex" | "antigravity";
 
-export const AGENT_NAMES: Record<AgentKind, string> = { claude: "Claude Code", codex: "Codex" };
+export const AGENT_NAMES: Record<AgentKind, string> = { claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
 
 export type AgentState = {
   kind: AgentKind;

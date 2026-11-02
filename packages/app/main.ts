@@ -14,6 +14,7 @@ import { API_HEADER, tailnetMacs } from "miks/shared/tailscale";
 import os from "os";
 import type { WebSocket } from "ws";
 import { browsePartition, isBrowsePartition } from "./browse.ts";
+import { syncAntigravityHooks } from "./antigravityHooks.ts";
 import { syncClaudeHooks } from "./claudeHooks.ts";
 import { syncCodexHooks } from "./codexHooks.ts";
 import { checkRemote, remoteSocket, stopAllRemotes, stopRemote } from "./remotes.ts";
@@ -859,6 +860,7 @@ ipcMain.on("miks:setSettings", (_event, changes: Partial<Settings>) => {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send("miks:settings", settings);
   if ("claudeHooks" in changes) updateClaudeHooks();
   if ("codexHooks" in changes) updateCodexHooks();
+  if ("antigravityHooks" in changes) updateAntigravityHooks();
   if ("remotes" in changes) remotesChanged(previous);
 });
 
@@ -904,6 +906,21 @@ function updateCodexHooks() {
     installedScript: path.join(miksHome(), "codex-hook.sh"),
     codexHome: path.join(os.homedir(), ".codex"),
   }).catch((error) => console.error("Couldn't update Codex's hooks:", error));
+}
+
+function updateAntigravityHooks() {
+  // A scratch Miks (MIKS_HOME) leaves the real Antigravity's alone too.
+  if (process.env.MIKS_HOME) return;
+  try {
+    syncAntigravityHooks({
+      enabled: settings.antigravityHooks,
+      bundledScript: path.join(root, "packages/daemon/hooks/antigravity-hook.sh"),
+      installedScript: path.join(miksHome(), "antigravity-hook.sh"),
+      geminiHome: path.join(os.homedir(), ".gemini"),
+    });
+  } catch (error) {
+    console.error("Couldn't update Antigravity's hooks:", error);
+  }
 }
 
 //
@@ -1120,6 +1137,7 @@ app.whenReady().then(() => {
   restoreFrontWindow();
   updateClaudeHooks();
   updateCodexHooks();
+  updateAntigravityHooks();
   startUpdates(confirmQuitForUpdate);
 
   app.on("activate", () => {

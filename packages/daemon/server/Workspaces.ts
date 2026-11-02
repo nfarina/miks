@@ -21,16 +21,20 @@ import {
 import { type FileContents, readForPanel, writeFromPanel } from "./Files.ts";
 import { Pane } from "./Pane.ts";
 import { BackgroundTasks } from "./BackgroundTasks.ts";
+import { AGY_ASKING, AGY_BUSY, AGY_READY, AgyTranscript, agyHook, agyReply, agyTranscriptPath, findAgyConversation } from "./Antigravity.ts";
 import { ClaudeTranscript } from "./ClaudeTranscript.ts";
 import { findCodexSession } from "./CodexSessions.ts";
 import { CodexTranscript } from "./CodexTranscript.ts";
-import { Transcript } from "./Transcript.ts";
+import { Transcript, type TranscriptFormat } from "./Transcript.ts";
 import type { MachineSettings } from "../shared/settings.ts";
 import { loadMachineSettings, only, saveMachineSettings } from "./MachineSettings.ts";
 
 /** What survives a daemon restart, in `state.json`. */
 /** How long a finished turn waits for its session to end before it's `done`. */
 const DONE_DELAY = 1000;
+
+/** How long a turn Antigravity's just started gets to put its footer up. */
+const AGY_SETTLE = 2000;
 
 /** A Codex session too new to have an ID: the chat panel's open, with nothing to read yet. */
 const NEW_SESSION = "new";
@@ -187,12 +191,14 @@ export class Workspaces extends EventEmitter<{
   private readonly command?: string[];
   private readonly claudeCommand: string;
   private readonly codexCommand: string;
+  private readonly agyCommand: string;
 
   constructor({
     socketPath,
     command,
     claudeCommand = "claude",
     codexCommand = "codex",
+    agyCommand = "agy",
   }: {
     socketPath: string;
     command?: string[];
@@ -200,12 +206,15 @@ export class Workspaces extends EventEmitter<{
     claudeCommand?: string;
     /** What resumes a Codex session; tests substitute something harmless. */
     codexCommand?: string;
+    /** What resumes an Antigravity conversation; tests substitute something harmless. */
+    agyCommand?: string;
   }) {
     super();
     this.socketPath = socketPath;
     this.command = command;
     this.claudeCommand = claudeCommand;
     this.codexCommand = codexCommand;
+    this.agyCommand = agyCommand;
     this.machine = loadMachineSettings(path.dirname(socketPath));
   }
 
@@ -342,11 +351,12 @@ export class Workspaces extends EventEmitter<{
     this.historyIds.set(id, historyId);
     if (keep) this.keeps.set(id, { command: keep, seenRunning: false });
     if (keep || resume) this.restoredSessions.add(id);
-    // Codex says nothing until the first prompt, by when another restart
-    // would have lost it, and the chat panel would have been empty till then.
-    if (resume?.agent === "codex") {
+    // Codex and Antigravity say nothing until the first prompt, by when
+    // another restart would have lost it, and the chat panel would have been
+    // empty till then.
+    if (resume && resume.agent !== "claude") {
       this.sessions.set(id, { ...resume, seenRunning: false });
-      this.agents.set(id, { kind: "codex", status: "idle", since: Date.now() });
+      this.agents.set(id, { kind: resume.agent, status: "idle", since: Date.now() });
     }
     // After the tab named, or at the end.
     const index = after ? workspace.tabIds.indexOf(after) : -1;
@@ -525,9 +535,10 @@ export class Workspaces extends EventEmitter<{
     }
 
     // Quitting Codex can leave its thread with a daemon of its own, which
-    // never ends the session, so it's over here when the shell's back.
+    // never ends the session, and Antigravity has no such hook, so they're
+    // over here when the shell's back.
     for (const [tabId, session] of this.sessions) {
-      if (session.agent !== "codex") continue;
+      if (session.agent === "claude") continue;
       if (this.panes.get(tabId)?.running()) session.seenRunning = true;
       if (this.panes.get(tabId)?.running() || !session.seenRunning) continue;
       this.endSession(tabId);
@@ -535,6 +546,7 @@ export class Workspaces extends EventEmitter<{
     }
 
     for (const [tabId, pane] of this.panes) {
+      if (pane.running() === "agy") changed = this.pollAgy(tabId, pane) || changed;
       const known = this.sessions.get(tabId);
       if (pane.running() !== "codex" || (known && known.id !== NEW_SESSION)) continue;
       const title = pane.displayTitle;
@@ -607,6 +619,7 @@ export class Workspaces extends EventEmitter<{
    */
   applyHook(tabId: string, payload: any, kind: AgentKind = "claude") {
     if (!this.panes.has(tabId)) return;
+    if (kind === "antigravity") payload = agyHook(payload);
     // A Codex subagent's session isn't the tab's.
     if (kind === "codex" && payload?.agent_id) return;
 
@@ -664,17 +677,21 @@ export class Workspaces extends EventEmitter<{
         this.pendingWaiting.set(tabId, { timer, message });
         return;
       }
+      case "Interrupted":
+        set("idle");
+        break;
       case "Stop": {
-        const reply = payload?.last_assistant_message;
-        const replyLines = typeof reply === "string" ? reply.split("\n").length : undefined;
-        // More than a notification shows; the whole reply is in the panel.
-        const replyStart = typeof reply === "string" ? reply.slice(0, 500) : undefined;
         // A one-shot `claude -p` (a script's, say) ends its session right
         // after its turn, 25ms later in practice; nothing for you to see, so
         // no `done` (and no notification). An interactive session stays.
         const timer = setTimeout(() => {
           this.pendingDone.delete(tabId);
           if (!this.agents.has(tabId)) return;
+          // Antigravity's is only in its transcript, a moment behind the hook.
+          const reply = kind === "antigravity" ? agyReply(payload?.transcript_path) : payload?.last_assistant_message;
+          const replyLines = typeof reply === "string" ? reply.split("\n").length : undefined;
+          // More than a notification shows; the whole reply is in the panel.
+          const replyStart = typeof reply === "string" ? reply.slice(0, 500) : undefined;
           this.agents.set(tabId, { kind, status: "done", since: Date.now(), replyLines, reply: replyStart });
           this.emit("change");
         }, DONE_DELAY);
@@ -724,6 +741,42 @@ export class Workspaces extends EventEmitter<{
   setGateway(gateway: GatewayState | undefined) {
     this.gateway = gateway;
     this.emit("change");
+  }
+
+  /**
+   * What Antigravity's hooks don't say, from its screen: that it's up and
+   * taking prompts, before any hook; that it's asking you something; and Esc
+   * ending a turn, which fires none (its footer's "esc to cancel" goes).
+   */
+  private pollAgy(tabId: string, pane: Pane): boolean {
+    const screen = pane.screenText();
+
+    if (!this.sessions.has(tabId)) {
+      if (!AGY_READY.test(screen)) return false;
+      this.sessions.set(tabId, { agent: "antigravity", id: NEW_SESSION, seenRunning: true });
+      this.agents.set(tabId, { kind: "antigravity", status: "idle", since: Date.now() });
+      this.updateChat(tabId);
+      void findAgyConversation(pane.pid).then((id) => {
+        if (!id || this.sessions.get(tabId)?.id !== NEW_SESSION) return;
+        this.sessions.set(tabId, { agent: "antigravity", id, transcriptPath: agyTranscriptPath(id), seenRunning: true });
+        this.updateChat(tabId);
+        this.emit("change");
+      });
+      return true;
+    }
+
+    const agent = this.agents.get(tabId);
+    if (agent?.kind !== "antigravity") return false;
+
+    const asking = AGY_ASKING.test(screen);
+    const status =
+      asking ? "waiting"
+      : agent.status === "waiting" ? AGY_BUSY.test(screen) ? "working" : "idle"
+      : agent.status === "working" && !AGY_BUSY.test(screen) && Date.now() - agent.since > AGY_SETTLE ? "idle"
+      : agent.status;
+    if (status === agent.status) return false;
+    this.agents.set(tabId, { ...agent, status, message: undefined, since: Date.now() });
+    return true;
   }
 
   private endSession(tabId: string) {
@@ -870,7 +923,9 @@ export class Workspaces extends EventEmitter<{
   }
 
   private resumeCommand({ agent, id }: NonNullable<SavedTab["session"]>): string {
-    return agent === "codex" ? `${this.codexCommand} resume ${id}` : `${this.claudeCommand} --resume ${id}`;
+    if (agent === "codex") return `${this.codexCommand} resume ${id}`;
+    if (agent === "antigravity") return `${this.agyCommand} --conversation ${id}`;
+    return `${this.claudeCommand} --resume ${id}`;
   }
 
   /**
@@ -920,7 +975,7 @@ export class Workspaces extends EventEmitter<{
     if (unchanged && chat.session === this.chatSession(tabId)) return;
 
     chat.transcript?.close();
-    const transcript = file ? new Transcript(file, session?.agent === "codex" ? new CodexTranscript() : new ClaudeTranscript()) : null;
+    const transcript = file ? new Transcript(file, this.transcriptFormat(session?.agent)) : null;
     chat.transcript = transcript;
     chat.ready = false;
 
@@ -940,6 +995,12 @@ export class Workspaces extends EventEmitter<{
     };
     if (transcript) void transcript.ready.then(start);
     else start();
+  }
+
+  private transcriptFormat(agent: AgentKind | undefined): TranscriptFormat {
+    if (agent === "codex") return new CodexTranscript();
+    if (agent === "antigravity") return new AgyTranscript();
+    return new ClaudeTranscript();
   }
 
   private chatSession(tabId: string): string | null {

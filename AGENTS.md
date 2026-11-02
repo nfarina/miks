@@ -758,6 +758,27 @@ conversation twice: `event_msg` `item_completed` is the one to read, since
 `thread_rolled_back`, whole turns off the end. Finished rollouts get compressed
 to `.jsonl.zst` by Codex; following one isn't handled, nor tested.
 
+Antigravity's CLI, `agy` (`hooks/antigravity-hook.sh`, `/api/hook/antigravity`,
+`server/Antigravity.ts`), keeps hooks in `~/.gemini/config/hooks.json`
+(`packages/app/antigravityHooks.ts`), named hooks rather than Claude Code's
+lists, needing no trust, each answered with JSON. Payloads name no event, so
+`agyHook` goes by their fields and puts them in Claude Code's terms. Verified
+live, all of this: `SessionStart` waits for the first prompt, as Codex's;
+`PreInvocation` with `invocationNum` 0 is a prompt; `Stop` has no reply, which
+is in the transcript a moment later, so `done` reads it; there's no `SessionEnd`
+(the shell coming back ends it, as with Codex) and no title. It's the screen
+that says the rest (`pollAgy`): its footer is `? for shortcuts` or `esc to
+cancel` once it's past a trust screen, which is when a tab gets its panel;
+"Requesting permission for:" is `waiting`; and Esc in a reply fires no `Stop`,
+whatever the docs say, so the footer's "esc to cancel" going ends the turn. A
+long command moves to the background, ending the turn with `fullyIdle: false`,
+with no `PostToolUse`. `agy -c` holds `presence/<id>.lock` open from the start,
+so `lsof` finds it before any prompt. The transcript is `transcript_full.jsonl`
+in the conversation's `brain` folder (`transcript.jsonl` truncates, and quotes
+its arguments): a line per step. Rewinding wrote a step again under its index,
+so a step at or before the last replaces what's past it; a rewind past that
+hasn't been tried. `PreToolUse` isn't used: its answer is a permission decision.
+
 # Style
 
 Comments in Sentence case, ending with a period; UI text in Sentence case. No

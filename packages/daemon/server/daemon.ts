@@ -5,7 +5,7 @@ import net from "net";
 import os from "os";
 import path from "path";
 import { WebSocket, WebSocketServer } from "ws";
-import type { ClientInfo, ClientMessage, DaemonMessage } from "../shared/protocol.ts";
+import type { AgentKind, ClientInfo, ClientMessage, DaemonMessage } from "../shared/protocol.ts";
 import { fetchImageForPanel, findPaths, readImageForPanel, showFolder } from "./Files.ts";
 import { findDefinition, stopLanguageServers } from "./Language.ts";
 import { listFiles, readFolder, searchFiles } from "./Search.ts";
@@ -36,12 +36,20 @@ export type Daemon = {
  * processes running as you, and no web page can reach it the way it could
  * reach localhost.
  */
+/** Its own route for each agent, so a daemon too old to know one turns it away. */
+const HOOK_ROUTES: Record<string, AgentKind | undefined> = {
+  "/api/hook": "claude",
+  "/api/hook/codex": "codex",
+  "/api/hook/antigravity": "antigravity",
+};
+
 export async function serve({
   socketPath,
   statePath,
   command,
   claudeCommand,
   codexCommand,
+  agyCommand,
   onStop,
 }: {
   socketPath: string;
@@ -53,6 +61,8 @@ export async function serve({
   claudeCommand?: string;
   /** What resumes a Codex session. For tests. */
   codexCommand?: string;
+  /** What resumes an Antigravity conversation. For tests. */
+  agyCommand?: string;
   /**
    * Asked to stop: when the last window left after its Mac's Miks quit, or
    * to restart (Restart daemon… from any window, this Mac's or another's,
@@ -68,7 +78,7 @@ export async function serve({
   fs.mkdirSync(path.dirname(socketPath), { recursive: true, mode: 0o700 });
   await removeStaleSocket(socketPath);
 
-  const workspaces = new Workspaces({ socketPath, command, claudeCommand, codexCommand });
+  const workspaces = new Workspaces({ socketPath, command, claudeCommand, codexCommand, agyCommand });
 
   const saved = statePath ? readSavedState(statePath) : null;
   const restored = !!saved?.workspaces.some((w) => w.tabs.length > 0);
@@ -201,10 +211,11 @@ export async function serve({
       );
     }
 
-    if (req.method === "POST" && (url.pathname === "/api/hook" || url.pathname === "/api/hook/codex")) {
+    const hookAgent = HOOK_ROUTES[url.pathname];
+    if (req.method === "POST" && hookAgent) {
       const pane = url.searchParams.get("pane");
       return readJson(req).then((payload) => {
-        if (pane) workspaces.applyHook(pane, payload, url.pathname.endsWith("/codex") ? "codex" : "claude");
+        if (pane) workspaces.applyHook(pane, payload, hookAgent);
         json(res, 200, { ok: true });
       });
     }

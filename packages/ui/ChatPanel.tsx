@@ -1468,7 +1468,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
       >
         <div className="conversation" ref={conversationRef}>
           {chat && !session && (
-            <div className="note">Start Claude Code or Codex in this tab, and its conversation shows up here.</div>
+            <div className="note">Start Claude Code, Codex or Antigravity in this tab, and its conversation shows up here.</div>
           )}
           {chat && session && chat.entries.length === 0 && <div className="note">Nothing said yet.</div>}
           {group(chat?.entries ?? [], status === "working").map((item) =>

@@ -292,6 +292,16 @@ export class Pane extends EventEmitter<{
     return this.titleSetBy && this.titleSetBy === this.foreground ? this.title : this.foreground;
   }
 
+  /** What's on the screen now, as text. */
+  screenText(): string {
+    const buffer = this.terminal.buffer.active;
+    const lines: string[] = [];
+    for (let row = 0; row < this.terminal.rows; row++) {
+      lines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? "");
+    }
+    return lines.join("\n");
+  }
+
   /** Checks which program is in front. Returns whether that changed. */
   pollForeground(): boolean {
     const foreground = this.pty.process;

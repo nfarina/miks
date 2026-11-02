@@ -110,6 +110,12 @@ function MacSettings() {
         onClick={() => updateSettings({ codexHooks: !settings.codexHooks })}
       />
       <LabeledToggle
+        label="Antigravity status"
+        detail="Adds hooks to ~/.gemini/config/hooks.json so Miks can follow Antigravity's CLI too. Outside Miks they do nothing."
+        on={settings.antigravityHooks}
+        onClick={() => updateSettings({ antigravityHooks: !settings.antigravityHooks })}
+      />
+      <LabeledToggle
         label="Keep terminals running"
         detail="After Miks quits, so they're all still there when it opens again."
         on={settings.keepDaemonRunning}

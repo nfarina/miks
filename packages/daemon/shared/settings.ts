@@ -40,6 +40,8 @@ export type Settings = {
   claudeHooks: boolean;
   /** The same for Codex, in ~/.codex/hooks.json. */
   codexHooks: boolean;
+  /** The same for Antigravity, in ~/.gemini/config/hooks.json. */
+  antigravityHooks: boolean;
   /** Whether the file editor wraps long lines (⌥Z). */
   wordWrap: boolean;
   /** Whether Option sends Meta (⌥A as Escape-A, for zsh bindings) instead of typing å. */
@@ -76,6 +78,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keepDaemonRunning: false,
   claudeHooks: true,
   codexHooks: true,
+  antigravityHooks: true,
   wordWrap: true,
   optionAsMeta: true,
   browser: "",
