@@ -1108,6 +1108,28 @@ test("Codex: its hooks set the tab's agent, a restore resumes it with Codex, and
   title("Fixing | repo");
   await waitFor(() => agent()?.status === "idle");
 
+  // With its title to go by, a request its reviewer takes a while over isn't
+  // yours. A Codex in front meanwhile, or the shell would end the session; see
+  // the new session test for why it's signed.
+  const fake = path.join(home, "codex");
+  fs.copyFileSync("/bin/sleep", fake);
+  execFileSync("codesign", ["-f", "-s", "-", fake], { stdio: "ignore" });
+  const pane = first.workspaces.getPane(tab)!;
+  pane.write(`'${fake}' 30\n`);
+  await waitFor(() => pane.running() === "codex");
+  const codexTitle = (text: string) => (pane as any).terminal.write(`\x1b]0;${text}\x07`);
+  await postHook(tab, { hook_event_name: "UserPromptSubmit", session_id: session }, route);
+  codexTitle("⠋ Fixing | repo");
+  await postHook(tab, { hook_event_name: "PermissionRequest", session_id: session, tool_input: { description: "May I?" } }, route);
+  await new Promise((resolve) => setTimeout(resolve, 5500));
+  expect(agent()?.status).toBe("working");
+  // Unless it does ask you, in its own words.
+  codexTitle("[ ! ] Action Required | Fixing | repo");
+  await waitFor(() => agent()?.status === "waiting");
+  expect(agent()?.message).toBe("May I?");
+  codexTitle("⠙ Fixing | repo");
+  await waitFor(() => agent()?.status === "working");
+
   await first.close();
   const saved = JSON.parse(fs.readFileSync(statePath, "utf8"));
   expect(saved.workspaces[0].tabs.map((each: any) => each.session?.agent).filter(Boolean)).toEqual(["codex"]);

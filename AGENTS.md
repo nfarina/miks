@@ -747,7 +747,9 @@ stays with Codex's daemon), so a session ends when the pane's shell is back in
 front (`pollForeground`); `PermissionRequest` fires for what the auto-reviewer
 settles too, with nobody asked, so `waiting` comes from the title (`[ . ]` and
 `[ ! ] Action Required | …`, blinking, for a question as well), with a 5s timer
-for a title configured away; no hook for Esc, and the braille spinner stopping
+only for a tab whose title has never spun (configured away): a
+`guardian_subagent` reviewer can take longer, and its title keeps spinning
+meanwhile, with no `[ ! ]`; no hook for Esc, and the braille spinner stopping
 ends the turn, as with Claude Code. Testing: `CODEX_HOME` is stripped from panes
 (`/^CODEX_/`) only as the daemon's, so it can be typed in one, and a folder's
 first run stops at "Trust this folder?", whose Quit is what typed text picks.

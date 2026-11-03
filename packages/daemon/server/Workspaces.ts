@@ -157,7 +157,12 @@ export class Workspaces extends EventEmitter<{
   /** The title each tab's Codex was last looked up by, so it's once per title. */
   private readonly codexLookups = new Map<string, string>();
   /** A permission request waits a moment before it's `waiting` (see applyHook). */
-  private readonly pendingWaiting = new Map<string, { timer: NodeJS.Timeout; message?: string }>();
+  private readonly pendingWaiting = new Map<string, { timer?: NodeJS.Timeout; message?: string }>();
+  /**
+   * Tabs whose Codex has a title of its own spinning, which then says when
+   * it's asking you, so a permission request alone never does.
+   */
+  private readonly codexTitled = new Set<string>();
   /**
    * The conversation in each tab someone's watching (the chat panel), read
    * from its agent session's transcript while there's one.
@@ -675,6 +680,13 @@ export class Workspaces extends EventEmitter<{
         // asked. Its title says when you are (applyTitle), and failing that
         // (it can be configured away), one still open after a moment is yours.
         const message = typeof payload?.tool_input?.description === "string" ? payload.tool_input.description : undefined;
+        // An auto-reviewer can take longer than the timer (a guardian
+        // subagent's review took 3.6s live), and its title never says it's
+        // asking you meanwhile, so with a title to go by, only that counts.
+        if (this.codexTitled.has(tabId)) {
+          this.pendingWaiting.set(tabId, { message });
+          return;
+        }
         const timer = setTimeout(() => {
           this.pendingWaiting.delete(tabId);
           if (!this.agents.has(tabId)) return;
@@ -794,6 +806,7 @@ export class Workspaces extends EventEmitter<{
     this.agents.delete(tabId);
     this.sessions.delete(tabId);
     this.codexLookups.delete(tabId);
+    this.codexTitled.delete(tabId);
     this.restoredSessions.delete(tabId);
     this.updateChat(tabId);
   }
@@ -815,6 +828,7 @@ export class Workspaces extends EventEmitter<{
 
   private applyTitle(tabId: string, title: string, previous: string) {
     const agent = this.agents.get(tabId);
+    if (agent?.kind === "codex" && WORKING_TITLE.test(title)) this.codexTitled.add(tabId);
     if (agent?.kind === "codex" && CODEX_ASKING_TITLE.test(title)) {
       if (agent.status === "waiting") return;
       const message = this.pendingWaiting.get(tabId)?.message;
@@ -1286,6 +1300,7 @@ export class Workspaces extends EventEmitter<{
     this.agents.delete(tabId);
     this.sessions.delete(tabId);
     this.codexLookups.delete(tabId);
+    this.codexTitled.delete(tabId);
     this.restoredSessions.delete(tabId);
     this.chats.get(tabId)?.transcript?.close();
     this.chats.delete(tabId);
