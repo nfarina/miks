@@ -69,6 +69,74 @@ case "$MODE" in
     ;;
 esac
 
+if [[ "$MODE" == "device" ]]; then
+  # Which device to install onto. Parsed from JSON rather than the table, whose
+  # columns contain spaces in every interesting field — the name, the model, and
+  # the two-word state — so column-position parsing silently picks the wrong row.
+  # It will happily hand you a paired Apple Watch.
+  #
+  # Pass a name fragment, identifier, or UDID to disambiguate:
+  #   ios/build.sh device "Nick's iPhone"
+  DEVICE_QUERY="${2:-${IOS_DEVICE:-}}"
+
+  DEVICE_JSON="$(mktemp)"
+  trap 'rm -f "$DEVICE_JSON"' EXIT
+  xcrun devicectl list devices --json-output "$DEVICE_JSON" >/dev/null 2>&1
+
+  FOUND="$(python3 - "$DEVICE_JSON" "$DEVICE_QUERY" <<'PY'
+import json, sys
+
+path, query = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "")
+devices = json.load(open(path))["result"]["devices"]
+
+def usable(d):
+    hw, conn = d.get("hardwareProperties", {}), d.get("connectionProperties", {})
+    return (
+        hw.get("reality") == "physical"          # not a simulator
+        and hw.get("platform") == "iOS"          # not the watch
+        and conn.get("pairingState") == "paired"
+        and conn.get("tunnelState") != "unavailable"  # a phone belonging to someone else
+    )
+
+def name(d):
+    return d.get("deviceProperties", {}).get("name", "?")
+
+matches = [d for d in devices if usable(d)]
+if query:
+    q = query.lower()
+    # devicectl's own identifier isn't the UDID its table shows, so match both.
+    matches = [
+        d for d in matches
+        if q in name(d).lower()
+        or q in d["identifier"].lower()
+        or q in d.get("hardwareProperties", {}).get("udid", "").lower()
+    ]
+
+if not matches:
+    print("NONE", file=sys.stderr)
+    sys.exit(1)
+if len(matches) > 1:
+    print("Several devices match. Re-run with one of:", file=sys.stderr)
+    for d in matches:
+        print(f'  ios/build.sh device "{name(d)}"', file=sys.stderr)
+    sys.exit(2)
+
+print(matches[0]["identifier"], matches[0]["hardwareProperties"]["udid"])
+print(name(matches[0]), file=sys.stderr)
+PY
+  )" || {
+    echo "Pick a device (or connect one): ios/build.sh devices" >&2
+    exit 1
+  }
+  read -r DEVICE UDID <<<"$FOUND"
+
+  # Built for that phone rather than a generic one, so Xcode registers a
+  # device that's new to the team and adds it to the development profile.
+  # Built generically, a new phone's install fails with "This provisioning
+  # profile cannot be installed on this device."
+  DESTINATION="id=$UDID"
+fi
+
 echo "Building $SCHEME for $DESTINATION"
 
 # Every mode builds into our own (gitignored) build/ folder rather than Xcode's
@@ -93,6 +161,7 @@ xcodebuild \
   -destination "$DESTINATION" \
   "${EXTRA_ARGS[@]}" \
   -allowProvisioningUpdates \
+  -allowProvisioningDeviceRegistration \
   -quiet \
   build
 
@@ -167,59 +236,6 @@ APP="$(xcodebuild -project "$PROJECT" -scheme "$SCHEME" -destination "$DESTINATI
 
 [[ -d "$APP" ]] || {
   echo "Couldn't find the built app at $APP" >&2
-  exit 1
-}
-
-# Which device to install onto. Parsed from JSON rather than the table, whose
-# columns contain spaces in every interesting field — the name, the model, and
-# the two-word state — so column-position parsing silently picks the wrong row.
-# It will happily hand you a paired Apple Watch.
-#
-# Pass a name fragment or identifier to disambiguate:
-#   ios/build.sh device "Nick's iPhone"
-DEVICE_QUERY="${2:-${IOS_DEVICE:-}}"
-
-DEVICE_JSON="$(mktemp)"
-trap 'rm -f "$DEVICE_JSON"' EXIT
-xcrun devicectl list devices --json-output "$DEVICE_JSON" >/dev/null 2>&1
-
-DEVICE="$(python3 - "$DEVICE_JSON" "$DEVICE_QUERY" <<'PY'
-import json, sys
-
-path, query = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else "")
-devices = json.load(open(path))["result"]["devices"]
-
-def usable(d):
-    hw, conn = d.get("hardwareProperties", {}), d.get("connectionProperties", {})
-    return (
-        hw.get("reality") == "physical"          # not a simulator
-        and hw.get("platform") == "iOS"          # not the watch
-        and conn.get("pairingState") == "paired"
-        and conn.get("tunnelState") != "unavailable"  # a phone belonging to someone else
-    )
-
-def name(d):
-    return d.get("deviceProperties", {}).get("name", "?")
-
-matches = [d for d in devices if usable(d)]
-if query:
-    q = query.lower()
-    matches = [d for d in matches if q in name(d).lower() or q in d["identifier"].lower()]
-
-if not matches:
-    print("NONE", file=sys.stderr)
-    sys.exit(1)
-if len(matches) > 1:
-    print("Several devices match. Re-run with one of:", file=sys.stderr)
-    for d in matches:
-        print(f'  ios/build.sh device "{name(d)}"', file=sys.stderr)
-    sys.exit(2)
-
-print(matches[0]["identifier"])
-print(name(matches[0]), file=sys.stderr)
-PY
-)" || {
-  echo "Pick a device (or connect one): ios/build.sh devices" >&2
   exit 1
 }
 

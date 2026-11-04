@@ -4,8 +4,8 @@
 # Gets a native build onto one of Nick's devices, wherever it is: installed
 # directly if this Mac can reach it (`build.sh device`), else as a link to
 # tap in Safari, which installs it from anywhere, no cable or Xcode. Either
-# way it goes on devices in the team's development profile: any device
-# that's been paired with Xcode once.
+# way it goes on devices in the team's development profile, which a new
+# device joins on its first direct install (build.sh registers it).
 #
 # Usage:
 #   ios/share.sh                    # the one reachable device, else a link
