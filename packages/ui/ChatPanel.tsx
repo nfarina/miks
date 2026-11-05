@@ -28,7 +28,7 @@ import {
 } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
-import { padSafeArea, safeArea } from "crosswing/safearea";
+import { ignoreSafeArea, padSafeArea, paddedSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { FilesView } from "./FilesView";
 import { SearchView } from "./SearchView";
@@ -1782,6 +1782,9 @@ const StyledChatPanel = styled.div`
     align-items: center;
     gap: 8px;
     padding: 7px 10px 7px 12px;
+    /* Its line runs to the screen's edge, over the conversation. */
+    ${ignoreSafeArea("right")}
+    padding-right: ${paddedSafeArea.right("10px")};
     border-bottom: 1px solid ${colors.separator()};
 
     > .tool-tabs {
@@ -1839,16 +1842,19 @@ const StyledChatPanel = styled.div`
     text-align: center;
   }
 
+  /* The conversation scrolls to the screen's edge, under the iPhone Duo's
+     strip, with only its messages kept clear of it. */
   > .scroller {
     flex-grow: 1;
     outline: none;
     min-height: 0;
+    ${ignoreSafeArea("right")}
   }
 
   /* Messages' catch-up button: round, floating at the top right. */
   > .catch-up {
     position: absolute;
-    right: ${safeArea.right("12px")};
+    right: ${paddedSafeArea.right("12px")};
     z-index: 2;
     width: 34px;
     height: 34px;
@@ -1875,6 +1881,10 @@ const StyledChatPanel = styled.div`
     }
   }
 
+  > .find-bar {
+    right: ${paddedSafeArea.right("12px")};
+  }
+
   &:not([data-showing="chat"]) > .catch-up,
   &:not([data-showing="chat"]) > .find-bar {
     display: none;
@@ -1883,6 +1893,7 @@ const StyledChatPanel = styled.div`
   > .scroller > .conversation {
     position: relative;
     padding: 16px 18px 8px;
+    padding-right: ${paddedSafeArea.right("18px")};
     display: flex;
     flex-flow: column;
     gap: 14px;

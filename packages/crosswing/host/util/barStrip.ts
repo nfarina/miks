@@ -59,20 +59,30 @@ export function getBarStripStyle(layout: HostLayout | undefined): CSSProperties 
 }
 
 /**
- * CSS custom properties for a bar along the top, for safeAreaTopBar, where the
- * system would put one higher than the safe area: beside the cameras and the
- * status bar rather than under them, as on the iPhone Duo's inner display, whose
- * status sits in the top-right corner. Nothing anywhere else, where the
- * properties fall back to the safe area.
+ * CSS custom properties for a bar along the top, for safeAreaTopBar: its sides
+ * where the system would put one, clear of the screen's rounded corners (the
+ * iPhone Duo's inner display, whose corners are large, while the safe area
+ * there says nothing of them). And its top too, where that's higher than the
+ * safe area: beside the cameras and the status bar rather than under them, as
+ * on the inner display upright, whose status sits in the top-right corner.
+ * Nothing where the host reports no bars, where the properties fall back to
+ * the safe area.
  */
 export function getTopBarStyle(layout: HostLayout | undefined): CSSProperties {
   const bar = layout?.bars?.top;
-  if (!bar || bar.y >= layout.safeArea.top) return {};
+  if (!bar) return {};
+
+  // Never inside the safe area, as reserveSafeArea widens it (our own bar
+  // strip, in Split View).
+  const { safeArea } = layout;
+  const reserve = getReserve(layout);
+  const left = Math.max(bar.x, safeArea.left, reserve.left);
+  const right = Math.max(layout.width - bar.x - bar.width, safeArea.right, reserve.right);
 
   return {
-    "--safe-area-top-bar-top": `${bar.y}px`,
-    "--safe-area-top-bar-left": `${bar.x}px`,
-    "--safe-area-top-bar-right": `${layout.width - bar.x - bar.width}px`,
+    ...(bar.y < safeArea.top && { "--safe-area-top-bar-top": `${bar.y}px` }),
+    "--safe-area-top-bar-left": `${left}px`,
+    "--safe-area-top-bar-right": `${right}px`,
   } as CSSProperties;
 }
 

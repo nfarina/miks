@@ -11,7 +11,7 @@ import { Workspace } from "miks/shared/protocol";
 import { Fragment, HTMLAttributes, KeyboardEvent, use, useState } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
-import { padSafeArea, provideSafeArea, safeAreaTopBar } from "crosswing/safearea";
+import { padSafeArea, provideSafeArea, safeArea, safeAreaTopBar } from "crosswing/safearea";
 import { daemon, useMacs } from "./daemon";
 import { addMac, useRemoveMac } from "./MacChooser";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
@@ -81,6 +81,10 @@ export const StyledSidebar = styled.div`
   /* Its title row is a bar along the top, beside the status bar where the
      system puts bars there (the iPhone Duo's inner display). */
   padding-top: ${safeAreaTopBar.top()};
+  /* Where that bar's side starts, past what we pad already: clear of the
+     inner display's big rounded corner. Read here, since it's cleared for
+     what's inside. */
+  --titlebar-left: max(0px, calc(${safeAreaTopBar.left()} - ${safeArea.left()}));
   > * {
     ${provideSafeArea({ top: "0px" })}
   }
@@ -94,7 +98,7 @@ export const StyledSidebar = styled.div`
     justify-content: flex-end;
     align-items: flex-start;
     /* In line with the tab bar's buttons beside it. */
-    padding: 6px 6px 0 0;
+    padding: 6px 6px 0 var(--titlebar-left);
 
     > ${() => StyledMacSwitcher} {
       margin-right: auto;

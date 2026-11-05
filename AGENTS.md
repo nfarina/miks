@@ -264,6 +264,13 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   only), taken by `site/screenshots/capture.mjs` in headless Chrome; the
   iPhone Duo's in the simulator (`site/screenshots/README.md`). Retake them
   when the UI changes visibly.
+- `yarn storybook` (port 2736): `packages/ui/App.stories.tsx` is the whole UI
+  on the website's pretend daemon (`demo.js`, as the iOS app reaches a Mac)
+  on crosswing's mock devices, a story per iPhone Duo pose plus Simulator
+  (every device, picked from a toolbar). Media queries still see the browser
+  window: emulate touch (`hover: none`, `pointer: coarse`) for the
+  touch-screen layout. Settings change from an eval, e.g.
+  `window.miks.setSettings({sidebarVisible: false})`.
 - `node scripts/devtools.ts screenshot out.png` / `eval '<js>'` drive the
   running dev app over its DevTools port (2739): how to check UI work without
   screen-recording permission. `curl --unix-socket <sock> http://miks/api/state`

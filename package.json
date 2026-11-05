@@ -31,11 +31,14 @@
     "release": "node scripts/release.ts",
     "deploy:web": "node scripts/deploy-web.ts",
     "ui": "yarn workspace ui vite --port 4810 --strictPort",
+    "storybook": "storybook dev --ci -p 2736",
     "site": "python3 -m http.server 4820 --directory site"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
     "@rolldown/plugin-babel": "^0.2.4",
+    "@storybook/react": "^10.6.2",
+    "@storybook/react-vite": "^10.6.2",
     "@types/debug": "^4.1.13",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
@@ -48,6 +51,7 @@
     "oxlint": "1.76.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "storybook": "^10.6.2",
     "styled-components": "^6.5.3",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

@@ -132,3 +132,4 @@ mirror-to-neo.sh
 # @chatwing:projectIgnores:end
 # zsh history, if a shell ever saves it beside Miks's startup files.
 .zsh_history
+debug-storybook.log

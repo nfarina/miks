@@ -117,6 +117,8 @@ export const StyledMockDevice = styled.div`
     /* Width-dependent styles inside respond to the device, not the browser. */
     ${viewportContainer}
     overflow: hidden;
+    /* So is a fixed element, like an app's root, which fills the device. */
+    contain: layout;
 
     > *:not(.cutout) {
       flex-grow: 1;
