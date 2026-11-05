@@ -28,7 +28,7 @@ import {
 } from "react";
 import { styled } from "styled-components";
 import { coarsePointer } from "crosswing/host/pointer";
-import { ignoreSafeArea, padSafeArea, paddedSafeArea } from "crosswing/safearea";
+import { ignoreSafeArea, padSafeArea, paddedSafeArea, provideSafeArea } from "crosswing/safearea";
 import { BrowseView } from "./BrowseView";
 import { FilesView } from "./FilesView";
 import { SearchView } from "./SearchView";
@@ -1773,6 +1773,15 @@ const StyledChatPanel = styled.div`
     min-height: 0;
     display: flex;
     flex-flow: column;
+  }
+
+  /* Like the conversation, these run to the screen's edge, under the iPhone
+     Duo's strip, and keep only what's in them clear of it, by the safe area
+     they're given back. */
+  > .file-view,
+  > .tool-view {
+    ${ignoreSafeArea("right")}
+    ${provideSafeArea({ right: paddedSafeArea.right() })}
   }
 
   /* Like the tab bar's tabs, with the showing one's controls at the end. */

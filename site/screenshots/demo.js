@@ -349,6 +349,24 @@
   ].join("\n");
   const files = { "PLAN.md": plan, COMMIT_EDITMSG: commit };
 
+  // The storefront's folders, for Files, and some of its source, for Find in files.
+  const entry = (name, folder = false, ignored = false) => ({ name, folder, ...(ignored && { ignored }) });
+  const folders = {
+    "": [entry("node_modules", true, true), entry("public", true), entry("src", true), entry(".gitignore"), entry("PLAN.md"), entry("README.md"), entry("package.json"), entry("tsconfig.json"), entry("vite.config.ts")],
+    src: [entry("components", true), entry("hooks", true), entry("pages", true), entry("App.tsx"), entry("main.tsx")],
+    "src/components": [entry("Cart.tsx"), entry("Checkout.tsx"), entry("ProductCard.tsx"), entry("ProductList.test.tsx"), entry("ProductList.tsx"), entry("SearchField.tsx")],
+    "src/hooks": [entry("useCart.ts"), entry("useFiltered.ts")],
+    "src/pages": [entry("Home.tsx"), entry("OrderHistory.tsx")],
+    public: [entry("favicon.svg"), entry("logo.png")],
+  };
+  const searchable = [
+    ["src/components/ProductList.tsx", ['import { SearchField } from "./SearchField";', "export function ProductList({ products }: Props) {", '  const [query, setQuery] = useState("");', "  const shown = useFiltered(products, query);", "      <SearchField value={query} onChange={setQuery} />"]],
+    ["src/components/SearchField.tsx", ["/** A search box that filters as you type. */", "export function SearchField({ value, onChange }: Props) {", '  return <input type="search" placeholder="Search products" value={value} onChange={(e) => onChange(e.target.value)} />;']],
+    ["src/hooks/useFiltered.ts", ["/** Products whose names match the search, ignoring case and accents. */", "export function useFiltered(products: Product[], query: string) {"]],
+    ["src/components/ProductList.test.tsx", ['  it("filters by name as you type", async () => {', '    await user.type(screen.getByRole("searchbox"), "lamp");']],
+    ["PLAN.md", ["- [x] Search on the product list"]],
+  ];
+
   // A scene can open files and pages in tabs, and pick the workspace on screen.
   for (const [name, state] of Object.entries(macs)) {
     const scene = demo.scenes?.[name];
@@ -385,6 +403,25 @@
       const t = tabOf(m.tabId);
       const file = t?.files?.find((f) => f.id === m.fileId) ?? t?.file;
       if (file) reply({ type: "file", tabId: m.tabId, id: file.id, content: files[file.path.split("/").pop()] ?? "", mtime: now });
+    }
+    if (m.type === "readFolder") {
+      const folder = folders[m.path.replace(/^.*\/Code\/storefront\/?/, "")];
+      reply({ type: "folder", requestId: m.requestId, ...(folder ? { entries: folder } : { error: "Not there." }) });
+    }
+    if (m.type === "search") {
+      const query = m.options.query.toLowerCase();
+      const found = query
+        ? searchable
+            .map(([path, lines]) => ({
+              path: `/Users/sam/Code/storefront/${path}`,
+              matches: lines.flatMap((text, i) => {
+                const column = text.toLowerCase().indexOf(query);
+                return column < 0 ? [] : [{ line: i + 1, column, length: query.length, text, ranges: [[column, column + query.length]] }];
+              }),
+            }))
+            .filter((file) => file.matches.length)
+        : [];
+      reply({ type: "searchResults", requestId: m.requestId, files: found, done: true });
     }
     if (m.type === "running") reply({ type: "running", requestId: m.requestId, running: [] });
     if (m.type === "findPaths") reply({ type: "paths", requestId: m.requestId, found: m.paths.map(() => null) });

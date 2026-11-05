@@ -1,4 +1,5 @@
 import { colors } from "crosswing/colors";
+import { safeArea } from "crosswing/safearea";
 import { fonts } from "crosswing/fonts";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
 import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
@@ -314,6 +315,7 @@ const StyledFilesView = styled.div`
     align-items: center;
     gap: 4px;
     padding: 6px 8px;
+    padding-right: ${safeArea.right("8px")};
     border-bottom: 1px solid ${colors.separator()};
 
     > .where {
@@ -374,6 +376,7 @@ const StyledFilesView = styled.div`
       width: 100%;
       box-sizing: border-box;
       padding: 6px 12px;
+      padding-right: ${safeArea.right("12px")};
       border: none;
       outline: none;
       background: none;
@@ -384,6 +387,7 @@ const StyledFilesView = styled.div`
 
   > .note {
     padding: 16px;
+    padding-right: ${safeArea.right("16px")};
     color: ${colors.textSecondary()};
     font: ${fonts.display({ size: 13, line: "20px" })};
   }
@@ -402,7 +406,7 @@ const StyledFilesView = styled.div`
     align-items: center;
     gap: 5px;
     height: 26px;
-    padding-right: 10px;
+    padding-right: ${safeArea.right("10px")};
     font: ${fonts.display({ size: 13, line: "26px" })};
     white-space: nowrap;
     cursor: default;

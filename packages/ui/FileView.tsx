@@ -4,6 +4,7 @@ import { Compartment, EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { colors } from "crosswing/colors";
+import { safeArea } from "crosswing/safearea";
 import { fonts } from "crosswing/fonts";
 import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText, PopupMenuToggle } from "crosswing/components/PopupMenu";
@@ -704,7 +705,7 @@ const StyledFileView = styled.div`
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 10px 8px 16px;
+    padding: 8px ${safeArea.right("10px")} 8px 16px;
     border-bottom: 1px solid ${colors.separator()};
 
     > .name {
@@ -765,7 +766,7 @@ const StyledFileView = styled.div`
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 16px;
+    padding: 6px ${safeArea.right("16px")} 6px 16px;
     background: ${colors.yellow({ alpha: 0.2 })};
     border-bottom: 1px solid ${colors.separator()};
     font: ${fonts.display({ size: 12, line: "16px" })};
@@ -785,6 +786,7 @@ const StyledFileView = styled.div`
 
   > .note {
     padding: 24px;
+    padding-right: ${safeArea.right("24px")};
     color: ${colors.textSecondary()};
     text-align: center;
   }
@@ -800,6 +802,7 @@ const StyledFileView = styled.div`
     align-items: center;
     justify-content: center;
     padding: 16px;
+    padding-right: ${safeArea.right("16px")};
     overflow: auto;
     outline: none;
 
@@ -843,7 +846,7 @@ const StyledFileView = styled.div`
           flex-wrap: wrap;
           align-items: center;
           gap: 6px;
-          padding: 7px 34px 7px 10px;
+          padding: 7px ${safeArea.right("34px")} 7px 10px;
           font: ${fonts.display({ size: 13 })};
 
           > br {
@@ -899,7 +902,7 @@ const StyledFileView = styled.div`
           > button[name="close"] {
             position: absolute;
             top: 7px;
-            right: 6px;
+            right: ${safeArea.right("6px")};
             min-height: 0;
             width: 26px;
             height: 26px;
@@ -909,6 +912,11 @@ const StyledFileView = styled.div`
             font: ${fonts.display({ size: 20 })};
           }
         }
+      }
+
+      /* Its lines scroll under the iPhone Duo's strip, and end clear of it. */
+      .cm-content {
+        padding-right: ${safeArea.right()};
       }
 
       .cm-scroller {

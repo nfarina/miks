@@ -1,4 +1,5 @@
 import { colors } from "crosswing/colors";
+import { safeArea } from "crosswing/safearea";
 import { fonts } from "crosswing/fonts";
 import { tooltip } from "crosswing/modals/popup";
 import { ChevronRight, SlidersHorizontal } from "lucide-react";
@@ -261,6 +262,7 @@ const StyledSearchView = styled.div`
     flex-flow: column;
     gap: 6px;
     padding: 8px 10px;
+    padding-right: ${safeArea.right("10px")};
     border-bottom: 1px solid ${colors.separator()};
 
     input:not([type="checkbox"]) {
@@ -371,6 +373,7 @@ const StyledSearchView = styled.div`
   > .summary {
     flex-shrink: 0;
     padding: 6px 12px;
+    padding-right: ${safeArea.right("12px")};
     color: ${colors.textSecondary()};
     font: ${fonts.display({ size: 12, line: "18px" })};
 
@@ -400,7 +403,7 @@ const StyledSearchView = styled.div`
       align-items: center;
       gap: 5px;
       height: 24px;
-      padding: 0 10px 0 6px;
+      padding: 0 ${safeArea.right("10px")} 0 6px;
       background: ${colors.textBackgroundPanel()};
       font: ${fonts.display({ size: 13, line: "24px" })};
       white-space: nowrap;
@@ -446,7 +449,7 @@ const StyledSearchView = styled.div`
     > .match {
       display: flex;
       gap: 8px;
-      padding: 0 10px 0 24px;
+      padding: 0 ${safeArea.right("10px")} 0 24px;
       font: ${fonts.displayMono({ size: 12, line: "21px" })};
       white-space: nowrap;
       cursor: default;

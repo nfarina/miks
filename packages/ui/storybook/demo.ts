@@ -11,4 +11,12 @@ localStorage.setItem("ChatPanel:open", JSON.stringify(["t1"]));
 (window as any).__demo = {
   bridge: "web",
   dark: matchMedia("(prefers-color-scheme: dark)").matches,
+  // A file in the first tab's panel too, beside its chat.
+  scenes: {
+    air: {
+      tabs: {
+        t1: { files: [{ id: "f1", path: "/Users/sam/Code/storefront/PLAN.md", edit: false, wait: false }] },
+      },
+    },
+  },
 };

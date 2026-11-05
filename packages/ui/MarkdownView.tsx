@@ -1,4 +1,5 @@
 import { colors } from "crosswing/colors";
+import { safeArea } from "crosswing/safearea";
 import { fonts } from "crosswing/fonts";
 import type { OpenFile, Tab } from "miks/shared/protocol";
 import { type MouseEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -369,7 +370,7 @@ const StyledWebImages = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 6px ${safeArea.right("16px")} 6px 16px;
   background: ${colors.textBackgroundAlt()};
   border-bottom: 1px solid ${colors.separator()};
   font: ${fonts.display({ size: 12, line: "16px" })};
@@ -401,7 +402,7 @@ const StyledMarkdownView = styled.div`
   > .content {
     max-width: 820px;
     margin: 0 auto;
-    padding: 16px 20px 32px;
+    padding: 16px ${safeArea.right("20px")} 32px 20px;
     overflow-wrap: break-word;
     user-select: text;
     font: ${fonts.display({ size: 14, line: "22px" })};
