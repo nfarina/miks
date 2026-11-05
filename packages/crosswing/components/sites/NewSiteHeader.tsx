@@ -15,7 +15,7 @@ import { flattenChildren } from "../../hooks/flattenChildren";
 import { HostContext } from "../../host/context/HostContext";
 import { tooltip } from "../../modals/popup/TooltipView";
 import { StyledUnreadBadge, UnreadBadge } from "../../router/tabs/UnreadBadge.js";
-import { safeAreaCorners } from "../../safearea/safeArea";
+import { safeAreaCorners, safeAreaTopBar } from "../../safearea/safeArea";
 import { AutoBorderView, BorderVisibility } from "../AutoBorderView";
 import { barStripPill } from "../BarStrip";
 import { Button, StyledButton } from "../Button";
@@ -133,6 +133,10 @@ export const StyledNewSiteHeader = styled(AutoBorderView)`
   flex-flow: row;
   align-items: center;
   padding: 8px 10px;
+  /* Clear of whatever runs down the sides, like the iPhone Duo's status bar
+     strip or an iPhone's notch in landscape. */
+  padding-left: ${safeAreaTopBar.left("10px")};
+  padding-right: ${safeAreaTopBar.right("10px")};
   box-sizing: border-box;
   position: relative;
 

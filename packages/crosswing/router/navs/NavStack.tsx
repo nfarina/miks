@@ -243,6 +243,8 @@ export function NavStack({
               ref={item.ref}
               data-full-screen={!!item.fullScreen}
               data-forward={item === forwardItem}
+              // The page you're on: the last one, not counting the forward page.
+              data-top={item === items.at(-1)}
               data-arriving={
                 item !== forwardItem && (item.key === lastForwardKey || item.key === arrivingKey)
               }

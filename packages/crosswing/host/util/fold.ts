@@ -1,7 +1,7 @@
 import { CSSProperties, use } from "react";
 import { css, Interpolation } from "styled-components";
 import { HostContext } from "../context/HostContext.js";
-import { HostLayout } from "./types.js";
+import { HostLayout, HostViewport } from "./types.js";
 
 /**
  * Where the fold runs down the screen when it's in play (the iPhone Duo in the
@@ -77,4 +77,28 @@ export function whenFolded(styles: Interpolation<object>) {
       ${styles}
     }
   `;
+}
+
+/**
+ * How far up from the bottom of what the keyboard leaves us to keep content,
+ * so it isn't drawn into the fold. In the iPhone Duo's laptop pose the keyboard
+ * fills the half on the table, so what's left of the view ends at the crease,
+ * inside the band the system reserves for it, where nothing can be seen or
+ * tapped. Zero when the keyboard is down, or ends anywhere else.
+ */
+export function getFoldAboveKeyboard(
+  layout: HostLayout | undefined,
+  viewport: HostViewport,
+): number {
+  if (!viewport.keyboardVisible || viewport.height == null) return 0;
+
+  const division = layout?.divisions?.find(
+    (region) => region.active && region.width > region.height,
+  );
+  if (!division) return 0;
+
+  // The keyboard's top, relative to the band: a little slack below it, since
+  // a sliver between the crease and the keys is no place for a text field.
+  const overlap = viewport.height - division.y;
+  return overlap > 0 && overlap <= division.height + 24 ? overlap : 0;
 }

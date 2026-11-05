@@ -330,9 +330,15 @@ function hasBackAccessory(accessory: NavAccessories | null | undefined): boolean
 /**
  * Where the header's buttons start: below the status bar and clear of the
  * screen's corners, and never flush against the top where nothing's up there
- * (a browser window, or iPhone landscape).
+ * (a browser window, or iPhone landscape). Where the system puts a top bar
+ * higher than that (beside the camera island on the iPhone Duo's inner
+ * display), the header goes there instead, like Safari's.
  */
-const headerTop = `max(${safeAreaCorners.top()}, 10px)`;
+const headerTop = `max(var(--safe-area-top-bar-top, ${safeAreaCorners.top()}), 10px)`;
+
+/** The header's sides, kept clear of whatever shares its strip (the island). */
+const headerLeft = `var(--safe-area-top-bar-left, ${safeArea.left()})`;
+const headerRight = `var(--safe-area-top-bar-right, ${safeArea.right()})`;
 
 export const StyledNavHeader = styled.div`
   display: flex;
@@ -343,8 +349,8 @@ export const StyledNavHeader = styled.div`
   padding-bottom: 10px;
   border-bottom: 1px solid ${colors.separator()};
   padding-top: ${headerTop};
-  padding-left: ${safeArea.left()};
-  padding-right: ${safeArea.right()};
+  padding-left: ${headerLeft};
+  padding-right: ${headerRight};
 
   /* With room to spare, the title centers on the screen (and so on any fold,
      like Safari's address on the iPhone Duo) rather than between the edges of
@@ -617,6 +623,14 @@ export const StyledNavLayout = styled.div`
   /* Any layouts nested in our content are clear of the tab bar already. */
   &[data-floating-tab-bar="true"] > *:nth-child(2):not(${StyledBarStrip}) {
     --floating-tab-bar-height: 0px;
+  }
+
+  /* The header has the top inset covered, either by sitting below it or by
+     sitting in the top bar's slot beside the island, so content under it
+     starts clear. (Content running under the bars gets the header's height.) */
+  &[data-extends-under-bars="false"]:not([data-hidden="true"])
+  > *:nth-child(2):not(${StyledBarStrip}) {
+    ${provideSafeArea({ top: "0px" })}
   }
 
   /* Content */

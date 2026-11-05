@@ -2,7 +2,12 @@ import { ReactNode, use } from "react";
 import { BarEdgeContext } from "../context/BarEdgeContext.js";
 import { HostContext, defaultHostContext } from "../context/HostContext.js";
 import { StyledHostProvider } from "../context/HostProvider.js";
-import { getBarStripStyle, getSafeAreaCornersStyle, getTopBarStyle, reserveSafeArea } from "../util/barStrip.js";
+import {
+  getBarStripStyle,
+  getSafeAreaCornersStyle,
+  getTopBarStyle,
+  reserveSafeArea,
+} from "../util/barStrip.js";
 import { getFoldStyle } from "../util/fold.js";
 import { getPointerStyle } from "../util/pointer.js";
 import { HostContextValue } from "../util/types.js";
@@ -48,6 +53,7 @@ export function MockHostProvider({
             ...getBarStripStyle(value.layout),
             ...getFoldStyle(value.layout),
             ...getSafeAreaCornersStyle(value.layout),
+            // As HostProvider does, so a mock device places a top bar where the real one would.
             ...getTopBarStyle(value.layout),
           }}
           children={children}

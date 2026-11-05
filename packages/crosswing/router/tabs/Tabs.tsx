@@ -395,8 +395,10 @@ export const StyledTabs = styled.div`
     }
 
     /* A page that hides the tab bar just sends it away, since it doesn't
-       hold any space to give back. */
-    &:has(> ${TabContent}.active ${StyledNavs} > .item:last-child [data-hide-tab-bar="true"])
+       hold any space to give back. That's the page on top, which isn't always
+       the last one: a page you came back from waits off-screen after it, to
+       swipe forward to (see NavStack), and mustn't keep the bar hidden. */
+    &:has(> ${TabContent}.active ${StyledNavs} > .item[data-top="true"] [data-hide-tab-bar="true"])
     > ${StyledTabBar} {
       transform: translateY(calc(100% + var(--floating-tab-bar-bottom)));
       opacity: 0;
