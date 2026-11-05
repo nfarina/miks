@@ -60,7 +60,7 @@ export function Tabs({
   // Grab the viewport information from our native host so we can hide
   // the tab bar if the keyboard is visible, and its layout so we can present
   // the tab bar to suit the device and pose.
-  const { viewport, container, layout } = use(HostContext);
+  const { viewport, container, layout, behindKeyboard } = use(HostContext);
   const barEdge = use(BarEdgeContext);
 
   // Without a host reporting size classes (in a browser), approximate them
@@ -186,7 +186,11 @@ export function Tabs({
   // the keyboard leaves it too short to hold the tabs and the nav's buttons.
   const collapsed = /*container !== "android" &&*/ !!viewport.keyboardVisible;
 
-  const floatingBar = !!floating && presentation.startsWith("bottom") && !collapsed;
+  // A page behind the keyboard keeps a floating bar's inset, hidden, as the
+  // keyboard rises past it, so the page's bottom moves on from there with the
+  // keyboard rather than jumping (see --floating-tab-bar-height).
+  const floatingBar =
+    !!floating && presentation.startsWith("bottom") && (!collapsed || !!behindKeyboard);
 
   return (
     <StyledTabs
@@ -370,14 +374,23 @@ export const StyledTabs = styled.div`
      to keep clear of (see NavLayout). */
   &[data-floating="true"] {
     --tab-bar-height: 62px;
-    --floating-tab-bar-bottom: max(12px, calc(${safeArea.bottom()} - 8px));
+    /* On the screen's own bottom inset, not the keyboard's (see
+       getKeyboardStyle). */
+    --floating-tab-bar-bottom: max(
+      12px,
+      calc(var(--safe-area-bottom-base, ${safeArea.bottom()}) - 8px)
+    );
 
     &[data-presentation="bottom-inline"] {
       --tab-bar-height: 44px;
     }
 
     > ${TabContent} > * {
-      --floating-tab-bar-height: calc(var(--floating-tab-bar-bottom) + var(--tab-bar-height) + 8px);
+      /* Or the keyboard, once it rises past the bar. */
+      --floating-tab-bar-height: max(
+        ${safeArea.bottom()},
+        calc(var(--floating-tab-bar-bottom) + var(--tab-bar-height) + 8px)
+      );
     }
 
     > ${StyledTabBar} {

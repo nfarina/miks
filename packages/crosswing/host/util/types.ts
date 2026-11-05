@@ -13,6 +13,11 @@ export interface HostContextValue {
   safeArea: SafeArea;
   viewport: HostViewport;
   /**
+   * Whether the page runs behind the on-screen keyboard, with its height as
+   * bottom safe area (HostProvider's `behindKeyboard`).
+   */
+  behindKeyboard?: boolean;
+  /**
    * Whether the user points with a finger (`coarse`) or a mouse or trackpad
    * (`fine`). Mock devices report `coarse`, so touch-sized UI shows up in a
    * desktop browser too. Style with coarsePointer() rather than a media query,

@@ -111,6 +111,7 @@ export function HostProvider({
           platform: (features.platform as HostPlatform) ?? "unknown",
           safeArea,
           viewport,
+          behindKeyboard,
           pointer: coarse ? "coarse" : "fine",
           layout,
           preferredFontSize,
@@ -200,7 +201,10 @@ export function HostProvider({
             ...getFoldStyle(layout),
             ...getSafeAreaCornersStyle(layout),
             ...getTopBarStyle(layout),
-            ...getKeyboardStyle(viewport),
+            ...getKeyboardStyle(
+              viewport,
+              behindKeyboard && hostSafeArea ? reserveSafeArea(hostSafeArea, layout) : undefined,
+            ),
             ...rest.style,
           }}
         />

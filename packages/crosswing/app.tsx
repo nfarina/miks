@@ -11,6 +11,7 @@ import {
   GlobalFontFace,
 } from "./fonts/fonts.js";
 import { HostContext, hasHostProvider } from "./host/context/HostContext.js";
+import { followKeyboardMotion } from "./host/util/keyboardMotion.js";
 import { BROWSER_SAFE_AREA, getSafeAreaCSS, SafeArea } from "./safearea/safeArea.js";
 
 /**
@@ -88,6 +89,8 @@ export const StyledCrosswingApp = styled.div<{
   ${(p) => getBuilderVarCSS(p.$colors)}
   ${(p) => getFontVarCSS(p.$fonts)}
   ${(p) => getSafeAreaCSS(p.$safeArea)}
+  /* Moving with the keyboard, as the host's does (see keyboardMotion). */
+  ${followKeyboardMotion}
 
   &[data-transparent="false"] {
     background: ${colors.textBackground()};

@@ -143,11 +143,40 @@ export const SheetContainer = ({
   // On a phone, a sliding sheet is a card, as on iOS: it stops short of the
   // top, over a dimmed page, and drags down to dismiss.
   const card = getAnimation() === "slide" && !floating;
+  // Floating, a sliding sheet drags down to dismiss too, with a finger.
+  const swipeable = getAnimation() === "slide";
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const backdropRef = useRef<HTMLDivElement | null>(null);
 
   // The card's height as a swipe began, to fade the backdrop against.
   const swipeHeight = useRef(1);
+
+  // Floating, the sheet sits mid-screen, so sliding by its own height (as a
+  // card does, from the bottom) would start and end it just above the
+  // bottom. It slides from and to below the screen instead, by however far
+  // that is (see slideUp).
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const sheet = sheetRef.current;
+    if (!floating || !container || !sheet) return;
+
+    function measure() {
+      container!.style.setProperty(
+        "--slide-distance",
+        `${container!.clientHeight - sheet!.offsetTop}px`,
+      );
+    }
+
+    const resizes = new ResizeObserver(measure);
+    resizes.observe(container);
+    resizes.observe(sheet);
+    measure();
+
+    return () => {
+      resizes.disconnect();
+      container.style.removeProperty("--slide-distance");
+    };
+  }, [floating]);
 
   function setCardOffset(offset: number) {
     const sheet = sheetRef.current;
@@ -161,11 +190,13 @@ export const SheetContainer = ({
   // scrolled down. Moves only the card and the backdrop, by their own styles,
   // to keep up with a finger.
   useSwipe(sheetRef, {
-    enabled: card && !!animatingIn,
+    enabled: swipeable && !!animatingIn,
     direction: "down",
     overscroll: true,
-    // With a mouse, only the top of the card, and not its buttons.
+    // With a mouse, only the top of the card, and not its buttons. Not a
+    // floating sheet: with a mouse, that's a dialog.
     allowMouse: (e) => {
+      if (!card) return false;
       const target = e.target as HTMLElement;
       const top = sheetRef.current?.getBoundingClientRect().top ?? 0;
       return (
@@ -192,7 +223,10 @@ export const SheetContainer = ({
       if (!sticky && (flung || far)) {
         // Slides (and fades) on down from here (see slideDown), carrying on at
         // the speed it was let go.
-        const finish = getSwipeFinish(swipeHeight.current + 20 - offset, velocity, {
+        const distance = floating
+          ? containerRef.current!.clientHeight - sheetRef.current!.offsetTop
+          : swipeHeight.current;
+        const finish = getSwipeFinish(distance + 20 - offset, velocity, {
           min: CARD_DISMISS_MIN_DURATION,
           max: CARD_DISMISS_MAX_DURATION,
         });
@@ -290,6 +324,7 @@ export const SheetContainer = ({
       style={cssProps}
       data-animating-in={animatingIn}
       data-card={card}
+      data-swipeable={swipeable}
       data-fit={!!fit}
       onAnimationEnd={onAnimationEnd}
       // Sheets present in a way that obscures content underneath, so any hotkeys
@@ -378,9 +413,11 @@ const CARD_STRETCH = "120px";
 /** About the screen's own corners, like the system's sheets. */
 const CARD_RADIUS = "var(--sheet-corner-radius, 36px)";
 
+// From below the screen: a card's own height, or a floating sheet's distance
+// from the bottom (see --slide-distance).
 const slideUp = keyframes`
   from {
-    transform: translateY(100%);
+    transform: translateY(var(--slide-distance, 100%));
   }
 `;
 
@@ -390,7 +427,7 @@ const slideDown = keyframes`
     pointer-events: none;
   }
   to {
-    transform: translateY(calc(100% + 20px));  /* Add 20px for drop shadow. */
+    transform: translateY(calc(var(--slide-distance, 100%) + 20px));  /* Add 20px for drop shadow. */
   }
 `;
 
@@ -647,7 +684,34 @@ const StyledSheetContainer = styled.div`
         > * {
           clip-path: inset(0 round 16px);
         }
+      }
 
+      /* Back into place when a swipe doesn't dismiss it (see useSwipe), and
+         staying with the finger while it does. */
+      &[data-swipeable="true"] > .sheet {
+        transition: transform 0.5s ${easing.outQuint};
+        will-change: transform;
+      }
+
+      /* Fading with the slide, rather than ahead of it. */
+      &[data-swipeable="true"] > .backdrop {
+        transition: opacity 0.5s ${easing.outQuint};
+      }
+
+      &[data-swipeable="true"] > .backdrop[data-animating-in="true"] {
+        animation: ${fadeIn} 0.5s ${easing.outQuint} backwards;
+        animation-delay: calc(150ms + var(--animation-delay));
+      }
+
+      &[data-swipeable="true"] > .backdrop[data-animating-in="false"] {
+        animation: ${fadeOut} var(--dismiss-duration, 0.5s) ${easing.outQuint} forwards;
+      }
+
+      &[data-dragging="true"] > :is(.sheet, .backdrop) {
+        transition: none;
+      }
+
+      > .sheet {
         /* WebKit doesn't clip the blur by that either, but it does honor the
            blur's own corners. */
         ${StyledNavHeader}::before {

@@ -43,7 +43,11 @@ export function MockHostProvider({
   const overrides = { ...(safeArea && { safeArea }), ...host };
   const base = inherit ? { ...parent, ...overrides } : defaultHostContext(overrides);
   // The keyboard, as HostProvider handles it.
-  const value = { ...base, ...extendThroughFold(base.safeArea, base.layout, base.viewport, { behindKeyboard }) };
+  const value = {
+    ...base,
+    ...extendThroughFold(base.safeArea, base.layout, base.viewport, { behindKeyboard }),
+    ...(behindKeyboard != null && { behindKeyboard }),
+  };
 
   return (
     <HostContext value={value}>
