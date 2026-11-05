@@ -45,8 +45,10 @@ root.render(
       <RootStyle />
       <CrosswingApp faces={[systemUI]} fonts={miksFonts}>
         {/* The screen's safe area (the status bar, the iPhone Duo's strip and
-            fold) as --safe-area-* properties, in the iOS app and a browser. */}
-        <HostProvider>
+            fold) as --safe-area-* properties, in the iOS app and a browser. The
+            page runs behind the keyboard, so its rounded corners show the app,
+            not what's behind it. */}
+        <HostProvider behindKeyboard>
           <ModalRootProvider allowDesktopPresentation>
             <App />
           </ModalRootProvider>

@@ -64,19 +64,27 @@ export * from "./HostContext.js";
 export function HostProvider({
   container = detectContainer(),
   deviceId,
+  behindKeyboard,
   ...rest
 }: HTMLAttributes<HTMLDivElement> & {
   /** Allow setting the HostContainer directly for certain debugging situations. */
   container?: HostContainer;
   /** Allow setting the device ID directly for certain debugging situations. */
   deviceId?: string;
+  /**
+   * Run the page behind the on-screen keyboard, with its height as bottom safe
+   * area, rather than ending it at the keyboard's top (see extendThroughFold).
+   */
+  behindKeyboard?: boolean;
 }) {
   const features = useFeatures();
   const hostViewport = useHostViewport();
   const layout = useHostLayout(features);
   const hostSafeArea = useSafeArea(container, features, hostViewport);
   const { safeArea, viewport } = hostSafeArea
-    ? extendThroughFold(reserveSafeArea(hostSafeArea, layout), layout, hostViewport)
+    ? extendThroughFold(reserveSafeArea(hostSafeArea, layout), layout, hostViewport, {
+        behindKeyboard,
+      })
     : { safeArea: undefined, viewport: hostViewport };
   const deepLink = useDeepLinks(features);
   const clipboard = useClipboard(features);

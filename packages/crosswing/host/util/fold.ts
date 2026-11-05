@@ -115,15 +115,24 @@ export function getKeyboardFold(
 }
 
 /**
- * Runs the page down through the fold when the keyboard ends at it, keeping
- * content above it with the bottom safe area (see getKeyboardFold).
+ * Runs the page down behind the keyboard when it ends at a fold (see
+ * getKeyboardFold), keeping content above the fold with the bottom safe area.
+ * With `behindKeyboard`, behind any keyboard, keeping content above it: the
+ * keyboard's rounded top corners (and a translucent one) then show the page's
+ * own backgrounds rather than what's behind it. Only for a page sized by the
+ * viewport's height that pads its bottom by the safe area.
  */
 export function extendThroughFold(
   safeArea: SafeArea,
   layout: HostLayout | undefined,
   viewport: HostViewport,
+  { behindKeyboard = false }: { behindKeyboard?: boolean } = {},
 ): { safeArea: SafeArea; viewport: HostViewport } {
-  const fold = getKeyboardFold(layout, viewport);
+  const fold =
+    getKeyboardFold(layout, viewport) ??
+    (behindKeyboard && viewport.keyboardVisible && viewport.height != null && layout
+      ? { height: layout.height, bottom: Math.max(0, layout.height - viewport.height) }
+      : null);
   if (!fold) return { safeArea, viewport };
 
   return {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { duoLaptopLayout, iPhonePortraitLayout } from "../mocks/layouts.js";
-import { getKeyboardFold } from "./fold.js";
+import { extendThroughFold, getKeyboardFold } from "./fold.js";
 
 describe("getKeyboardFold", () => {
   // The laptop pose's fold band runs from 455.5 to 495.5.
@@ -34,5 +34,22 @@ describe("getKeyboardFold", () => {
     expect(
       getKeyboardFold(iPhonePortraitLayout, { keyboardVisible: true, height: 497 }),
     ).toBeNull();
+  });
+});
+
+describe("extendThroughFold", () => {
+  const safeArea = { top: "0px", right: "0px", bottom: "0px", left: "0px" };
+  const keyboard = { keyboardVisible: true, height: 600 };
+
+  test("ends the page at the keyboard unless asked", () => {
+    expect(extendThroughFold(safeArea, duoLaptopLayout, keyboard).viewport.height).toBe(600);
+  });
+
+  test("runs the page behind any keyboard when asked", () => {
+    const { safeArea: inset, viewport } = extendThroughFold(safeArea, duoLaptopLayout, keyboard, {
+      behindKeyboard: true,
+    });
+    expect(viewport.height).toBe(951);
+    expect(inset.bottom).toBe("max(0px, 351px)");
   });
 });

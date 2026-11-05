@@ -51,13 +51,16 @@ export const DuoLaptop: StoryObj = { render: () => <Device layout={duoLaptopLayo
 export const DuoLaptopKeyboard: StoryObj = {
   render: () => <Device layout={duoLaptopLayout} keyboard={455.5} />,
 };
+export const DuoOpenKeyboard: StoryObj = {
+  render: () => <Device layout={duoOpenLandscapeLayout} keyboard={330} />,
+};
 export const DuoOpen: StoryObj = { render: () => <Device layout={duoOpenLandscapeLayout} /> };
 export const DuoOpenPortrait: StoryObj = { render: () => <Device layout={duoOpenPortraitLayout} /> };
 
 function Device({ layout, keyboard }: { layout: HostLayout; keyboard?: number }) {
   return (
     <StyledStage>
-      <MockDevice layout={layout} keyboard={keyboard}>
+      <MockDevice layout={layout} keyboard={keyboard} behindKeyboard>
         <ModalRootProvider allowDesktopPresentation>
           <App />
         </ModalRootProvider>

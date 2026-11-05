@@ -22,8 +22,9 @@ import { HostContextValue } from "../util/types.js";
 export function MockHostProvider({
   children,
   inherit,
+  behindKeyboard,
   ...host
-}: { children?: ReactNode; inherit?: boolean } & Partial<HostContextValue>) {
+}: { children?: ReactNode; inherit?: boolean; behindKeyboard?: boolean } & Partial<HostContextValue>) {
   const parent = use(HostContext);
 
   // A mock layout implies its safe area, unless you gave one explicitly.
@@ -41,8 +42,8 @@ export function MockHostProvider({
 
   const overrides = { ...(safeArea && { safeArea }), ...host };
   const base = inherit ? { ...parent, ...overrides } : defaultHostContext(overrides);
-  // A keyboard ending at the fold, as HostProvider handles it.
-  const value = { ...base, ...extendThroughFold(base.safeArea, base.layout, base.viewport) };
+  // The keyboard, as HostProvider handles it.
+  const value = { ...base, ...extendThroughFold(base.safeArea, base.layout, base.viewport, { behindKeyboard }) };
 
   return (
     <HostContext value={value}>

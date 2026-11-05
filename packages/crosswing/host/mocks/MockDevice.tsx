@@ -21,6 +21,7 @@ export function MockDevice({
   cutouts = getCameraCutouts(layout),
   platform,
   keyboard,
+  behindKeyboard,
   children,
   style,
   ...rest
@@ -37,6 +38,8 @@ export function MockDevice({
    * start below it.
    */
   keyboard?: number;
+  /** As HostProvider's. */
+  behindKeyboard?: boolean;
 }) {
   // Mock devices are touch devices, even in a desktop browser (but see pointer).
   // Partly folded (the iPhone Duo's book and laptop poses), we shade the screen
@@ -72,7 +75,7 @@ export function MockDevice({
       : keyboard;
 
   return (
-    <MockHostProvider {...host} layout={layout} viewport={viewport}>
+    <MockHostProvider {...host} layout={layout} viewport={viewport} behindKeyboard={behindKeyboard}>
       <StyledMockDevice style={{ width: screen.width, height: screen.height, ...style }} {...rest}>
         <div
           className="window"
