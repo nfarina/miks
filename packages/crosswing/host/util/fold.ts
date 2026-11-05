@@ -85,12 +85,14 @@ export function whenFolded(styles: Interpolation<object>) {
  * keyboard ends at a fold across the screen. In the iPhone Duo's laptop pose
  * the keyboard fills the half on the table, and its frame starts at the top of
  * the band the system reserves around the crease (measured: 455.5, the band's
- * top), but it draws its keys only below the band, leaving the band showing
- * whatever's behind. So the page runs down through the band, for its own
- * backgrounds to fill it, with the band as bottom safe area, keeping content
- * above it. The same for a keyboard ending inside the band, or a little below
- * it, since a sliver between the crease and the keys is no place for a text
- * field. Null when the keyboard is down, or ends anywhere else.
+ * top), but it draws only below the band, with rounded top corners, leaving
+ * the band and those corners showing whatever's behind. So the page runs on to
+ * the bottom of the window, behind the keyboard, for its own backgrounds to
+ * fill all of that, with everything from the band down as bottom safe area,
+ * keeping content above it. The same for a keyboard ending inside the band, or
+ * a little below it, since a sliver between the crease and the keys is no
+ * place for a text field. Null when the keyboard is down, or ends anywhere
+ * else.
  */
 export function getKeyboardFold(
   layout: HostLayout | undefined,
@@ -108,7 +110,7 @@ export function getKeyboardFold(
   // A point of slack above, for rounding.
   if (top < division.y - 1 || top > bandBottom + 24) return null;
 
-  const height = Math.max(top, bandBottom);
+  const height = Math.max(top, layout!.height);
   return { height, bottom: height - division.y };
 }
 
