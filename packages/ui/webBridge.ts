@@ -108,6 +108,18 @@ void askApp<{ connected?: boolean }>("hardwareKeyboard").then((result) => {
   if (result) keyboardConnected = !!result.connected;
 });
 
+/**
+ * Whether the iOS app draws the key bar itself, on the keyboard (an older app
+ * doesn't, and the page draws it: KeyBar.tsx).
+ */
+export const nativeKeyBar = () => hasNativeKeyBar;
+
+let hasNativeKeyBar = false;
+void askApp<{ native?: boolean }>("keyBar").then((result) => (hasNativeKeyBar = !!result?.native));
+
+/** Shows or hides the iOS app's key bar, with Ctrl's state. */
+export const showNativeKeyBar = (visible: boolean, ctrl: string) => tellApp("keyBar", { visible, ctrl });
+
 /** The iOS app's own version, and the device's name (MiksPlugin.swift); null from an app before it said. */
 type AppInfo = { version: string; build: string; device: string };
 let appInfo: AppInfo | null = null;

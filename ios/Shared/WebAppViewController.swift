@@ -650,6 +650,11 @@ class WebAppViewController:
         popover.permittedArrowDirections = []
     }
 
+    /// Has the keyboard take WKWebView.inputAccessory again, while it's up.
+    func reloadInputAccessoryView() {
+        webView.reloadInputAccessoryView()
+    }
+
     func executeJSCallback(_ callbackFunc: String, result: [String: Any] = [:]) {
         // WKWebView is main-thread only, and plugins answer from wherever their
         // work finished — a URLSession completion handler, say. Calling it from

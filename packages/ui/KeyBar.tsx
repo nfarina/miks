@@ -5,10 +5,20 @@ import { safeArea } from "crosswing/safearea";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyboardOff } from "lucide-react";
 import { type ReactNode, use, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
-import { setCtrl, useCtrl } from "./keys";
+import { getCtrl, setCtrl, useCtrl } from "./keys";
 import { DEVICE_SETTINGS } from "./settings";
 import { typeKey, type Key } from "./TerminalView";
-import { hardwareKeyboard } from "./webBridge";
+import { hardwareKeyboard, nativeKeyBar, showNativeKeyBar } from "./webBridge";
+
+/** Ctrl's next state, from tapping it. */
+const nextCtrl = (state: ReturnType<typeof useCtrl>) => (state === "off" ? "once" : state === "once" ? "locked" : "off");
+
+// Keys from the iOS app's own key bar (ios/Miks/KeyBar.swift), by name.
+(window as any).miks_key = (key: Key | "ctrl" | "dismiss") => {
+  if (key === "ctrl") setCtrl(nextCtrl(getCtrl()));
+  else if (key === "dismiss") (document.activeElement as HTMLElement | null)?.blur();
+  else typeKey(key);
+};
 
 /**
  * The keys a touch screen's keyboard hasn't (Esc, ⌃C, Tab, ⇧Tab for Claude
@@ -16,7 +26,9 @@ import { hardwareKeyboard } from "./webBridge";
  * terminal has the keyboard. Not with a hardware keyboard, which has them.
  * ⌃C twice quits Claude Code, which says so after the first. At the end,
  * kept in view, a key to put the keyboard away: an iPad's has one, an
- * iPhone's hasn't.
+ * iPhone's hasn't. The iOS app draws it itself, as the keyboard's own bar
+ * (ios/Miks/KeyBar.swift), which iOS moves with it; here, it's only told
+ * when, and Ctrl's state.
  */
 export function KeyBar() {
   const { viewport } = use(HostContext);
@@ -33,7 +45,14 @@ export function KeyBar() {
     };
   }, []);
 
-  if (!DEVICE_SETTINGS || !viewport.keyboardVisible || !terminalFocused || hardwareKeyboard()) return null;
+  const native = nativeKeyBar();
+  const wanted = DEVICE_SETTINGS && terminalFocused && !hardwareKeyboard();
+
+  useEffect(() => {
+    if (native) showNativeKeyBar(wanted, ctrlState);
+  }, [native, wanted, ctrlState]);
+
+  if (native || !wanted || !viewport.keyboardVisible) return null;
 
   return (
     <StyledKeyBar className="key-bar">
@@ -44,7 +63,7 @@ export function KeyBar() {
         <KeyButton onPress={() => typeKey("backtab")}>⇧tab</KeyButton>
         <KeyButton
           data-state={ctrlState}
-          onPress={() => setCtrl(ctrlState === "off" ? "once" : ctrlState === "once" ? "locked" : "off")}
+          onPress={() => setCtrl(nextCtrl(ctrlState))}
         >
           ctrl
         </KeyButton>

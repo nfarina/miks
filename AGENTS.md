@@ -223,9 +223,20 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   has the on-screen keyboard, the key bar (`ui/KeyBar.tsx`) sits on it: Esc,
   Tab, ⇧Tab, Ctrl (`ui/keys.ts`: the next character typed goes as its
   control key; twice, locked), arrows that repeat while held (`typeKey`, in
-  the program's cursor-key mode) and buried symbols. Its keys act on
-  pointerdown and cancel touchend, so the terminal keeps focus (and the
-  keyboard stays up). Holding the on-screen keyboard's delete: xterm.js
+  the program's cursor-key mode) and buried symbols. The app draws it
+  natively (`ios/Miks/KeyBar.swift`) as the keyboard's accessory bar, which
+  iOS moves with it: the shell's swap of WebKit's content view class (made
+  to hide Safari's ‹ › Done bar) returns `WKWebView.inputAccessory`. The page
+  says when (`keyBar`) and Ctrl's state, and gets each key by name
+  (`miks_key`); an app without it gets the page's own bar, whose keys act
+  on pointerdown and cancel touchend, so the terminal keeps focus. In the
+  Duo's laptop pose iOS counts the fold band as the keyboard's (its frame
+  starts at the band's top, 455.5, keys below it), so the bar goes above
+  the fold; the iPhone keyboard draws no `inputAssistantItem` groups, so
+  there's no spot on the half on the table (both tried on the Duo). The
+  page runs behind the keyboard (`HostProvider`'s `behindKeyboard`), its
+  height bottom safe area, so its rounded corners and the band show the
+  app. Holding the on-screen keyboard's delete: xterm.js
   keeps its textarea empty, so `keepDeleteRepeating` (`ui/keys.ts`) keeps a
   zero-width space in it. Two fingers scroll a terminal as a trackpad does
   (`ui/wheel.ts`). Both verified on an iPad. The app looks for a new web

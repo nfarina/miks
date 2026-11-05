@@ -14,6 +14,9 @@ export const setCtrl = (next: typeof ctrl) => {
   for (const listener of ctrlListeners) listener();
 };
 
+/** Ctrl's state now, outside React. */
+export const getCtrl = () => ctrl;
+
 /** What a terminal sends for what was typed, with Ctrl applied if it's on. */
 export function withModifiers(data: string): string {
   if (ctrl === "off" || data.length !== 1) return data;

@@ -1,6 +1,7 @@
 import Foundation
 import GameController
 import UIKit
+import WebKit
 
 /// What the page can't do itself. `fullName` turns the name you type for a Mac
 /// ("air") into its full one ("air.tailbf8edc.ts.net"), the only one its
@@ -66,6 +67,11 @@ class MiksPlugin: WebAppPlugin {
         pages.handle(["action": "closeAll"])
     }
 
+    /// The key bar, on the keyboard while a terminal has it (see KeyBar.swift).
+    private lazy var keyBar = KeyBar { [weak self] key in
+        self?.sendToPluginListener("key", args: "\"\(key)\"")
+    }
+
     @objc private func keyboardChanged() {
         sendToPluginListener("hardwareKeyboard", args: hasHardwareKeyboard ? "true" : "false")
     }
@@ -78,6 +84,19 @@ class MiksPlugin: WebAppPlugin {
             return true
         case "page":
             pages.handle(body)
+            return true
+        case "keyBar":
+            // Asked with a callback, it's whether we have one; told, what it shows.
+            if let callback = body["callback"] as? String {
+                webApp.executeJSCallback(callback, result: ["native": true])
+                return true
+            }
+            keyBar.ctrl = body["ctrl"] as? String ?? "off"
+            let visible = body["visible"] as? Bool ?? false
+            if visible != (WKWebView.inputAccessory != nil) {
+                WKWebView.inputAccessory = visible ? keyBar : nil
+                webApp.reloadInputAccessoryView()
+            }
             return true
         case "pushToken":
             guard let callback = body["callback"] as? String else { return false }
