@@ -236,7 +236,9 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
   there's no spot on the half on the table (both tried on the Duo). The
   page runs behind the keyboard (`HostProvider`'s `behindKeyboard`), its
   height bottom safe area, so its rounded corners and the band show the
-  app. Holding the on-screen keyboard's delete: xterm.js
+  app; `--safe-area-bottom`, registered as a `<length>` (unregistered, a
+  custom property can't animate), moves with the keyboard over its own
+  duration (`keyboardMotion`, the shell's `duration`). Holding the on-screen keyboard's delete: xterm.js
   keeps its textarea empty, so `keepDeleteRepeating` (`ui/keys.ts`) keeps a
   zero-width space in it. Two fingers scroll a terminal as a trackpad does
   (`ui/wheel.ts`). Both verified on an iPad. The app looks for a new web

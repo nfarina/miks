@@ -1016,13 +1016,19 @@ class WebAppViewController:
             return
         }
 
-        sendToWindowListener("onViewportChange", args: "{keyboardVisible: true, height:\(localFrame.origin.y / webView.pageZoom)}")
+        sendToWindowListener("onViewportChange", args: "{keyboardVisible: true, height:\(localFrame.origin.y / webView.pageZoom), duration: \(keyboardDuration)}")
+    }
+
+    /// How long the keyboard takes to come or go, from its last notification,
+    /// so the page can move with it.
+    private var keyboardDuration: Double {
+        (lastNotification?.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
     }
     
     @objc func keyboardWillReallyHide() {
         log.debug("Keyboard will really hide!")
 
-        sendToWindowListener("onViewportChange", args: "{}")
+        sendToWindowListener("onViewportChange", args: "{duration: \(keyboardDuration)}")
     }
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

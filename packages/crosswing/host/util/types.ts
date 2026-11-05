@@ -256,6 +256,8 @@ export interface HostPlugin {
 export interface HostViewport {
   height?: number;
   keyboardVisible?: boolean;
+  /** How long the keyboard takes to come or go, in seconds, as the host says. */
+  duration?: number;
 }
 
 /**

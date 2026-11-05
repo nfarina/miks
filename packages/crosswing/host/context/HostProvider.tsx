@@ -53,6 +53,7 @@ import { useScrollToTop } from "../util/useScrollToTop.js";
 import { useWindowListener } from "../util/useWindowListener.js";
 import { useMatchMedia } from "../../hooks/useMatchMedia.js";
 import { extendThroughFold, getFoldStyle } from "../util/fold.js";
+import { getKeyboardStyle, keyboardMotion, registerSafeAreaBottom } from "../util/keyboardMotion.js";
 import { COARSE_POINTER_QUERY, getPointerStyle } from "../util/pointer.js";
 import { getBarStripStyle, getSafeAreaCornersStyle, getTopBarStyle, reserveSafeArea } from "../util/barStrip.js";
 import { BarEdgeContext } from "./BarEdgeContext.js";
@@ -99,6 +100,9 @@ export function HostProvider({
   // Whether we're pointed at with a finger. Published as --pointer too, for
   // coarsePointer().
   const coarse = useMatchMedia(COARSE_POINTER_QUERY);
+
+  // So the bottom safe area can move with the keyboard (keyboardMotion).
+  if (behindKeyboard) registerSafeAreaBottom();
 
   const value: HostContextValue | null =
     features && viewport && safeArea && deepLink
@@ -188,6 +192,7 @@ export function HostProvider({
         {/* We need an actual HTML element in the DOM to attach our CSS custom properties to. */}
         <StyledHostProvider
           $safeArea={value.safeArea}
+          $behindKeyboard={behindKeyboard}
           {...rest}
           style={{
             ...getPointerStyle(value.pointer),
@@ -195,6 +200,7 @@ export function HostProvider({
             ...getFoldStyle(layout),
             ...getSafeAreaCornersStyle(layout),
             ...getTopBarStyle(layout),
+            ...getKeyboardStyle(viewport),
             ...rest.style,
           }}
         />
@@ -205,10 +211,12 @@ export function HostProvider({
 
 export const StyledHostProvider = styled.div<{
   $safeArea: SafeArea;
+  $behindKeyboard?: boolean;
 }>`
   display: flex;
   flex-flow: column;
   ${({ $safeArea }) => getSafeAreaCSS($safeArea)}
+  ${({ $behindKeyboard }) => $behindKeyboard && keyboardMotion}
 
   > * {
     flex-grow: 1;
