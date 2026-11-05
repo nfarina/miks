@@ -8,7 +8,7 @@ import {
   getTopBarStyle,
   reserveSafeArea,
 } from "../util/barStrip.js";
-import { getFoldStyle } from "../util/fold.js";
+import { extendThroughFold, getFoldStyle } from "../util/fold.js";
 import { getPointerStyle } from "../util/pointer.js";
 import { HostContextValue } from "../util/types.js";
 
@@ -40,7 +40,9 @@ export function MockHostProvider({
     );
 
   const overrides = { ...(safeArea && { safeArea }), ...host };
-  const value = inherit ? { ...parent, ...overrides } : defaultHostContext(overrides);
+  const base = inherit ? { ...parent, ...overrides } : defaultHostContext(overrides);
+  // A keyboard ending at the fold, as HostProvider handles it.
+  const value = { ...base, ...extendThroughFold(base.safeArea, base.layout, base.viewport) };
 
   return (
     <HostContext value={value}>

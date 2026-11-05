@@ -1,5 +1,6 @@
 import { CSSProperties, use } from "react";
 import { css, Interpolation } from "styled-components";
+import { SafeArea } from "../../safearea/safeArea.js";
 import { HostContext } from "../context/HostContext.js";
 import { HostLayout, HostViewport } from "./types.js";
 
@@ -80,25 +81,51 @@ export function whenFolded(styles: Interpolation<object>) {
 }
 
 /**
- * How far up from the bottom of what the keyboard leaves us to keep content,
- * so it isn't drawn into the fold. In the iPhone Duo's laptop pose the keyboard
- * fills the half on the table, so what's left of the view ends at the crease,
- * inside the band the system reserves for it, where nothing can be seen or
- * tapped. Zero when the keyboard is down, or ends anywhere else.
+ * Where to end the page and how much of its bottom to keep clear when the
+ * keyboard ends at a fold across the screen. In the iPhone Duo's laptop pose
+ * the keyboard fills the half on the table, and its frame starts at the top of
+ * the band the system reserves around the crease (measured: 455.5, the band's
+ * top), but it draws its keys only below the band, leaving the band showing
+ * whatever's behind. So the page runs down through the band, for its own
+ * backgrounds to fill it, with the band as bottom safe area, keeping content
+ * above it. The same for a keyboard ending inside the band, or a little below
+ * it, since a sliver between the crease and the keys is no place for a text
+ * field. Null when the keyboard is down, or ends anywhere else.
  */
-export function getFoldAboveKeyboard(
+export function getKeyboardFold(
   layout: HostLayout | undefined,
   viewport: HostViewport,
-): number {
-  if (!viewport.keyboardVisible || viewport.height == null) return 0;
+): { height: number; bottom: number } | null {
+  if (!viewport.keyboardVisible || viewport.height == null) return null;
 
   const division = layout?.divisions?.find(
     (region) => region.active && region.width > region.height,
   );
-  if (!division) return 0;
+  if (!division) return null;
 
-  // The keyboard's top, relative to the band: a little slack below it, since
-  // a sliver between the crease and the keys is no place for a text field.
-  const overlap = viewport.height - division.y;
-  return overlap > 0 && overlap <= division.height + 24 ? overlap : 0;
+  const top = viewport.height;
+  const bandBottom = division.y + division.height;
+  // A point of slack above, for rounding.
+  if (top < division.y - 1 || top > bandBottom + 24) return null;
+
+  const height = Math.max(top, bandBottom);
+  return { height, bottom: height - division.y };
+}
+
+/**
+ * Runs the page down through the fold when the keyboard ends at it, keeping
+ * content above it with the bottom safe area (see getKeyboardFold).
+ */
+export function extendThroughFold(
+  safeArea: SafeArea,
+  layout: HostLayout | undefined,
+  viewport: HostViewport,
+): { safeArea: SafeArea; viewport: HostViewport } {
+  const fold = getKeyboardFold(layout, viewport);
+  if (!fold) return { safeArea, viewport };
+
+  return {
+    safeArea: { ...safeArea, bottom: `max(${safeArea.bottom}, ${fold.bottom}px)` },
+    viewport: { ...viewport, height: fold.height },
+  };
 }

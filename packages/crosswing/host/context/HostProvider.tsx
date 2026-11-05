@@ -52,7 +52,7 @@ import { useSafeArea } from "../util/useSafeArea.js";
 import { useScrollToTop } from "../util/useScrollToTop.js";
 import { useWindowListener } from "../util/useWindowListener.js";
 import { useMatchMedia } from "../../hooks/useMatchMedia.js";
-import { getFoldAboveKeyboard, getFoldStyle } from "../util/fold.js";
+import { extendThroughFold, getFoldStyle } from "../util/fold.js";
 import { COARSE_POINTER_QUERY, getPointerStyle } from "../util/pointer.js";
 import { getBarStripStyle, getSafeAreaCornersStyle, getTopBarStyle, reserveSafeArea } from "../util/barStrip.js";
 import { BarEdgeContext } from "./BarEdgeContext.js";
@@ -60,16 +60,6 @@ import { HostContext } from "./HostContext.js";
 
 export * from "./BarEdgeContext.js";
 export * from "./HostContext.js";
-
-/** Raises the bottom safe area clear of the fold when the keyboard ends in it (see getFoldAboveKeyboard). */
-function clearFoldAboveKeyboard(
-  safeArea: SafeArea,
-  layout: HostLayout | undefined,
-  viewport: HostViewport,
-): SafeArea {
-  const fold = getFoldAboveKeyboard(layout, viewport);
-  return fold > 0 ? { ...safeArea, bottom: `max(${safeArea.bottom}, ${fold}px)` } : safeArea;
-}
 
 export function HostProvider({
   container = detectContainer(),
@@ -82,9 +72,12 @@ export function HostProvider({
   deviceId?: string;
 }) {
   const features = useFeatures();
-  const viewport = useHostViewport();
+  const hostViewport = useHostViewport();
   const layout = useHostLayout(features);
-  const safeArea = useSafeArea(container, features, viewport);
+  const hostSafeArea = useSafeArea(container, features, hostViewport);
+  const { safeArea, viewport } = hostSafeArea
+    ? extendThroughFold(reserveSafeArea(hostSafeArea, layout), layout, hostViewport)
+    : { safeArea: undefined, viewport: hostViewport };
   const deepLink = useDeepLinks(features);
   const clipboard = useClipboard(features);
   const preferredFontSize = usePreferredFontSize(features);
@@ -104,7 +97,7 @@ export function HostProvider({
       ? {
           container,
           platform: (features.platform as HostPlatform) ?? "unknown",
-          safeArea: clearFoldAboveKeyboard(reserveSafeArea(safeArea, layout), layout, viewport),
+          safeArea,
           viewport,
           pointer: coarse ? "coarse" : "fine",
           layout,

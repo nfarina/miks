@@ -214,6 +214,12 @@ export const StyledApp = styled.div`
   color: ${colors.text()};
   font: ${fonts.display({ size: 13 })};
 
+  /* The key bar, at the bottom, takes the bottom safe area (the fold, on an
+     iPhone Duo in the laptop pose). */
+  &:has(> .key-bar) > .layout {
+    ${provideSafeArea({ bottom: "0px" })}
+  }
+
   > .layout {
     flex-grow: 1;
     min-width: 0;

@@ -1,6 +1,7 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { HostContext } from "crosswing/host/context";
+import { safeArea } from "crosswing/safearea";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, KeyboardOff } from "lucide-react";
 import { type ReactNode, use, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
@@ -35,7 +36,7 @@ export function KeyBar() {
   if (!DEVICE_SETTINGS || !viewport.keyboardVisible || !terminalFocused || hardwareKeyboard()) return null;
 
   return (
-    <StyledKeyBar>
+    <StyledKeyBar className="key-bar">
       <div className="keys">
         <KeyButton onPress={() => typeKey("escape")}>esc</KeyButton>
         <KeyButton onPress={() => typeKey("interrupt")}>⌃C</KeyButton>
@@ -139,6 +140,7 @@ function KeyButton({
 const StyledKeyBar = styled.div`
   flex-shrink: 0;
   display: flex;
+  padding-bottom: ${safeArea.bottom()};
   border-top: 1px solid ${colors.separator()};
   background: ${colors.textBackgroundPanel()};
 

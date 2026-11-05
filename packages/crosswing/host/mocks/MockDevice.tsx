@@ -20,6 +20,7 @@ export function MockDevice({
   live,
   cutouts = getCameraCutouts(layout),
   platform,
+  keyboard,
   children,
   style,
   ...rest
@@ -30,6 +31,12 @@ export function MockDevice({
   cutouts?: HostRect[];
   /** The platform the host reports, like "macOS" for the Mac app. */
   platform?: HostPlatform;
+  /**
+   * Show the on-screen keyboard, reporting its top here, as the host would. In
+   * the iPhone Duo's laptop pose that's the top of the fold, though its keys
+   * start below it.
+   */
+  keyboard?: number;
 }) {
   // Mock devices are touch devices, even in a desktop browser (but see pointer).
   // Partly folded (the iPhone Duo's book and laptop poses), we shade the screen
@@ -58,8 +65,14 @@ export function MockDevice({
     ? { inherit: true, pointer, ...(platform && { platform }) }
     : { container: "ios" as const, pointer, ...(platform && { platform }) };
 
+  const viewport = keyboard != null ? { keyboardVisible: true, height: keyboard } : {};
+  const keysTop =
+    keyboard != null && across && keyboard <= division.y + division.height
+      ? division.y + division.height
+      : keyboard;
+
   return (
-    <MockHostProvider {...host} layout={layout}>
+    <MockHostProvider {...host} layout={layout} viewport={viewport}>
       <StyledMockDevice style={{ width: screen.width, height: screen.height, ...style }} {...rest}>
         <div
           className="window"
@@ -71,6 +84,7 @@ export function MockDevice({
           }}
         >
           {children}
+          {keysTop != null && <div className="keyboard" style={{ top: keysTop }} />}
           {cutouts.map((rect, i) => (
             <div
               key={i}
@@ -120,7 +134,7 @@ export const StyledMockDevice = styled.div`
     /* So is a fixed element, like an app's root, which fills the device. */
     contain: layout;
 
-    > *:not(.cutout) {
+    > *:not(.cutout, .keyboard) {
       flex-grow: 1;
     }
   }
@@ -154,6 +168,17 @@ export const StyledMockDevice = styled.div`
         var(--shade) var(--fold-center),
         transparent calc(var(--fold-center) + 50px)
       );
+  }
+
+  > .window > .keyboard {
+    position: absolute;
+    z-index: 999;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: ${colors.mediumGray()};
+    border-radius: 24px 24px 0 0;
+    pointer-events: none;
   }
 
   > .window > .cutout {

@@ -47,13 +47,17 @@ export const DuoClosed: StoryObj = { render: () => <Device layout={duoClosedPort
 export const DuoClosedLandscape: StoryObj = { render: () => <Device layout={duoClosedLandscapeLayout} /> };
 export const DuoBook: StoryObj = { render: () => <Device layout={duoBookLayout} /> };
 export const DuoLaptop: StoryObj = { render: () => <Device layout={duoLaptopLayout} /> };
+/** With the on-screen keyboard up, which iOS says starts at the fold's top. */
+export const DuoLaptopKeyboard: StoryObj = {
+  render: () => <Device layout={duoLaptopLayout} keyboard={455.5} />,
+};
 export const DuoOpen: StoryObj = { render: () => <Device layout={duoOpenLandscapeLayout} /> };
 export const DuoOpenPortrait: StoryObj = { render: () => <Device layout={duoOpenPortraitLayout} /> };
 
-function Device({ layout }: { layout: HostLayout }) {
+function Device({ layout, keyboard }: { layout: HostLayout; keyboard?: number }) {
   return (
     <StyledStage>
-      <MockDevice layout={layout}>
+      <MockDevice layout={layout} keyboard={keyboard}>
         <ModalRootProvider allowDesktopPresentation>
           <App />
         </ModalRootProvider>
