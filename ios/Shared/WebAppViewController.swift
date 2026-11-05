@@ -982,7 +982,10 @@ class WebAppViewController:
         
         lastNotification = notification
         cancelPendingKeyboardCalls()
-        self.perform(#selector(keyboardWillReallyShow), with: nil, afterDelay: 0.01)
+        // In the common modes: in the default one alone, it waited out any
+        // scroll still tracking or coasting (as after dragging the keyboard
+        // away), and the page heard late.
+        self.perform(#selector(keyboardWillReallyShow), with: nil, afterDelay: 0.01, inModes: [.common])
     }
     
     @objc func keyboardWillHide(_ notification:Notification) {
@@ -990,7 +993,10 @@ class WebAppViewController:
         
         lastNotification = notification
         cancelPendingKeyboardCalls()
-        self.perform(#selector(keyboardWillReallyHide), with: nil, afterDelay: 0.01)
+        // In the common modes: in the default one alone, it waited out any
+        // scroll still tracking or coasting (as after dragging the keyboard
+        // away), and the page heard late.
+        self.perform(#selector(keyboardWillReallyHide), with: nil, afterDelay: 0.01, inModes: [.common])
     }
     
     func cancelPendingKeyboardCalls() {
