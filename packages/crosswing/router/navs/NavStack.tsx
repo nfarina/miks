@@ -112,6 +112,17 @@ export function NavStack({
     return () => clearTimeout(timeout);
   }, [arrivingKey]);
 
+  // Focus left on a page that's no longer on top (a text field you swiped
+  // back from, say, which stays mounted to swipe forward to) would keep the
+  // keyboard up over the page you're on. However you got there.
+  const topKey = items.at(-1)?.key;
+  useEffect(() => {
+    // By data-top, since a page that's leaving can still be the last one.
+    for (const item of stackRef.current?.children ?? []) {
+      if (item instanceof HTMLElement && item.dataset.top !== "true") blurWithin(item);
+    }
+  }, [topKey]);
+
   useSwipe(stackRef, {
     enabled: swipes && !!back,
     direction: "right",
@@ -136,6 +147,8 @@ export function NavStack({
       const far = offset > width * SWIPE_BACK_DISTANCE;
 
       if (flung || far) {
+        // The keyboard goes with it, rather than once it's gone.
+        blurWithin(item);
         // Off it goes, carrying on at the speed it was let go, and stays put
         // while the stack lets it go, rather than jumping back for its exit
         // animation (the inline style wins).
@@ -195,6 +208,9 @@ export function NavStack({
       const flung = velocity > SWIPE_BACK_VELOCITY && offset > 10;
       const far = offset > width * SWIPE_BACK_DISTANCE;
       const going = flung || far;
+      // The keyboard goes as the page you're on is covered.
+      const covered = stackRef.current && getTopItem(stackRef.current);
+      if (going && covered) blurWithin(covered);
 
       // Carrying on at the speed it was let go, if it's going.
       const finish = going
@@ -434,3 +450,9 @@ export const StyledNavs = styled.div`
     }
   }
 `;
+
+/** Drops the focus, and so the keyboard, if it's somewhere in this element. */
+function blurWithin(element: HTMLElement) {
+  const focused = document.activeElement;
+  if (focused instanceof HTMLElement && element.contains(focused)) focused.blur();
+}
