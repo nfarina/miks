@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
 # @chatwing
 #
-# Points the app on a device at a development server, live, by opening a
+# Points the app on a device at a build to try, by opening a
 # `<scheme>://dev-server/…` link in it (see ios/Shared/DevServer.swift). The
 # app must be installed and in Developer mode (Settings → <App>), and an
 # iPhone unlocked.
 #
+# By default it hands over a bundle: it builds and packages the web app from
+# this working tree, serves it from this machine (riot's `bundle` task, over
+# Tailscale), and has the device download and cache it. The app then runs that
+# build against production wherever you take it, laptop closed or not. Naming
+# a server, or --live, points the app at a live Vite server instead, for quick
+# iteration with the laptop at hand. A project that can't package a bundle
+# (no `package` script) always goes live.
+#
 # Usage:
-#   ios/point.sh                    # this machine, on the connected iPhone
-#   ios/point.sh neo                # a server from DevServers in Info.plist
-#   ios/point.sh production
-#   ios/point.sh https://…          # any other server
-#   ios/point.sh air /some/page     # and open a page there
-#   ios/point.sh air / "Nick's iPad"  # pick a device (name fragment or id)
-#   ios/point.sh air / mac          # the Mac app on this machine instead
-#   ios/point.sh --bundle [page] [device]
-#                                   # build and package the web app here, serve
-#                                   # it (riot's `bundle` task, over Tailscale),
-#                                   # and have the device cache it - so it keeps
-#                                   # working away from this machine. The way to
-#                                   # hand over a build to try.
+#   ios/point.sh                    # a bundle of this tree, on the connected iPhone
+#   ios/point.sh /some/page         # ...opened at a page
+#   ios/point.sh "Nick's iPad"      # ...on another device (name fragment or id)
+#   ios/point.sh /some/page mac     # ...in the Mac app on this machine
+#   ios/point.sh --live [page] [device]
+#                                   # this machine's live Vite server instead
+#   ios/point.sh neo [page] [device]
+#                                   # a live server from DevServers in Info.plist
+#   ios/point.sh https://… [page] [device]
+#                                   # any other live server
+#   ios/point.sh production [page] [device]
+#   ios/point.sh --backend=functions …
+#                                   # a live server, against this machine's local
+#                                   # server (functions) or its emulators
+#                                   # (firestore); `none` for production again
 #   ios/point.sh --restart …        # restart the app on the iPhone or iPad to
 #                                   # deliver the link, for when it isn't taken
 #                                   # up by the running app
+#
+# A bundle can't use a local backend: it would need this machine awake, which
+# is what a bundle is for avoiding. Deploy the server side first, or use
+# --live with --backend.
 #
 # Exits nonzero unless the device really switched, which it checks by reading
 # the app's own settings and bundle back off the device.
@@ -34,33 +48,101 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 PROJECT="$(ls -d *.xcodeproj | head -1)"
 APP_NAME="$(basename "$PROJECT" .xcodeproj)"
 
-BUNDLE=0
+MODE="" # bundle or live; settled below if no flag says.
+BACKEND=""
 RESTART=0
 ARGS=()
 for arg in "$@"; do
   case "$arg" in
-    --bundle) BUNDLE=1 ;;
+    --bundle) MODE="bundle" ;;
+    --live) MODE="live" ;;
+    --backend=*) BACKEND="${arg#--backend=}" ;;
     --restart) RESTART=1 ;;
     *) ARGS+=("$arg") ;;
   esac
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
-TAILSCALE="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
-THIS_MACHINE="$("$TAILSCALE" status --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["Self"]["DNSName"].split(".")[0])')"
+case "$BACKEND" in
+  "" | none | functions | firestore) ;;
+  *)
+    echo "--backend is none, functions, or firestore, not \"$BACKEND\"." >&2
+    exit 1
+    ;;
+esac
 
-if [[ "$BUNDLE" == 1 ]]; then
-  # Built here, so served from here.
-  SERVER="$THIS_MACHINE"
-  PAGE="${1:-}"
-  DEVICE_QUERY="${2:-${IOS_DEVICE:-}}"
+TAILSCALE="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
+TAILNET_NAME="$("$TAILSCALE" status --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))')"
+THIS_MACHINE="${TAILNET_NAME%%.*}"
+
+INFO_PLIST="$APP_NAME/Info.plist"
+SCHEME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" "$INFO_PLIST")"
+PRESETS="$(/usr/libexec/PlistBuddy -c "Print :DevServers" "$INFO_PLIST" 2>/dev/null || true)"
+
+# The DevServers URL named by a preset's first host label, if there is one.
+preset_url() {
+  grep -oE "https?://$1\.[^ ]+" <<<"$PRESETS" | head -1 || true
+}
+
+# Whether the first argument names a server, rather than a page or a device.
+is_server() {
+  [[ "$1" == "production" || "$1" == *"://"* || -n "$(preset_url "$1")" ]]
+}
+
+# Whether this project can package a bundle for the app to cache.
+can_bundle() {
+  python3 -c 'import json, sys; sys.exit("package" not in json.load(open("../packages/app/package.json")).get("scripts", {}))' 2>/dev/null
+}
+
+FIRST="${1:-}"
+if [[ -n "$FIRST" ]] && is_server "$FIRST"; then
+  # Naming a server means that live server, as it always has.
+  if [[ "$MODE" == "bundle" ]]; then
+    echo "A bundle is built and served here; don't name a server with --bundle." >&2
+    exit 1
+  fi
+  MODE="live"
+  SERVER="$FIRST"
+  shift
 else
-  SERVER="${1:-$THIS_MACHINE}"
-  PAGE="${2:-}"
-  DEVICE_QUERY="${3:-${IOS_DEVICE:-}}"
+  if [[ -z "$MODE" ]]; then
+    if [[ -n "$BACKEND" ]]; then
+      MODE="live"
+    elif can_bundle; then
+      MODE="bundle"
+    else
+      MODE="live"
+    fi
+  fi
+  SERVER="$THIS_MACHINE"
 fi
 
-SCHEME="$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" "$APP_NAME/Info.plist")"
+if [[ "$MODE" == "bundle" && -n "$BACKEND" ]]; then
+  echo "A bundle runs against production; --backend needs a live server (add --live)." >&2
+  exit 1
+fi
+if [[ "$MODE" == "bundle" ]] && ! can_bundle; then
+  echo "This project can't package a bundle (no \`package\` script in packages/app)." >&2
+  exit 1
+fi
+
+# What's left is [page] [device]. A page starts with "/"; anything else in the
+# first slot is a device, so `point.sh "Nick's iPad"` reads naturally.
+PAGE=""
+DEVICE_QUERY="${IOS_DEVICE:-}"
+if [[ $# -ge 1 ]]; then
+  if [[ "$1" == /* || $# -ge 2 ]]; then
+    PAGE="$1"
+    DEVICE_QUERY="${2:-$DEVICE_QUERY}"
+  else
+    DEVICE_QUERY="$1"
+  fi
+fi
+
+if [[ "$MODE" == "live" && "$SERVER" == "$THIS_MACHINE" && -z "$(preset_url "$THIS_MACHINE")" ]]; then
+  echo "No server for this machine ($THIS_MACHINE) in DevServers, so it can't go live. Leave off --live for a bundle." >&2
+  exit 1
+fi
 
 # The app's bundle id: the shortest in the project, as extensions and the
 # watch app append to it. The first pattern is the JSON format, the second a
@@ -94,11 +176,21 @@ DEVICE_NAME="the Mac app"
 if [[ "$DEVICE_QUERY" != "mac" ]]; then
   xcrun devicectl list devices --json-output "$WORK/devices.json" >/dev/null 2>&1
 
+  # How to run this again for a given device, for the "Pick a device" hints.
+  if [[ "$MODE" == "bundle" ]]; then
+    AGAIN="ios/point.sh ${PAGE:-/}"
+  elif [[ "$SERVER" == "$THIS_MACHINE" ]]; then
+    AGAIN="ios/point.sh --live ${PAGE:-/}"
+  else
+    AGAIN="ios/point.sh $SERVER ${PAGE:-/}"
+  fi
+  [[ -n "$BACKEND" ]] && AGAIN="$AGAIN --backend=$BACKEND"
+
   # Same rules as build.sh: a paired, physical iPhone or iPad that's ours.
-  PICKED="$(python3 - "$WORK/devices.json" "$DEVICE_QUERY" "$SERVER" "$BUNDLE" <<'PY'
+  PICKED="$(python3 - "$WORK/devices.json" "$DEVICE_QUERY" "$AGAIN" <<'PY'
 import json, sys
 
-path, query, server, bundle = sys.argv[1:]
+path, query, again = sys.argv[1:]
 devices = json.load(open(path))["result"]["devices"]
 
 def usable(d):
@@ -121,9 +213,8 @@ if query:
 if len(matches) != 1:
     print("Pick a device:" if matches else "No device found.", file=sys.stderr)
     for d in matches:
-        args = "--bundle <page>" if bundle == "1" else f"{server} <page>"
-        print(f'  ios/point.sh {args} "{name(d)}"', file=sys.stderr)
-    print('  ios/point.sh ' + ("--bundle <page>" if bundle == "1" else f"{server} <page>") + " mac", file=sys.stderr)
+        print(f'  {again} "{name(d)}"', file=sys.stderr)
+    print(f"  {again} mac", file=sys.stderr)
     sys.exit(1)
 
 print(matches[0]["identifier"])
@@ -147,21 +238,34 @@ if [[ -f "$WORK/prefs.plist" ]] && ! python3 -c 'import plistlib, sys; sys.exit(
   exit 1
 fi
 
-
 # The bundle is served by the app's hosting emulator, which serves its dist
 # folder from disk, so a rebuild needs no restart. `tailscale serve` is
 # configuration kept by Tailscale itself, not a process: setting it again is a
 # no-op, and it outlasts reboots.
-if [[ "$BUNDLE" == 1 ]]; then
-  PRESET="$(/usr/libexec/PlistBuddy -c "Print :DevServers" "$APP_NAME/Info.plist" | grep -oE "https?://$SERVER\.[^ ]+" | head -1)" || {
-    echo "No server for this machine ($SERVER) in DevServers." >&2
+if [[ "$MODE" == "bundle" ]]; then
+  PORT="$(python3 -c 'import json; print(json.load(open("../packages/app/firebase.json"))["emulators"]["hosting"]["port"])')"
+  SERVER="https://$TAILNET_NAME:$PORT"
+
+  # The bundle is built from the working tree, so it carries any uncommitted
+  # work, including other sessions' in this checkout.
+  DIRTY="$(git -C .. status --porcelain -- packages | wc -l | tr -d ' ')"
+  if [[ "$DIRTY" != 0 ]]; then
+    echo "Note: this includes uncommitted changes in $DIRTY file(s) under packages/."
+  fi
+
+  echo "Building and packaging the web app…"
+  (cd .. && yarn workspace app build && yarn workspace app package) >"$WORK/build.log" 2>&1 || {
+    tail -30 "$WORK/build.log" >&2
+    echo "The build failed." >&2
     exit 1
   }
-  PORT="$(python3 -c 'import json; print(json.load(open("../packages/app/firebase.json"))["emulators"]["hosting"]["port"])')"
-  SERVER="${PRESET%:*}:$PORT"
-
-  (cd .. && yarn workspace app build && yarn workspace app package) >/dev/null
   if command -v riot >/dev/null; then
+    # `tailscale serve` keeps listening on this port on the tailnet addresses,
+    # and the hosting emulator refuses to start on a port anything holds, so
+    # hand it back while the server starts (it's served again just below).
+    if ! curl -sf "http://localhost:$PORT/bundle.json" >/dev/null; then
+      "$TAILSCALE" serve --https="$PORT" off >/dev/null 2>&1 || true
+    fi
     (cd .. && riot start .:bundle) >/dev/null
   else
     curl -sf "http://localhost:$PORT/bundle.json" >/dev/null || {
@@ -173,20 +277,22 @@ if [[ "$BUNDLE" == 1 ]]; then
   echo "Serving $(cat ../packages/app/dist/bundle.json) at $SERVER"
 fi
 
-URL="$(python3 - "$SCHEME" "$SERVER" "$PAGE" "$BUNDLE" <<'PY'
+URL="$(python3 - "$SCHEME" "$SERVER" "$PAGE" "$MODE" "$BACKEND" <<'PY'
 import sys
 from urllib.parse import quote, urlencode
 
-scheme, server, page, bundle = sys.argv[1:]
+scheme, server, page, mode, backend = sys.argv[1:]
 query = {}
 if "://" in server:
     name, query["url"] = "", server
-    if bundle == "1":
+    if mode == "bundle":
         query["bundle"] = "1"
 else:
     name = quote(server)
 if page:
     query["path"] = page
+if backend:
+    query["emulator"] = backend
 
 print(f"{scheme}://dev-server/{name}" + (f"?{urlencode(query)}" if query else ""))
 PY
@@ -208,10 +314,10 @@ fi
 case "$SERVER" in
   production) EXPECTED_SERVER="" ;;
   *://*) EXPECTED_SERVER="$SERVER" ;;
-  *) EXPECTED_SERVER="$(/usr/libexec/PlistBuddy -c "Print :DevServers" "$APP_NAME/Info.plist" | grep -oE "https?://$SERVER\.[^ ]+" | head -1 || true)" ;;
+  *) EXPECTED_SERVER="$(preset_url "$SERVER")" ;;
 esac
 EXPECTED_HASH=""
-if [[ "$BUNDLE" == 1 ]]; then
+if [[ "$MODE" == "bundle" ]]; then
   EXPECTED_HASH="$(python3 -c 'import json; print(json.load(open("../packages/app/dist/bundle.json"))["hash"])')"
 fi
 
@@ -250,7 +356,7 @@ for _ in $(seq 1 15); do
   sleep 2
   read_app_state
   if LEFT="$(what_is_left 2>&1)"; then
-    echo "$DEVICE_NAME is on ${EXPECTED_SERVER:-production}${EXPECTED_HASH:+, running $EXPECTED_HASH}."
+    echo "$DEVICE_NAME is on ${EXPECTED_SERVER:-production}${EXPECTED_HASH:+, running $EXPECTED_HASH}${BACKEND:+, backend $BACKEND}."
     exit 0
   fi
 done

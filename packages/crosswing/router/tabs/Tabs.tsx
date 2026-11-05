@@ -338,8 +338,8 @@ export const StyledTabs = styled.div`
     }
   }
 
-  /* Special data attribute added by <NavLayout>. Our approach to hiding the tab bar used to be complex, but is now simple, we just stretch the content of any <NavLayout> to cover up the tabs. */
-  &[data-presentation^="bottom"]:not([data-floating="true"])
+  /* Special data attribute added by <NavLayout>. Our approach to hiding the tab bar used to be complex, but is now simple, we just stretch the content of any <NavLayout> to cover up the tabs. Not while the bar is collapsed for the keyboard, though: it takes no space then, so there's nothing to cover, and stretching would push the page's bottom (a text field, say) behind the keyboard. */
+  &[data-presentation^="bottom"]:not([data-floating="true"]):not([data-collapsed="true"])
   > ${TabContent}.active
   *[data-hide-tab-bar="true"] {
     bottom: calc(0px - var(--tab-bar-height) - ${safeArea.bottom()});

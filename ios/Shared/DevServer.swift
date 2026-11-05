@@ -18,7 +18,8 @@ import UIKit
 /// The servers on offer are the `DevServers` URLs in Info.plist, each named by
 /// its first host label (`https://neo.example.ts.net:7202` is "neo"). Those are
 /// live Vite servers. A server can instead serve a packaged bundle for the app
-/// to cache (`bundle=1` on a link), which keeps working away from the laptop.
+/// to cache (`bundle=1` on a link), which keeps working away from the laptop;
+/// that's what ios/point.sh hands over by default.
 ///
 /// A live Vite server can also be told which backend to use: production, the
 /// machine's local server against production data, or its emulators. That's
