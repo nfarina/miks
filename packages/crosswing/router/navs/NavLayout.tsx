@@ -116,7 +116,10 @@ export function NavLayout({
   const resolvedBack = backTo ?? back;
 
   // Pull host info for safe area.
-  const { container, platform, viewport } = use(HostContext);
+  const { container, platform, viewport, layout } = use(HostContext);
+  // A regular-width screen, as the host says (not in a browser, which keeps
+  // its centered titles).
+  const regularWidth = layout?.sizeClass.horizontal === "regular";
   const statusBar = useHostStatusBar();
 
   const tabs = use(TabsContext);
@@ -217,6 +220,7 @@ export function NavLayout({
       data-hidden={!!hidden}
       data-hide-tab-bar={!!hideTabBar}
       data-fit-content={!!fitContent}
+      data-regular-width={regularWidth}
       {...StatusBarStyleAttribute(lightStatusBar ? "light" : "default")} // Picked up on by useAutoStatusBar.
       {...rest}
     >
@@ -225,6 +229,7 @@ export function NavLayout({
         data-window-drag
         data-container={container}
         data-platform={platform}
+        data-regular-width={regularWidth}
         data-hide-separator={!!hideSeparator}
         data-hide-fade={!!hideHeaderFade}
         data-transparent-header={!!transparentHeader}
@@ -358,6 +363,34 @@ export const StyledNavHeader = styled.div`
   @container viewport (min-width: 700px) {
     padding-left: max(${safeArea.left()}, ${safeArea.right()});
     padding-right: max(${safeArea.left()}, ${safeArea.right()});
+  }
+
+  /* On a regular-width screen, with room across the page itself, the title
+     leads, right after the left-hand controls, as iPadOS's do (and ours on
+     the Mac, below). Not in a narrower page there, like a split view's pane
+     or a floating sheet, which stay centered, as iPadOS's do. Nothing to
+     center, so the sides keep clear of only what's on their own side. */
+  @container nav-layout (min-width: 600px) {
+    &[data-regular-width="true"] {
+      padding-left: ${headerLeft};
+      padding-right: ${headerRight};
+
+      > .accessories {
+        width: auto;
+
+        /* Nothing to hold apart from the title, so less of a gap before it. */
+        &[data-align="left"]:empty {
+          padding-left: 10px;
+        }
+      }
+
+      > ${StyledNavTitleView} {
+        > .title,
+        > .subtitle {
+          text-align: left;
+        }
+      }
+    }
   }
 
   /* A Mac window's traffic lights sit in our top-left corner, which the host
@@ -514,6 +547,12 @@ export const StyledNavHeader = styled.div`
 export const StyledNavLayout = styled.div`
   display: flex;
   flex-flow: column;
+
+  /* For the header to measure the page by (see StyledNavHeader). Not a page
+     sized by its content, which a container can't be. */
+  &[data-regular-width="true"]:not([data-fit-content="true"]) {
+    container: nav-layout / inline-size;
+  }
 
   /* The space the bars take along the top and bottom, for content that runs
      under them. Captured here since the content redefines the safe area in
