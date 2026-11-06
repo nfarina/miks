@@ -1,4 +1,4 @@
-import { HTMLAttributes } from "react";
+import { HTMLAttributes, useRef } from "react";
 import { styled } from "styled-components";
 import { getSafeAreaCSS, SafeArea } from "../../safearea/safeArea.js";
 import {
@@ -54,6 +54,7 @@ import { useWindowListener } from "../util/useWindowListener.js";
 import { useMatchMedia } from "../../hooks/useMatchMedia.js";
 import { extendThroughFold, getFoldStyle } from "../util/fold.js";
 import { getKeyboardStyle, keyboardMotion, registerSafeAreaBottom } from "../util/keyboardMotion.js";
+import { useRevealFocus } from "../util/revealFocus.js";
 import { COARSE_POINTER_QUERY, getPointerStyle } from "../util/pointer.js";
 import { getBarStripStyle, getSafeAreaCornersStyle, getTopBarStyle, reserveSafeArea } from "../util/barStrip.js";
 import { BarEdgeContext } from "./BarEdgeContext.js";
@@ -103,6 +104,10 @@ export function HostProvider({
 
   // So the bottom safe area can move with the keyboard (keyboardMotion).
   if (behindKeyboard) registerSafeAreaBottom();
+
+  // Behind the keyboard, nothing else keeps a field you're typing in above it.
+  const element = useRef<HTMLDivElement>(null);
+  useRevealFocus(element, hostViewport, !!behindKeyboard);
 
   const value: HostContextValue | null =
     features && viewport && safeArea && deepLink
@@ -192,6 +197,7 @@ export function HostProvider({
       <BarEdgeContext value={layout?.barEdge ?? null}>
         {/* We need an actual HTML element in the DOM to attach our CSS custom properties to. */}
         <StyledHostProvider
+          ref={element}
           $safeArea={value.safeArea}
           $behindKeyboard={behindKeyboard}
           {...rest}
