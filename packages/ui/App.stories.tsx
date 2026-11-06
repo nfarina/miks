@@ -12,6 +12,7 @@ import {
   duoLaptopLayout,
   duoOpenLandscapeLayout,
   duoOpenPortraitLayout,
+  iPhoneLandscapeLayout,
 } from "crosswing/host/mocks/layouts";
 import type { HostLayout } from "crosswing/host/types";
 import { ModalRootProvider } from "crosswing/modals/context";
@@ -19,6 +20,7 @@ import { CrosswingAppDecorator } from "crosswing/storybook";
 import { styled } from "styled-components";
 import { App } from "./App";
 import { miksFonts, systemUI } from "./fonts";
+import { MacChooser } from "./MacChooser";
 
 /**
  * The whole UI as the iOS app shows it, on the website's pretend daemon, for
@@ -57,12 +59,24 @@ export const DuoOpenKeyboard: StoryObj = {
 export const DuoOpen: StoryObj = { render: () => <Device layout={duoOpenLandscapeLayout} /> };
 export const DuoOpenPortrait: StoryObj = { render: () => <Device layout={duoOpenPortraitLayout} /> };
 
-function Device({ layout, keyboard }: { layout: HostLayout; keyboard?: number }) {
+/** The Mac chooser (Your Macs), as before one connects, on an iPhone held sideways. */
+export const ChooserLandscape: StoryObj = {
+  render: () => <Device layout={iPhoneLandscapeLayout} chooser />,
+};
+
+function Device({ layout, keyboard, chooser }: { layout: HostLayout; keyboard?: number; chooser?: boolean }) {
   return (
     <StyledStage>
       <MockDevice layout={layout} keyboard={keyboard} behindKeyboard>
         <ModalRootProvider allowDesktopPresentation>
-          <App />
+          {chooser ? (
+            // As in the app, where it fills StyledApp.
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexFlow: "column" }}>
+              <MacChooser />
+            </div>
+          ) : (
+            <App />
+          )}
         </ModalRootProvider>
       </MockDevice>
     </StyledStage>

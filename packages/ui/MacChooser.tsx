@@ -2,12 +2,13 @@ import { colors } from "crosswing/colors";
 import { Button } from "crosswing/components/Button";
 import { TextInput } from "crosswing/components/forms/TextInput";
 import { PopupMenu, PopupMenuText } from "crosswing/components/PopupMenu";
+import { Scrollable } from "crosswing/components/Scrollable";
 import { fonts } from "crosswing/fonts";
 import { useConfirm } from "crosswing/modals/confirm";
 import { usePopup } from "crosswing/modals/popup/usePopup";
 import { safeArea } from "crosswing/safearea";
 import { Ellipsis, Laptop, Plus, Smartphone, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { keyframes, styled } from "styled-components";
 import { type Mac, useMacs } from "./daemon";
 import { STATUS_LABELS, statusColors, URGENCY } from "./status";
@@ -41,7 +42,7 @@ export function MacChooser() {
   if (adding || macs.length === 0) return <AddMac onCancel={macs.length > 0 ? () => setAdding(false) : undefined} />;
 
   return (
-    <StyledMacChooser>
+    <ChooserLayout>
       <header>
         <h1>Your Macs</h1>
         <button className="add" aria-label="Add a Mac" onClick={() => setAdding(true)}>
@@ -53,7 +54,16 @@ export function MacChooser() {
           <MacCard key={mac.host} mac={mac} />
         ))}
       </div>
-    </StyledMacChooser>
+    </ChooserLayout>
+  );
+}
+
+/** Scrolls edge to edge (there can be many Macs), the column centered in the safe area. */
+function ChooserLayout({ children }: { children: ReactNode }) {
+  return (
+    <StyledChooserLayout>
+      <StyledMacChooser>{children}</StyledMacChooser>
+    </StyledChooserLayout>
   );
 }
 
@@ -136,7 +146,7 @@ function AddMac({ onCancel }: { onCancel?: () => void }) {
   const [problem, setProblem] = useState<string | null>(null);
 
   return (
-    <StyledMacChooser data-adding>
+    <ChooserLayout>
       {onCancel && (
         <button className="cancel" onClick={onCancel}>
           Cancel
@@ -192,7 +202,7 @@ function AddMac({ onCancel }: { onCancel?: () => void }) {
         {problem && <p className="problem">{problem}</p>}
         <Button newStyle primary type="submit" working={adding} disabled={!text.trim()} children="Connect" />
       </form>
-    </StyledMacChooser>
+    </ChooserLayout>
   );
 }
 
@@ -231,17 +241,20 @@ const travel = keyframes`
   100% { left: calc(100% - 8px); opacity: 0; }
 `;
 
-const StyledMacChooser = styled.div`
+const StyledChooserLayout = styled(Scrollable)`
   flex-grow: 1;
   align-self: stretch;
-  overflow-y: auto;
+  box-sizing: border-box;
+  padding: ${safeArea.top("28px")} ${safeArea.right("20px")} ${safeArea.bottom("20px")} ${safeArea.left("20px")};
+`;
+
+const StyledMacChooser = styled.div`
   display: flex;
   flex-flow: column;
   gap: 20px;
-  box-sizing: border-box;
-  width: min(440px, 100%);
+  width: 100%;
+  max-width: 400px;
   margin: 0 auto;
-  padding: calc(${safeArea.top()} + 28px) 20px calc(${safeArea.bottom()} + 20px);
   color: ${colors.text()};
 
   button {

@@ -1,6 +1,7 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
 import { tooltip } from "crosswing/modals/popup";
+import { safeArea } from "crosswing/safearea";
 import type { Tab } from "miks/shared/protocol";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
@@ -159,7 +160,8 @@ const StyledQuickOpen = styled.div`
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 72px 16px 16px;
+  /* Clear of the screen's edges, and of the keyboard, which the page runs behind. */
+  padding: max(72px, ${safeArea.top("16px")}) ${safeArea.right("16px")} ${safeArea.bottom("16px")} ${safeArea.left("16px")};
 
   > .box {
     width: 560px;

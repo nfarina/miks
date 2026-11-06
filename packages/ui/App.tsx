@@ -487,8 +487,8 @@ const StyledReconnecting = styled.div`
   > .sheet {
     pointer-events: auto;
     position: absolute;
-    left: 12px;
-    right: 12px;
+    left: ${safeArea.left("12px")};
+    right: ${safeArea.right("12px")};
     bottom: calc(${safeArea.bottom()} + 12px);
     max-width: 420px;
     margin: 0 auto;
