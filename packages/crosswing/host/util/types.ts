@@ -162,6 +162,11 @@ export interface HostFeatures {
    * and is currently running via a file:// url.
    */
   webBundle?: boolean;
+  /**
+   * The native app's version (its MARKETING_VERSION), for telling a build that
+   * needs updating. Missing from builds before 2026-11-07.
+   */
+  version?: string;
   /** Whether this host supports native Firebase Auth email sign-in. */
   emailSignIn?: boolean;
   /** Whether this host supports passing in login via a token. */

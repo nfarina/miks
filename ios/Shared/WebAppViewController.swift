@@ -408,6 +408,10 @@ class WebAppViewController:
                 "wakeLock": true,
                 "brightness": true,
                 "reviewPrompt": true,
+                // The app's own version (MARKETING_VERSION), so the page can
+                // tell a build that needs updating. Builds from before
+                // 2026-11-07 don't say.
+                "version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
                 ] as [String : Any]
 
             if let layout = layoutObserver.layout {
