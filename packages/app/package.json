@@ -10,10 +10,10 @@
     "start": "electron ."
   },
   "dependencies": {
-    "electron": "^44.7.2",
+    "electron": "^44.10.1",
     "miks": "workspace:*",
     "vite": "8.2.0",
-    "ws": "^8.22.0"
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@types/ws": "^8.18.2"

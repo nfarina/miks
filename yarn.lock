@@ -1928,7 +1928,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@storybook/react-vite@npm:^10.6.2":
+"@storybook/react-vite@npm:^10.6.5":
   version: 10.6.5
   resolution: "@storybook/react-vite@npm:10.6.5"
   dependencies:
@@ -1954,7 +1954,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@storybook/react@npm:10.6.5, @storybook/react@npm:^10.6.2":
+"@storybook/react@npm:10.6.5, @storybook/react@npm:^10.6.5":
   version: 10.6.5
   resolution: "@storybook/react@npm:10.6.5"
   dependencies:
@@ -2263,7 +2263,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:^26.6.4":
+"@types/node@npm:*":
   version: 26.6.5
   resolution: "@types/node@npm:26.6.5"
   dependencies:
@@ -2278,6 +2278,15 @@ __metadata:
   dependencies:
     undici-types: "npm:>=7.24.0 <7.24.7"
   checksum: 10c0/b51a7f8854007ad579dffdd0633d8addbfeb2c97cceb380f2eba0ed163638ec52e17565385a6cc04d54ac4ff99c70c64aee68a4ca45b6128c035e828794e29c5
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^26.6.6":
+  version: 26.6.6
+  resolution: "@types/node@npm:26.6.6"
+  dependencies:
+    undici-types: "npm:~8.9.0"
+  checksum: 10c0/5cb63f644f6e85a257a9cd2403cbcbe196760e2a35fd3ec9fb8b5cff663e14cc832b198cc17b53f870a2e30900ed45a1fb3f53e6589aba26b8e8c484aa672053
   languageName: node
   linkType: hard
 
@@ -2657,10 +2666,10 @@ __metadata:
   resolution: "app@workspace:packages/app"
   dependencies:
     "@types/ws": "npm:^8.18.2"
-    electron: "npm:^44.7.2"
+    electron: "npm:^44.10.1"
     miks: "workspace:*"
     vite: "npm:8.2.0"
-    ws: "npm:^8.22.0"
+    ws: "npm:^8.22.1"
   languageName: unknown
   linkType: soft
 
@@ -2925,7 +2934,7 @@ __metadata:
     dayjs: "npm:^1.11.23"
     debug: "npm:^4.4.3"
     glob: "npm:^13.0.6"
-    lucide-react: "npm:^1.58.0"
+    lucide-react: "npm:^1.66.0"
     react: "npm:^19.3.1"
     react-dom: "npm:^19.3.1"
     react-is: "npm:^19.3.1"
@@ -3190,9 +3199,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"electron@npm:^44.7.2":
-  version: 44.8.0
-  resolution: "electron@npm:44.8.0"
+"electron@npm:^44.10.1":
+  version: 44.10.1
+  resolution: "electron@npm:44.10.1"
   dependencies:
     "@electron-internal/extract-zip": "npm:^1.0.1"
     "@electron/get": "npm:^5.0.0"
@@ -3200,7 +3209,7 @@ __metadata:
   bin:
     electron: cli.js
     install-electron: install.js
-  checksum: 10c0/f76b66e3a04c71a33a56cfb5fa26b0bd5c2131f898d71cf8a9b50dc10da80ab37e3722a50544fbd56c04e59569727eff55b141f4dea8b356b68c604c90b3a5ef
+  checksum: 10c0/658640fbba4d1c1bfec0bacaaac9a7ff0aef07c5bf956fc745d37a277c04787a2799e1b37973bb4f9c929f3493e7b8669bb569186b1ca168b918129cf2742541
   languageName: node
   linkType: hard
 
@@ -3860,29 +3869,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lucide-react@npm:^1.54.0":
-  version: 1.58.0
-  resolution: "lucide-react@npm:1.58.0"
+"lucide-react@npm:^1.66.0":
+  version: 1.66.0
+  resolution: "lucide-react@npm:1.66.0"
   peerDependencies:
     "@types/react": "*"
     react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
   peerDependenciesMeta:
     "@types/react":
       optional: true
-  checksum: 10c0/2206d52aef1224292bf41285b7c1d224e3718bc9bbb1ae57fbaba346ec7600793b594730288ed065aa3165c98966bee275c8765ab1802620867a18787bfdf20c
-  languageName: node
-  linkType: hard
-
-"lucide-react@npm:^1.58.0":
-  version: 1.59.0
-  resolution: "lucide-react@npm:1.59.0"
-  peerDependencies:
-    "@types/react": "*"
-    react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-  peerDependenciesMeta:
-    "@types/react":
-      optional: true
-  checksum: 10c0/e02dbdda8a9689527988ffb8ed7f01675755146ee7abfebbbe46b843fbc477f23dc0a4524fe257d0daa3d8eb3289a46f8bdce4a1dcbbdeeab5d158bfa68842c4
+  checksum: 10c0/de56abab6b8a311975dd11b504ee838376dfaebdc52ba525cef22b226e0977c732be543c7fc8bb3b5f23f64da8ef2566762b9419d5cd798f7488c629f638a914
   languageName: node
   linkType: hard
 
@@ -3922,12 +3918,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"marked@npm:^18.1.1":
-  version: 18.1.1
-  resolution: "marked@npm:18.1.1"
+"marked@npm:^18.1.2":
+  version: 18.1.2
+  resolution: "marked@npm:18.1.2"
   bin:
     marked: bin/marked.js
-  checksum: 10c0/650d37ef22d39cc28e9afb194517dc7a23baa7c93971ccd518583907ac9b61ce90affb654e0f37b1505f7809988b6c35e45fbb8023bc03a33104bcdfe26324b1
+  checksum: 10c0/0e7312138d6cf866f59a28d2d97ab332ef1b6d1d09263306375a8e9c0e5a4ee892ff1e6ecb668a4959fab0c5f1008c3ddec16c861396fe7cce8f7810521484c9
   languageName: node
   linkType: hard
 
@@ -3960,10 +3956,10 @@ __metadata:
   dependencies:
     "@electron/packager": "npm:^20.3.0"
     "@rolldown/plugin-babel": "npm:^0.2.4"
-    "@storybook/react": "npm:^10.6.2"
-    "@storybook/react-vite": "npm:^10.6.2"
+    "@storybook/react": "npm:^10.6.5"
+    "@storybook/react-vite": "npm:^10.6.5"
     "@types/debug": "npm:^4.1.13"
-    "@types/node": "npm:^26.6.4"
+    "@types/node": "npm:^26.6.6"
     "@types/react": "npm:^19.3.0"
     "@types/react-dom": "npm:^19.3.0"
     "@types/react-is": "npm:^19.3.0"
@@ -3972,15 +3968,15 @@ __metadata:
     babel-plugin-react-compiler: "npm:^1.0.0"
     eslint-plugin-react-hooks: "npm:7.1.1"
     oxlint: "npm:1.76.0"
-    react: "npm:^19.3.0"
-    react-dom: "npm:^19.3.0"
-    storybook: "npm:^10.6.2"
-    styled-components: "npm:^6.5.3"
+    react: "npm:^19.3.1"
+    react-dom: "npm:^19.3.1"
+    storybook: "npm:^10.6.5"
+    styled-components: "npm:^6.6.0"
     tsx: "npm:^4.23.15"
     typescript: "npm:^7.0.2"
     vite: "npm:8.2.0"
     vitest: "npm:5.0.1"
-    ws: "npm:^8.22.0"
+    ws: "npm:^8.22.1"
   languageName: unknown
   linkType: soft
 
@@ -3992,7 +3988,7 @@ __metadata:
     "@xterm/addon-serialize": "npm:^0.14.0"
     "@xterm/headless": "npm:^6.0.0"
     node-pty: "npm:^1.1.0"
-    ws: "npm:^8.22.0"
+    ws: "npm:^8.22.1"
   languageName: unknown
   linkType: soft
 
@@ -4839,7 +4835,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"storybook@npm:^10.6.2":
+"storybook@npm:^10.6.5":
   version: 10.6.5
   resolution: "storybook@npm:10.6.5"
   dependencies:
@@ -5247,15 +5243,15 @@ __metadata:
     crosswing: "workspace:*"
     dompurify: "npm:^3.4.17"
     highlight.js: "npm:^11.12.0"
-    lucide-react: "npm:^1.54.0"
-    marked: "npm:^18.1.1"
+    lucide-react: "npm:^1.66.0"
+    marked: "npm:^18.1.2"
     marked-highlight: "npm:^2.2.4"
     material-icon-theme: "npm:5.40.0"
     miks: "workspace:*"
-    react: "npm:^19.3.0"
-    react-dom: "npm:^19.3.0"
-    react-is: "npm:^19.3.0"
-    styled-components: "npm:^6.5.3"
+    react: "npm:^19.3.1"
+    react-dom: "npm:^19.3.1"
+    react-is: "npm:^19.3.1"
+    styled-components: "npm:^6.6.0"
     vite: "npm:8.2.0"
   languageName: unknown
   linkType: soft
@@ -5470,7 +5466,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:^8.21.1":
+"ws@npm:^8.21.1, ws@npm:^8.22.1":
   version: 8.22.1
   resolution: "ws@npm:8.22.1"
   peerDependencies:
@@ -5482,21 +5478,6 @@ __metadata:
     utf-8-validate:
       optional: true
   checksum: 10c0/858ccc31e56a7549c25d0bfd522b65c64f7bffdc5460eeb4c29517d34728d34de102d2ebf8296160c8b4594fd45ead6a324acd9a1ea0b0b8742bbed4d52d9a51
-  languageName: node
-  linkType: hard
-
-"ws@npm:^8.22.0":
-  version: 8.22.0
-  resolution: "ws@npm:8.22.0"
-  peerDependencies:
-    bufferutil: ^4.0.1
-    utf-8-validate: ">=5.0.2"
-  peerDependenciesMeta:
-    bufferutil:
-      optional: true
-    utf-8-validate:
-      optional: true
-  checksum: 10c0/7304d14ef38898dd366a528a85e2da389c4eebf30f4ce8a007bd2dce6025f9b619cefe44fe2354f0bad0ec541b1c9a4da06a3f3e046ab56f01fd52d5784ecfb2
   languageName: node
   linkType: hard
 
