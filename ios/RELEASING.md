@@ -60,8 +60,10 @@ and see what a tag started with
   iCloud Drive, linked at the top of the Review Notes). 1.0 (3) was never
   submitted. 1.0 (4) (tag `ios-1.0-tailscale`, build
   `3a49dc24-92ed-4db4-9b0a-ff49ac164f53`) was added to `Public` and
-  submitted on 2026-10-27, and is waiting for review: whether a later build
-  of an approved version clears faster is still to be seen. Only one build
+  submitted on 2026-10-27, and was approved. 1.0 (6) (tag `ios-1.0-keybar`,
+  build `688f5780-44e3-4193-8bea-941ce1536b8d`) was added to `Public` and
+  submitted on 2026-11-08: whether a later build of an approved version
+  clears faster is still to be seen. Only one build
   of a version can be in review at a time ("Another build in the same train
   is already in beta review").
 - Whether a build ever reaches `Public` without being added (Phoenix's
