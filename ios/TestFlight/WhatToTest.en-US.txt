@@ -1,1 +1,1 @@
-A new build of Miks: your Macs' terminals and Claude Code sessions, over Tailscale.
+The key bar is the on-screen keyboard's own accessory bar now, the page runs behind the keyboard (filling its corners, and the iPhone Duo's fold), and Your Macs scrolls and clears the camera held sideways.
