@@ -164,6 +164,12 @@ export function FileView({
       // What we've seen already (our own save, coming back).
       if (before && event.mtime === before.mtime) return;
 
+      // One that isn't there yet (New file…, Create in Miks): its source,
+      // to write in, not an empty preview.
+      if (!before && event.mtime === null && event.content === "") {
+        showPreview(false);
+        setEditing(true);
+      }
       if (!before || !dirtyRef.current) {
         diskRef.current = event;
         setDisk(event);

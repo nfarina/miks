@@ -237,10 +237,13 @@ const viewShowers = new Map<string, (view: Tool | "chat") => void>();
 /** ⌘⇧C, ⌘⇧E and ⌘⇧F: to that view, or from it, closing the panel, if the keyboard's already there. */
 export const showView = (tab: Tab, view: Tool | "chat") => viewShowers.get(tab.id)?.(view);
 
-const fileRevealers = new Map<string, () => void>();
+const fileRevealers = new Map<string, (path?: string) => void>();
 
 /** ⌘⇧\: finds the file on show in the panel in Files. */
 export const revealFile = (tab: Tab) => fileRevealers.get(tab.id)?.();
+
+/** Finds a file or folder (absolute, on the tab's Mac) in the tab's Files, opening the panel to it. */
+export const revealInFiles = (tabId: string, path: string) => fileRevealers.get(tabId)?.(path);
 
 /** The files in a tab's panel; an older daemon has one at most. */
 const openFiles = (tab: Tab): OpenFile[] => tab.files ?? (tab.file ? [tab.file] : []);
@@ -383,10 +386,10 @@ export function ChatLayout({
       if (!open) choosePanel(tab, true);
       setFocusView((count) => count + 1);
     });
-    fileRevealers.set(tab.id, () => {
-      const file = files.find((entry) => showing === `file:${entry.id}`);
-      if (!file) return;
-      setReveal({ path: file.path, count: (reveal?.count ?? 0) + 1 });
+    fileRevealers.set(tab.id, (path) => {
+      const shown = path ?? files.find((entry) => showing === `file:${entry.id}`)?.path;
+      if (!shown) return;
+      setReveal({ path: shown, count: (reveal?.count ?? 0) + 1 });
       pickView("files");
       if (!isChatOpen(tab)) choosePanel(tab, true);
       setFocusView((count) => count + 1);
@@ -432,7 +435,8 @@ export function ChatLayout({
       // One that took a passing file's place goes back to where that would have.
       const from = cameFrom.has(view) ? view : showing;
       if (from !== arrived) cameFrom.set(arrived, from);
-      setView(arrived);
+      // For the daemon too: a window connecting later shows it as well.
+      pickView(arrived);
       if (arrived === "page" && page?.fill) expandedTabs.set(tab, true);
       if (!isChatOpen(tab)) {
         openedForContent.current = true;

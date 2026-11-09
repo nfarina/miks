@@ -481,7 +481,7 @@ export async function serve({
           const { requestId, tabId } = message;
           void workspaces
             .tabCwd(tabId, { now: message.now })
-            .then((cwd) => findPaths(message.paths.slice(0, 100), cwd))
+            .then((cwd) => findPaths(message.paths.slice(0, 100), cwd, { search: message.search }))
             .then((found) => send({ type: "paths", requestId, found }));
           return;
         }

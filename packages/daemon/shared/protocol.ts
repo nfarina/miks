@@ -394,8 +394,11 @@ export type ClientMessage =
    * `:line:column` left off. Answered by `paths`. The folder is the one
    * last polled (up to 2s old), or with `now`, where the shell is this
    * moment (an `lsof`: for a click, not every hover). Since protocol 10.
+   * With `search`, one that isn't there is looked for in the repo by how
+   * its path ends (`codeMenu.tsx`, `ui/codeMenu.tsx`), for a click on code
+   * in a chat; an older daemon ignores it.
    */
-  | { type: "findPaths"; requestId: string; tabId: string; paths: string[]; now?: boolean }
+  | { type: "findPaths"; requestId: string; tabId: string; paths: string[]; now?: boolean; search?: boolean }
   /**
    * Shows a folder (absolute) in Finder, on the daemon's Mac. Since protocol
    * 10. With `reveal`, a file or folder selected in its own folder's window
@@ -466,7 +469,8 @@ export type DaemonMessage =
   /** A `readImage`'s (or `fetchImage`'s) image, base64 with its file's `mtime`, or `unchanged`, or why there's none. */
   | { type: "image"; requestId: string; data?: string; mime?: string; mtime?: number; unchanged?: boolean; error?: string }
   /** A `findPaths`'s answer, in its order: each one's absolute path, or null if it isn't there. */
-  | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean } | null)[] }
+  /** `missing`: not there yet, but its folder is (only with `search`). */
+  | { type: "paths"; requestId: string; found: ({ path: string; folder: boolean; missing?: boolean } | null)[] }
   /** A `readFolder`'s answer. */
   | { type: "folder"; requestId: string; entries?: FolderEntry[]; error?: string }
   /** More of a `search`'s results; `done` on the last. */

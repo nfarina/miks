@@ -651,10 +651,16 @@ resizes); keep it passing.
 
 - A click on code in a chat message (`ui/codeMenu.tsx`; not in a block or
   a link) shows a menu: Copy, and for one that's there on the tab's Mac
-  (`findPaths`, from the tab's folder), Open (a file in the panel, a folder
-  in Finder) and Reveal in Finder (`showFolder` with `reveal`, since
-  protocol 18: `open -R`), the Finder ones only on this Mac; for a web
-  address, Open link.
+  (`findPaths` with `search`), Open in Miks (a file, in the panel) or Open
+  in Finder (a folder), Reveal in Files and Reveal in Finder (`showFolder`
+  with `reveal`, since protocol 18: `open -R`), the Finder ones only on this
+  Mac; for a web address, Open link. The tab's folder is its shell's (an
+  agent's own `cd`s are in subshells), and with `search` a path not there is
+  tried from each folder above it up to home (written from where the agent
+  started), then by how it ends among the repo's files (`codeMenu.tsx`,
+  only if one fits, or one under the shell's folder), then as a file to be
+  made (`missing`: Create in Miks) where its folder is, if it has a `/` or
+  starts with a dot. Terminal hovers never search.
 
 - `miks browse <url>` (`POST /api/browse`, `Tab.page`) shows a page in the
   panel (`ui/BrowseView.tsx`, a `<webview>`), switching Chat | file | page

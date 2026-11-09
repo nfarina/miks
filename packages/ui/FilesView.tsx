@@ -2,10 +2,11 @@ import { colors } from "crosswing/colors";
 import { safeArea } from "crosswing/safearea";
 import { fonts } from "crosswing/fonts";
 import { PopupMenu, PopupMenuSeparator, PopupMenuText } from "crosswing/components/PopupMenu";
+import { usePrompt } from "crosswing/components/forms/usePrompt";
 import { useMatchMedia } from "crosswing/hooks/useMatchMedia";
 import { tooltip } from "crosswing/modals/popup";
 import { usePopup } from "crosswing/modals/popup/usePopup";
-import { ArrowUp, ChevronRight, Copy, FileText, FolderOpen, FolderSearch, RotateCw } from "lucide-react";
+import { ArrowUp, ChevronRight, Copy, FilePlus, FileText, FolderOpen, FolderSearch, RotateCw } from "lucide-react";
 import type { FolderEntry, Tab } from "miks/shared/protocol";
 import { displayPath } from "miks/shared/settings";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
@@ -63,7 +64,25 @@ export function FilesView({
   const filterRef = useRef<HTMLInputElement>(null);
   const touch = useMatchMedia("(pointer: coarse)");
   // What the menu's for: its popup can be shown only from the click itself.
-  const menuRow = useRef<{ path: string; folder: boolean } | null>(null);
+  // Or the empty space below the rows (`space`), which stands for the root.
+  const menuRow = useRef<{ path: string; folder: boolean; space?: boolean } | null>(null);
+
+  // A file that isn't there yet opens empty, and saving it makes it (its
+  // folders too, if the name has some), as `miks edit` of a new one does.
+  const newFile = usePrompt((folder: string) => ({
+    title: "New file",
+    message: `In ${displayPath(folder, hidePathPrefix, home)}`,
+    placeholder: "Name",
+    spellCheck: false,
+    okText: "Create",
+    validate: (name: string) => {
+      const parts = name.trim().split("/");
+      if (!name.trim()) throw new Error("A file needs a name.");
+      if (name.trim().startsWith("/") || parts.some((part) => part === ".." || part === ".")) throw new Error("A name within this folder.");
+      if (name.trim().endsWith("/")) throw new Error("A file's name, not a folder's.");
+    },
+    onSubmit: (name: string) => openInPanel(tab, join(folder, name.trim()), { keep: true }),
+  }));
 
   const load = (folder: string) =>
     void daemon.readFolder(folder).then(
@@ -175,6 +194,14 @@ export function FilesView({
       const row = menuRow.current;
       if (!row) return null;
       const finderMissing = whyNoFinder();
+      const into = row.folder ? row.path : parent(row.path);
+      if (row.space) {
+        return (
+          <PopupMenu>
+            <PopupMenuText icon={<FilePlus />} onClick={() => newFile.show(into)} children="New file…" />
+          </PopupMenu>
+        );
+      }
       return (
         <PopupMenu>
           {row.folder ? (
@@ -182,6 +209,7 @@ export function FilesView({
           ) : (
             <PopupMenuText icon={<FileText />} onClick={() => openInPanel(tab, row.path, { keep: true })} children="Open" />
           )}
+          <PopupMenuText icon={<FilePlus />} onClick={() => newFile.show(into)} children="New file…" />
           <PopupMenuSeparator />
           <PopupMenuText
             icon={<FolderSearch />}
@@ -271,7 +299,20 @@ export function FilesView({
       </div>
       {error && <div className="note">{error}</div>}
       {filtering && rows.length === 0 && <div className="note">No files.</div>}
-      <div ref={treeRef} className="tree" tabIndex={0} data-panel-focus onKeyDown={onKeyDown}>
+      <div
+        ref={treeRef}
+        className="tree"
+        tabIndex={0}
+        data-panel-focus
+        onKeyDown={onKeyDown}
+        // Below the rows: a new file in the folder on show.
+        onContextMenu={(event) => {
+          if (!root || (event.target as HTMLElement).closest(".row")) return;
+          event.preventDefault();
+          menuRow.current = { path: root, folder: true, space: true };
+          menu.onClick(event);
+        }}
+      >
         {rows.map(({ path, name, entry, depth, expanded, hits }) => (
           <div
             key={path}
@@ -281,6 +322,8 @@ export function FilesView({
             data-ignored={entry.ignored}
             style={{ paddingLeft: 8 + depth * 14 }}
             onClick={() => {
+              // A click elsewhere in the tree takes the place of the menu.
+              menu.hide();
               setSelected(path);
               if (entry.folder) openFolder(path);
               else if (touch) openInPanel(tab, path);

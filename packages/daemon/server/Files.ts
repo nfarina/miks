@@ -7,6 +7,7 @@ import net from "net";
 import os from "os";
 import path from "path";
 import type { FileProblem } from "../shared/protocol.ts";
+import { listFiles, repoRoot } from "./Search.ts";
 
 /** The most the panel opens: past this it's a log or a dump, not a file to edit. */
 const MAX_SIZE = 5 * 1024 * 1024;
@@ -57,6 +58,8 @@ export async function writeFromPanel(
   }
 
   try {
+    // A new file's folders too (Files' New file…, named `src/new.ts`).
+    if (mtime === null) await fs.promises.mkdir(path.dirname(file), { recursive: true });
     await fs.promises.writeFile(file, content);
     return { mtime: (await fs.promises.stat(file)).mtimeMs };
   } catch (error: any) {
@@ -140,7 +143,11 @@ const IS_PACKAGE = 'ObjC.import("AppKit"); function run(argv) { return $.NSWorks
  * home folder, and with any `:line` or `:line:column` after a file's name
  * (compilers', and Claude Code's, way of pointing into it) left off.
  */
-export async function findPaths(paths: string[], cwd: string | null): Promise<({ path: string; folder: boolean } | null)[]> {
+export async function findPaths(
+  paths: string[],
+  cwd: string | null,
+  { search = false } = {},
+): Promise<FoundPath[]> {
   const find = async (written: string) => {
     const expanded = written === "~" || written.startsWith("~/") ? os.homedir() + written.slice(1) : written;
     if (!path.isAbsolute(expanded) && !cwd) return null;
@@ -157,9 +164,66 @@ export async function findPaths(paths: string[], cwd: string | null): Promise<({
       const found = await find(written);
       if (found) return found;
       const bare = written.replace(/(:\d+){1,2}$/, "");
-      return bare !== written ? find(bare) : null;
+      const foundBare = bare !== written ? await find(bare) : null;
+      if (foundBare || !search) return foundBare;
+      const relative = !!cwd && !path.isAbsolute(bare) && !bare.startsWith("~");
+      if (!relative) return findMissing(bare, cwd, find);
+      return (await findAbove(bare, cwd)) ?? (await findInRepo(bare, cwd)) ?? (await findMissing(bare, cwd, find));
     }),
   );
+}
+
+/**
+ * A path relative to a folder above the shell's, as one written from where
+ * an agent started, before its shell went further in: the nearest, up to
+ * the home folder (above it is everyone's).
+ */
+async function findAbove(written: string, cwd: string): Promise<FoundPath> {
+  const home = os.homedir();
+  for (let at = path.dirname(cwd); at.startsWith(`${home}/`) || at === home; at = path.dirname(at)) {
+    const found = await findPaths([written], at);
+    if (found[0]) return found[0];
+    if (at === home) break;
+  }
+  return null;
+}
+
+type FoundPath = { path: string; folder: boolean; missing?: boolean } | null;
+
+/**
+ * A file that isn't there yet (`sell-stuff/.env`, to be made), where its
+ * folder is: opening it starts it empty, and saving makes it. Only what
+ * reads as a path, with a `/` in it or a dot first, not every `word.like.this`.
+ */
+async function findMissing(written: string, cwd: string | null, find: (written: string) => Promise<FoundPath>): Promise<FoundPath> {
+  const tail = written.replace(/\/+$/, "");
+  if (!(tail.includes("/") || tail.startsWith(".")) || tail.split("/").at(-1)?.match(/^\.*$/)) return null;
+  const folderWritten = tail.includes("/") ? tail.slice(0, tail.lastIndexOf("/")) || "/" : ".";
+  const name = tail.slice(tail.lastIndexOf("/") + 1);
+  const relative = !!cwd && !path.isAbsolute(folderWritten) && !folderWritten.startsWith("~");
+  const searched = relative && folderWritten !== ".";
+  const folder =
+    (await find(folderWritten)) ??
+    (cwd && searched ? ((await findAbove(folderWritten, cwd)) ?? (await findInRepo(folderWritten, cwd))) : null);
+  return folder?.folder ? { path: path.join(folder.path, name), folder: false, missing: true } : null;
+}
+
+/**
+ * A path written relative to somewhere else in the repo, or just a file's
+ * name: the file or folder whose path ends with it, if only one does, or
+ * only one under `cwd`. Several anywhere else, and it's no guess at all.
+ */
+export async function findInRepo(written: string, cwd: string): Promise<FoundPath> {
+  const tail = written.replace(/^\.\//, "").replace(/\/+$/, "");
+  if (!tail || tail.split("/").includes("..")) return null;
+  const { root, paths } = await listFiles(repoRoot(cwd) ?? cwd);
+  const files = new Set(paths);
+  const folders = new Set(paths.flatMap((file) => file.split("/").slice(0, -1).map((_, index, parts) => parts.slice(0, index + 1).join("/"))));
+  const fits = (entry: string) => entry === tail || entry.endsWith(`/${tail}`);
+  const matches = [...[...files].filter(fits), ...[...folders].filter(fits)].map((entry) => path.join(root, entry));
+  const near = matches.length > 1 ? matches.filter((match) => match.startsWith(`${cwd}/`)) : matches;
+  if (near.length !== 1) return null;
+  return { path: near[0], folder: !files.has(path.relative(root, near[0])) };
 }
 
 /**
