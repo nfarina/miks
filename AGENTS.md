@@ -453,7 +453,12 @@ resizes); keep it passing.
   `TextArea` with `autoTrim={false}` never takes a new `value` from outside
   (it wouldn't clear after sending), so the composer keeps the default.
   Each tab has its own panel, in its own area (`ChatLayout`), open or not
-  per tab (window storage), and shown only while `tab.agent` is set.
+  per tab, and shown only while `tab.agent` is set. Open or not and what
+  it shows are every window's (`Tab.panel`, from `panel` messages, since
+  protocol 23; saved with the tab), so the iOS app shows it as the Mac left
+  it. A window keeps its own copy (window storage, all an older daemon
+  has) and takes the daemon's only when that changes, so a `state` already
+  on its way can't undo a click.
   A session starting opens it, unless a restore brought it back
   (`AgentState.restored`, since protocol 14: the hook can't tell a restore's
   `--resume` from yours); closing one it opened within 20s stops that, and
@@ -591,7 +596,9 @@ resizes); keep it passing.
   its screen to search.
 - Every tab's panel has Files (⌘⇧E, `ui/FilesView.tsx`) and Find in files
   (⌘⇧F, `ui/SearchView.tsx`) at the start of its row, which aren't
-  `PanelView`s you can close or drag, nor stops for ⌘⇧[ and ⌘⇧]. ⌘⇧C, ⌘⇧E
+  `PanelView`s you can close or drag, nor stops for ⌘⇧[ and ⌘⇧] (though ⌘⇧]
+  from one goes on to the panel's first tab). With the panel open they step
+  through its tabs wherever the keyboard is, then on to the tab bar's. ⌘⇧C, ⌘⇧E
   and ⌘⇧F each go to their view, and close the panel if the keyboard's
   already in it (`showView`); ⌥⌘B just opens or closes it. ⌘⇧\ shows the file on
   show in Files, opening the folders down to it. ⌘⇧V switches ⌘P and
