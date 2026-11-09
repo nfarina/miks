@@ -192,7 +192,7 @@ const viewOrders = {
 const panelCommands = new Map<string, { step: (offset: number) => boolean; close: () => boolean }>();
 
 /**
- * ⌘⇧[ and ⌘⇧]: with the keyboard in the tab's panel, the panel's tab
+ * ⌘⇧[ and ⌘⇧]: with the tab's panel open, wherever the keyboard is, its tab
  * before or after; false past its ends, for the tab bar's to take over.
  */
 export const stepPanel = (tab: Tab, offset: number) => panelCommands.get(tab.id)?.step(offset) ?? false;
@@ -933,8 +933,10 @@ export function ChatPanel({
         // keys of their own, and stopping at them would keep you from the tab
         // bar's tabs. But from one, ⌘⇧] goes on to the first of the rest, as
         // the row reads (giving up there took you to the next terminal tab).
+        // Wherever the keyboard is: the panel being open is what counts, so the
+        // keys do the same from the terminal as from inside it.
         const next = isTool(showing) ? (offset > 0 ? views[0] : undefined) : views[views.indexOf(showing) + offset];
-        if (!hasKeyboard() || !next) return false;
+        if (!visible || !next) return false;
         onShow(next);
         return true;
       },
