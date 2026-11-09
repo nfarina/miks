@@ -894,9 +894,11 @@ export function ChatPanel({
   useEffect(() => {
     panelCommands.set(tab.id, {
       step(offset) {
-        // Not Files and Search, which every panel has: they have keys of their
-        // own, and stopping at them would keep you from the tab bar's tabs.
-        const next = isTool(showing) ? undefined : views[views.indexOf(showing) + offset];
+        // Not stopping at Files and Search, which every panel has: they have
+        // keys of their own, and stopping at them would keep you from the tab
+        // bar's tabs. But from one, ⌘⇧] goes on to the first of the rest, as
+        // the row reads (giving up there took you to the next terminal tab).
+        const next = isTool(showing) ? (offset > 0 ? views[0] : undefined) : views[views.indexOf(showing) + offset];
         if (!hasKeyboard() || !next) return false;
         onShow(next);
         return true;
