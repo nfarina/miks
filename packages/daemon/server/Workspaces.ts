@@ -15,6 +15,7 @@ import {
   type KeeperState,
   type OpenFile,
   type OpenPage,
+  type TabPanel,
   PROTOCOL_VERSION,
   type Tab,
 } from "../shared/protocol.ts";
@@ -68,6 +69,8 @@ export type SavedTab = {
   keep?: string;
   page?: string;
   draft?: string;
+  /** Its panel, open or not, and what it shows, unless that's a file (whose id is the opening's). */
+  panel?: TabPanel;
   /** The files in its panel, oldest first. */
   files?: string[];
 };
@@ -181,6 +184,7 @@ export class Workspaces extends EventEmitter<{
   /** The page in each tab's panel (`miks browse`). */
   private readonly pages = new Map<string, OpenPage>();
   private readonly drafts = new Map<string, string>();
+  private readonly panels = new Map<string, TabPanel>();
   /** Each tab's own shell history file's name, kept across restores. */
   private readonly historyIds = new Map<string, string>();
   /** What's been closed, for ⌘⇧T, the latest last. */
@@ -461,6 +465,7 @@ export class Workspaces extends EventEmitter<{
       this.drafts.set(tabId, tab.draft);
       this.emit("reopenedDraft", tabId, tab.draft);
     }
+    if (tab.panel) this.panels.set(tabId, tab.panel);
     for (const file of tab.files ?? []) void this.openFile(tabId, file, { edit: false, wait: false });
     return tabId;
   }
@@ -486,6 +491,7 @@ export class Workspaces extends EventEmitter<{
       keep: this.keeps.get(tabId)?.command,
       page: this.pages.get(tabId)?.url,
       draft: this.drafts.get(tabId),
+      panel: this.savedPanel(tabId),
       ...(files?.length ? { files } : {}),
     };
   }
@@ -901,6 +907,7 @@ export class Workspaces extends EventEmitter<{
         });
         if (tabId && tab.page) this.openPage(tabId, tab.page);
         if (tabId && tab.draft) this.drafts.set(tabId, tab.draft);
+        if (tabId && tab.panel) this.panels.set(tabId, tab.panel);
         for (const file of tab.files ?? []) if (tabId) void this.openFile(tabId, file, { edit: false, wait: false });
       }
       workspace.activeTabId = workspace.tabIds[savedWorkspace.activeTab] ?? workspace.tabIds[0] ?? null;
@@ -1222,6 +1229,26 @@ export class Workspaces extends EventEmitter<{
     this.emit("draft");
   }
 
+  /**
+   * A tab's panel opened, closed or switched in a window, so every window
+   * (a Mac's, the iOS app's) shows it alike; saved with the tab.
+   */
+  setPanel(tabId: string, changes: Partial<TabPanel>) {
+    if (!this.panes.has(tabId)) return;
+    const panel = { open: false, ...this.panels.get(tabId) };
+    if (changes.open !== undefined) panel.open = changes.open;
+    if (changes.view !== undefined) panel.view = changes.view;
+    this.panels.set(tabId, panel);
+    this.emit("change");
+  }
+
+  /** What a restore can bring back of a tab's panel: a file's view names an opening that won't be. */
+  private savedPanel(tabId: string): TabPanel | undefined {
+    const panel = this.panels.get(tabId);
+    if (!panel) return;
+    return panel.view?.startsWith("file:") ? { open: panel.open } : panel;
+  }
+
   /** Every tab's draft, "" for one with none. */
   getDrafts(): [string, string][] {
     return [...this.panes.keys()].map((tabId) => [tabId, this.drafts.get(tabId) ?? ""]);
@@ -1283,6 +1310,7 @@ export class Workspaces extends EventEmitter<{
       files: this.files.get(id)?.map((open) => open.file),
       page: this.pages.get(id),
       background: this.backgrounds.get(id)?.counts(),
+      panel: this.panels.get(id),
     };
   }
 
@@ -1307,6 +1335,7 @@ export class Workspaces extends EventEmitter<{
     this.closeFiles(tabId);
     this.pages.delete(tabId);
     this.drafts.delete(tabId);
+    this.panels.delete(tabId);
     this.backgrounds.get(tabId)?.close();
     this.backgrounds.delete(tabId);
     this.cwds.delete(tabId);

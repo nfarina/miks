@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -80,7 +80,15 @@ export type Tab = {
   page?: OpenPage;
   /** What its Claude session has running in the background, while anything is. */
   background?: Background;
+  /** Its panel, as a window last left it, for every window to show alike. Since protocol 23. */
+  panel?: TabPanel;
 };
+
+/**
+ * Whether a tab's panel is open, and what it shows: "chat", "files",
+ * "search", "page", or `file:<OpenFile id>`.
+ */
+export type TabPanel = { open: boolean; view?: string };
 
 /** A Claude Code session's background work, as its own footer counts it ("1 shell, 1 monitor"). */
 export type Background = { shells: number; monitors: number; agents: number };
@@ -415,7 +423,9 @@ export type ClientMessage =
   /** Changes this daemon's Mac's settings, for every window on it. Since protocol 11. */
   | { type: "machineSettings"; changes: Partial<MachineSettings> }
   /** What's written in a tab's chat panel so far, for its other windows (`draft` to them). Since protocol 11. */
-  | { type: "draft"; tabId: string; text: string };
+  | { type: "draft"; tabId: string; text: string }
+  /** A tab's panel opened, closed or showing something else, in some window: it goes to the others in `state`. Since protocol 23. */
+  | { type: "panel"; tabId: string; open?: boolean; view?: string };
 
 //
 // Daemon → client.

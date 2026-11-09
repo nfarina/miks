@@ -10,7 +10,7 @@ import { usePopup } from "crosswing/modals/popup/usePopup";
 import { tooltip } from "crosswing/modals/popup";
 import { useDraggable } from "crosswing/components/draggable/useDraggable";
 import { ArrowUp, ChevronRight, ChevronUp, ClipboardPaste, Files, LoaderCircle, Mic, Paperclip, Search, Square, TextQuote, X } from "lucide-react";
-import { AGENT_NAMES, type ChatEntry, type OpenFile, type Tab } from "miks/shared/protocol";
+import { AGENT_NAMES, type ChatEntry, type OpenFile, type Tab, type TabPanel } from "miks/shared/protocol";
 import { DEFAULT_SETTINGS } from "miks/shared/settings";
 import {
   type DragEvent,
@@ -124,15 +124,17 @@ function tabFlags(storageKey: string) {
 
   return {
     has: (tab: Tab) => keys.has(keyOf(tab)),
-    set(tab: Tab, on: boolean) {
+    /** False if it already was. */
+    set(tab: Tab, on: boolean): boolean {
       const key = keyOf(tab);
-      if (on === keys.has(key)) return;
+      if (on === keys.has(key)) return false;
       if (on) keys.add(key);
       else keys.delete(key);
       try {
         localStorage.setItem(storageKey, JSON.stringify([...keys]));
       } catch {}
       for (const listener of listeners) listener();
+      return true;
     },
     useFlag(tab: Tab | null): boolean {
       const key = tab ? keyOf(tab) : null;
@@ -201,9 +203,20 @@ export const stepPanel = (tab: Tab, offset: number) => panelCommands.get(tab.id)
  */
 export const closeInPanel = (tab: Tab) => panelCommands.get(tab.id)?.close() ?? false;
 
+/**
+ * Tells the daemon how a tab's panel is now in this window, so every other
+ * window (a Mac's, the iOS app's) shows it alike: the tab's `panel` in
+ * `state`. An older daemon keeps nothing, and each window has its own.
+ */
+function sendPanel(tab: Tab, changes: Partial<TabPanel>) {
+  if (daemon.speaks(23)) daemon.send({ type: "panel", tabId: tab.id, ...changes });
+}
+
 export const isChatOpen = openTabs.has;
 /** Opens or closes a tab's panel for you (a long reply, a file arriving), not as your choice. */
-export const setChatOpen = openTabs.set;
+export function setChatOpen(tab: Tab, open: boolean) {
+  if (openTabs.set(tab, open)) sendPanel(tab, { open });
+}
 export const useChatOpen = openTabs.useFlag;
 export const useExpanded = expandedTabs.useFlag;
 
@@ -327,7 +340,12 @@ export function ChatLayout({
   const files = openFiles(tab);
   // Which of what it has the panel shows: what you picked, or else the
   // latest to open (a page, then a file, then the conversation).
-  const [view, setView] = useState<PanelView>("page");
+  const [view, setView] = useState<PanelView>(() => (tab.panel?.view as PanelView | undefined) ?? "page");
+  // What you pick goes to every window, as the panel opening does.
+  const pickView = (next: PanelView) => {
+    setView(next);
+    sendPanel(tab, { view: next });
+  };
   const [order, setOrder] = useState(() => viewOrders.get(tab));
   const views = ordered(panelViews(tab, chatClosed), order);
   const visible = panelOpen;
@@ -361,7 +379,7 @@ export function ChatLayout({
       }
       if (target === "chat") chatClosedTabs.set(tab, false);
       if (target === "files" && !onShow) setFilesCenter((count) => count + 1);
-      setView(target);
+      pickView(target);
       if (!open) choosePanel(tab, true);
       setFocusView((count) => count + 1);
     });
@@ -369,7 +387,7 @@ export function ChatLayout({
       const file = files.find((entry) => showing === `file:${entry.id}`);
       if (!file) return;
       setReveal({ path: file.path, count: (reveal?.count ?? 0) + 1 });
-      setView("files");
+      pickView("files");
       if (!isChatOpen(tab)) choosePanel(tab, true);
       setFocusView((count) => count + 1);
     });
@@ -378,6 +396,23 @@ export function ChatLayout({
       fileRevealers.delete(tab.id);
     };
   });
+
+  // The panel as another window left it (opened, closed, switched), or as
+  // the daemon kept it, coming to this one. Only a change counts: a `state`
+  // already on its way as you click here would otherwise undo the click.
+  const remote = tab.panel;
+  const lastRemote = useRef<TabPanel | undefined>(undefined);
+  useEffect(() => {
+    const before = lastRemote.current;
+    lastRemote.current = remote;
+    // One the daemon has nothing for yet starts as this window has it.
+    if (!remote) {
+      if (!before && isChatOpen(tab)) sendPanel(tab, { open: true });
+      return;
+    }
+    if (remote.open !== before?.open) openTabs.set(tab, remote.open);
+    if (remote.view && remote.view !== before?.view) setView(remote.view as PanelView);
+  }, [remote?.open, remote?.view]);
 
   useEffect(() => {
     if (focusView && ref.current) focusPanel(ref.current, showing === "chat" ? "composer" : placeOf(showing));
@@ -514,7 +549,7 @@ export function ChatLayout({
           reveal={reveal}
           onShow={(next) => {
             focusShown.current = true;
-            setView(next);
+            pickView(next);
           }}
           onHide={() => {
             choosePanel(tab, false);

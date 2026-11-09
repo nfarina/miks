@@ -309,6 +309,8 @@ export async function serve({
           for (const other of sockets) if (other !== socket && other.readyState === WebSocket.OPEN) other.send(out);
           return;
         }
+        case "panel":
+          return workspaces.setPanel(message.tabId, { open: message.open, view: message.view });
         case "createWorkspace":
           workspaces.createWorkspace(message);
           return;
