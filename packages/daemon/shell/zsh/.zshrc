@@ -119,7 +119,8 @@ __miks_precmd() {
     builtin print -n "\e]133;D;$ret\a"
     unset __miks_running
   fi
-  builtin print -n "\e]133;A\a"
+  # miks_compose: this prompt can hand its line to the composer (below).
+  builtin print -n "\e]133;A;miks_compose=1\a"
 }
 __miks_preexec() {
   __miks_running=1
@@ -146,6 +147,25 @@ unset __miks_key __miks_widget
 autoload -Uz edit-command-line
 zle -N edit-command-line
 [[ $(bindkey -- '^X^E') == *undefined-key ]] && bindkey -- '^X^E' edit-command-line
+
+# The composer (⌘E, ui/Composer.tsx) takes the line you're typing: the
+# window sends a key no one types, only to a prompt marked as having this
+# (zsh eats characters around a sequence it hasn't bound), and gets the line
+# back as an OSC (where the cursor is, in characters, then the line in
+# base64), the line emptied for the composer to paste it back.
+__miks_compose() {
+  # At a continuation prompt (an open quote, say), the lines before too,
+  # and leaving it for a fresh prompt.
+  local text=$PREBUFFER$BUFFER
+  builtin print -rn -- $'\e]6973;compose;'"$(( $#PREBUFFER + CURSOR ));$(builtin print -rn -- "$text" | base64 | tr -d '\n')"$'\a'
+  BUFFER=
+  [[ -n $PREBUFFER ]] && zle send-break
+}
+zle -N __miks_compose
+for __miks_key in emacs viins vicmd; do
+  bindkey -M $__miks_key '^[[24;9~' __miks_compose
+done
+unset __miks_key
 
 # Without -l there's no .zlogin to come.
 [[ -o login ]] || __miks_restore_zdotdir

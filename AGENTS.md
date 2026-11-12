@@ -371,6 +371,16 @@ resizes); keep it passing.
   cursor's line counts as a prompt. Clear to start (⌘K) clears the UI's
   terminal and, by a `clear` message, the daemon's, or the next attach would
   bring it back.
+- The composer (⌘E, `ui/Composer.tsx`) is a textarea over the terminal at
+  the cursor, in its font and cells (`text-indent` to the cursor's column,
+  `letter-spacing` to the cell width), never a resize. It takes the shell's
+  line by sending `ESC[24;9~`, bound to `__miks_compose` in Miks's `.zshrc`,
+  which answers `OSC 6973;compose;<cursor in characters>;<base64>` and
+  empties the line (with `$PREBUFFER`, leaving a continuation). Only to a
+  prompt whose `133;A` carries `miks_compose=1`: zsh eats characters around
+  a sequence it hasn't bound, or types junk (tested), so an older shell, or
+  any after a reload until its next prompt, gets an empty composer whose
+  text is pasted. Every window sees the OSC; only the one that asked opens.
 - macOS's `/etc/zshrc` sets `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`, and
   runs while ZDOTDIR is Miks's folder: without a HISTFILE of your own,
   history went inside Miks.app (invalidating its signature) until `.zshrc`

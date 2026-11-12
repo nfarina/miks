@@ -1,6 +1,7 @@
 import type { IMarker, Terminal } from "@xterm/xterm";
 
-type Prompt = { marker: IMarker; ran: boolean };
+/** `compose`: its shell can hand the line being typed to the composer (Composer.tsx). */
+type Prompt = { marker: IMarker; ran: boolean; compose: boolean };
 
 /**
  * Where each command is, from the shell's OSC 133 marks (Miks's zsh
@@ -16,13 +17,13 @@ export function trackCommands(terminal: Terminal) {
   let prompts: Prompt[] = [];
   const live = () => (prompts = prompts.filter((prompt) => !prompt.marker.isDisposed));
 
-  const addPrompt = () => {
+  const addPrompt = (compose = false) => {
     const marker = terminal.registerMarker(0);
-    if (marker) prompts.push({ marker, ran: false });
+    if (marker) prompts.push({ marker, ran: false, compose });
   };
 
   terminal.parser.registerOscHandler(133, (data) => {
-    if (data.startsWith("A")) addPrompt();
+    if (data.startsWith("A")) addPrompt(data.split(";").includes("miks_compose=1"));
     else if (data.startsWith("C") && prompts.length > 0) prompts[prompts.length - 1].ran = true;
     return true;
   });
@@ -52,11 +53,21 @@ export function trackCommands(terminal: Terminal) {
       return false;
     },
 
+    /**
+     * Whether the shell's at a prompt that can hand its line to the
+     * composer: not after a reload until the next prompt, since snapshots
+     * carry no marks, nor while a command runs.
+     */
+    composable(): boolean {
+      const last = live().at(-1);
+      return !!last && last.compose && !last.ran && terminal.buffer.active.type === "normal";
+    },
+
     /** After `terminal.clear()`, which keeps only the cursor's line. */
     cleared() {
       const all = live();
       // The prompt being typed at lost its marker if it was more than a line.
-      if (all.length === 0 || all[all.length - 1].ran) addPrompt();
+      if (all.length === 0 || all[all.length - 1].ran) addPrompt(false);
     },
 
     /** After a snapshot replaced everything: likely sitting at a prompt. */

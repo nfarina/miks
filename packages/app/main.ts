@@ -1070,6 +1070,7 @@ function buildMenu() {
         // For pasting a command and what it printed into an agent elsewhere.
         command("selectLastCommand", "CmdOrCtrl+Shift+A", "Select last command"),
         command("clearToStart", "CmdOrCtrl+K", "Clear to start"),
+        command("compose", "CmdOrCtrl+E", "Compose…"),
       ],
     },
     {

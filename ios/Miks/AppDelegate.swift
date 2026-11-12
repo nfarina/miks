@@ -223,6 +223,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         (.edit, [
             ("Select last command", "a", [.command, .shift], "selectLastCommand"),
             ("Clear to start", "k", .command, "clearToStart"),
+            ("Compose…", "e", .command, "compose"),
         ]),
         (.view, [
             ("Toggle sidebar", "b", .command, "toggleSidebar"),

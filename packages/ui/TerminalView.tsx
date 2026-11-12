@@ -14,6 +14,7 @@ import { safeArea } from "crosswing/safearea";
 import { daemon, isRemote } from "./daemon";
 import { autoFocus, DEVICE_SETTINGS, getSettings, useSettings } from "./settings";
 import { trackCommands } from "./commandMarks";
+import { charactersAfter, Composer, type Composing } from "./Composer";
 import { FindBar, focusFind, onFind } from "./find";
 import { handleClipboardWrites } from "./osc52";
 import { handlePathLinks } from "./pathLinks";
@@ -45,6 +46,7 @@ export function TerminalView({
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findResult, setFindResult] = useState({ count: 0, current: -1 });
+  const [composing, setComposing] = useState<Composing | null>(null);
 
   useEffect(() => {
     const terminal = new Terminal({
@@ -62,11 +64,20 @@ export function TerminalView({
     const search = new SearchAddon();
     terminal.loadAddon(search);
     const searched = search.onDidChangeResults(({ resultIndex, resultCount }) => setFindResult({ count: resultCount, current: resultIndex }));
-    const view: View = { tabId, terminal, fit, commands, search, elsewhere: false };
+    const view: View = { tabId, terminal, fit, commands, search, elsewhere: false, compose: setComposing, asked: 0 };
     viewRef.current = view;
     views.set(tabId, view);
 
     terminal.loadAddon(fit);
+    // The shell's line, for the composer this window asked for (every
+    // window on the tab sees it).
+    terminal.parser.registerOscHandler(6973, (data) => {
+      const [kind, cursor, encoded] = data.split(";");
+      if (kind !== "compose" || Date.now() - view.asked > COMPOSE_WAIT_MS) return true;
+      view.asked = 0;
+      setComposing({ text: decodeBase64(encoded ?? ""), cursor: Number(cursor) || 0, captured: true });
+      return true;
+    });
     const settling = settle(containerRef.current!);
     // ⌃V in a window on another Mac: this Mac's clipboard image, for Claude.
     terminal.attachCustomKeyEventHandler((event) => {
@@ -291,8 +302,31 @@ export function TerminalView({
     viewRef.current?.terminal.focus();
   }
 
+  function closeComposer(text: string, run: boolean, cursor?: number) {
+    const view = viewRef.current;
+    setComposing(null);
+    if (!view) return;
+    view.terminal.focus();
+    if (run) return text ? sendToTerminal(tabId, text) : daemon.send({ type: "input", tabId, data: "\r" });
+    if (!text) return;
+    view.terminal.paste(text);
+    // Back to where the cursor was in it.
+    const back = charactersAfter(text, cursor ?? Array.from(text).length);
+    const left = `\x1b${view.terminal.modes.applicationCursorKeysMode ? "O" : "["}D`;
+    if (back > 0) daemon.send({ type: "input", tabId, data: left.repeat(back) });
+  }
+
   return (
     <StyledTerminalView ref={containerRef} data-active={active} data-find="terminal" onDragOver={onDragOver} onDrop={onDrop} {...rest}>
+      {composing && viewRef.current && (
+        <Composer
+          terminal={viewRef.current.terminal}
+          composing={composing}
+          colors={{ background: TERMINAL_BACKGROUND[dark ? "dark" : "light"], foreground: (dark ? darkTheme : lightTheme).foreground! }}
+          onRun={(text) => closeComposer(text, true)}
+          onPutBack={(text, cursor) => closeComposer(text, false, cursor)}
+        />
+      )}
       {findOpen && (
         <FindBar
           inputRef={findRef}
@@ -413,6 +447,10 @@ type View = {
   search: SearchAddon;
   /** Drawn at another screen's size, for the one in use, until this one is used again. */
   elsewhere: boolean;
+  /** Opens the composer. */
+  compose: (composing: Composing) => void;
+  /** When this window asked the shell for its line, for the composer. */
+  asked: number;
 };
 
 let activeView: View | null = null;
@@ -594,6 +632,40 @@ export function sendEscape(tabId: string) {
 /** Gives the keyboard back to the terminal on screen (after a dialog, say). */
 export function focusActiveTerminal() {
   if (autoFocus()) activeView?.terminal.focus();
+}
+
+/** How long the shell has to answer with its line before the composer opens empty. */
+const COMPOSE_WAIT_MS = 1000;
+
+/**
+ * ⌘E: opens the composer (Composer.tsx) on the tab's terminal, with the
+ * line being typed if the shell's at a prompt that can hand it over, or
+ * empty; or puts the keyboard back in one that's open.
+ */
+export function openComposer(tabId: string) {
+  const view = views.get(tabId);
+  if (!view) return;
+  const open = view.terminal.element?.parentElement?.querySelector("textarea.composer");
+  if (open instanceof HTMLTextAreaElement) return open.focus({ preventScroll: true });
+
+  if (!view.commands.composable()) return view.compose({ text: "", cursor: 0, captured: false });
+  view.asked = Date.now();
+  // A key no one types, bound to `__miks_compose` in Miks's .zshrc.
+  daemon.send({ type: "input", tabId, data: "\x1b[24;9~" });
+  setTimeout(() => {
+    if (view.asked && Date.now() - view.asked >= COMPOSE_WAIT_MS) {
+      view.asked = 0;
+      view.compose({ text: "", cursor: 0, captured: false });
+    }
+  }, COMPOSE_WAIT_MS);
+}
+
+function decodeBase64(encoded: string): string {
+  try {
+    return new TextDecoder().decode(Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)));
+  } catch {
+    return "";
+  }
 }
 
 /** Edit → Select last command (⌘⇧A): its prompt through its output. */

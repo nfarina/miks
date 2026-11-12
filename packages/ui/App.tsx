@@ -45,6 +45,7 @@ import { useHandoff } from "./handoff";
 import { MacChooser, Ring } from "./MacChooser";
 import {
   clearActiveTerminal,
+  openComposer,
   selectLastCommand,
   TERMINAL_BACKGROUND,
   TerminalView,
@@ -662,6 +663,13 @@ function runCommand(command: string) {
   };
 
   switch (command) {
+    case "compose": {
+      // An agent's tab has a composer of its own, in the panel.
+      const tab = tabs[tabIndex];
+      if (tab?.agent) showView(tab, "chat");
+      else if (tab) openComposer(tab.id);
+      return;
+    }
     case "toggleChat": {
       if (tabs[tabIndex]) showView(tabs[tabIndex], "chat");
       return;

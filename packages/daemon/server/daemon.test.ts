@@ -553,14 +553,14 @@ test("zsh reads your startup files, gives ZDOTDIR back, and marks each command",
   let output = "";
   pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
   try {
-    await waitFor(() => output.includes("\x1b]133;A\x07"));
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
     pane.write("echo read:$MIKS_TEST_READ zdotdir:${ZDOTDIR-unset}\n");
     await waitFor(() => /\x1b\]133;D;0\x07/.test(output));
 
     expect(output).toContain("read: .zshenv .zprofile .zshrc .zlogin zdotdir:unset");
     // The prompt, the command's output, its end, the next prompt.
     expect(output.indexOf("\x1b]133;C\x07")).toBeLessThan(output.indexOf("read: .zshenv"));
-    expect(output.lastIndexOf("\x1b]133;A\x07")).toBeGreaterThan(output.indexOf("\x1b]133;D;0\x07"));
+    expect(output.lastIndexOf("\x1b]133;A;miks_compose=1\x07")).toBeGreaterThan(output.indexOf("\x1b]133;D;0\x07"));
   } finally {
     await end(pane);
   }
@@ -572,7 +572,7 @@ test("zsh's history is yours, not saved inside Miks's own folder", async () => {
   let output = "";
   pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
   try {
-    await waitFor(() => output.includes("\x1b]133;A\x07"));
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
     pane.write("echo histfile:$HISTFILE\n");
     await waitFor(() => /\x1b\]133;D;0\x07/.test(output));
     expect(output).toContain(`histfile:${home}/.zsh_history`);
@@ -619,12 +619,49 @@ test("in zsh, ⌥← moves back a word", async () => {
   let output = "";
   pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
   try {
-    await waitFor(() => output.includes("\x1b]133;A\x07"));
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
     // What xterm.js sends for ⌥← with Option as Meta.
     pane.write("echo one two");
     pane.write("\x1b[1;3D");
     pane.write("X\n");
     await waitFor(() => output.includes("one Xtwo\r\n"));
+  } finally {
+    await end(pane);
+  }
+});
+
+test("in zsh, the composer's key hands over the line, cursor and continuation lines included, and empties it", async () => {
+  fs.writeFileSync(path.join(home, ".zshrc"), "PS1='%% '\n");
+  const pane = new Pane({ id: "zsh", cwd: home, env: { HOME: home }, command: ["/bin/zsh", "-l"] });
+  let output = "";
+  pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
+  const handed = () => {
+    const match = /\x1b\]6973;compose;(\d+);([A-Za-z0-9+/=]*)\x07/.exec(output);
+    return match && { cursor: Number(match[1]), text: Buffer.from(match[2], "base64").toString() };
+  };
+  try {
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
+    pane.write("echo héllo wörld");
+    pane.write("\x1b[D\x1b[D");
+    pane.write("\x1b[24;9~");
+    await waitFor(() => !!handed());
+    expect(handed()).toEqual({ cursor: 14, text: "echo héllo wörld" });
+
+    // Emptied: what's typed next is all there is.
+    output = "";
+    pane.write("echo fresh\r");
+    await waitFor(() => output.includes("\x1b]133;C\x07fresh\r\n"));
+
+    // An open quote's earlier line too, leaving the continuation.
+    output = "";
+    pane.write("echo 'one\rtwo");
+    await waitFor(() => output.includes("quote>"));
+    pane.write("\x1b[24;9~");
+    await waitFor(() => !!handed());
+    expect(handed()).toEqual({ cursor: 13, text: "echo 'one\ntwo" });
+    output = "";
+    pane.write("echo after\r");
+    await waitFor(() => output.includes("\x1b]133;C\x07after\r\n"));
   } finally {
     await end(pane);
   }
@@ -657,7 +694,7 @@ test("pbcopy in a zsh tab also copies through the terminal, for windows on other
   let output = "";
   pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
   try {
-    await waitFor(() => output.includes("\x1b]133;A\x07"));
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
     pane.write("printf 'two\\nlines\\n' | pbcopy\n");
     const osc52 = `\x1b]52;c;${Buffer.from("two\nlines\n").toString("base64")}\x07`;
     await waitFor(() => output.includes(osc52));
@@ -677,7 +714,7 @@ test("a zsh tab's own commands come back first on ↑ when it's restored", async
     let output = "";
     pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
     try {
-      await waitFor(() => output.includes("\x1b]133;A\x07"));
+      await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
       for (const data of input) {
         pane.write(data);
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -796,7 +833,7 @@ test("the miks keep function in zsh registers the command, quoted, then runs it"
   let output = "";
   pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
   try {
-    await waitFor(() => output.includes("\x1b]133;A\x07"));
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
     pane.write("miks keep echo 'two words' ran-$((1+1))\n");
     await waitFor(() => output.includes("two words ran-2"));
     expect(received).toEqual(["/api/keep?pane=p1 echo 'two words' ran-2"]);
@@ -823,7 +860,7 @@ test("miks edit --wait: the file opens in the tab's panel, saves, follows the di
   pane.attach({ snapshot: () => {}, output: (data) => (output += data) });
   const client = await connect();
   try {
-    await waitFor(() => output.includes("\x1b]133;A\x07"));
+    await waitFor(() => output.includes("\x1b]133;A;miks_compose=1\x07"));
     pane.write("[[ $EDITOR == */miks-editor && $VISUAL == $EDITOR ]] && echo EDITOR-$((1+1)); miks open missing.txt\n");
     await waitFor(() => output.includes("EDITOR-2") && output.includes("no such file: missing.txt"));
 
