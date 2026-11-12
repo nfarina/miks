@@ -36,11 +36,12 @@ export interface UseSwipeOptions {
  * being pulled away or a page being swiped back (or forward), and says where
  * it was let go.
  *
- * Which wins, the swipe or a scroll, is decided on the first move: our way,
- * more than across, with whatever's under the finger already scrolled to
- * that edge (and not in a text field). After that the content can't scroll
- * under the swipe, or the swipe start under a scroll. It takes touch events
- * rather than pointer events, since only a touchmove can stop a scroll.
+ * Which wins, the swipe or a scroll, is decided once the finger has moved a
+ * few pixels (see decideSwipe): clearly our way, with whatever's under the
+ * finger already scrolled to that edge (and not in a text field). After that
+ * the content can't scroll under the swipe, or the swipe start under a
+ * scroll. It takes touch events rather than pointer events, since only a
+ * touchmove can stop a scroll.
  */
 export function useSwipe(ref: RefObject<HTMLElement | null>, options: UseSwipeOptions) {
   // The latest callbacks, without listening anew on every render.
@@ -96,9 +97,15 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, options: UseSwipeOp
       const across = vertical ? x - gesture.start.x : y - gesture.start.y;
 
       if (gesture.state === "pending") {
-        const atEdge = isScrolledToEdge(gesture.scroller, direction);
-        const backward = along < 0 && !!latest.current.overscroll && !gesture.scroller;
-        if (along === 0 || Math.abs(across) > Math.abs(along) || (along > 0 ? !atEdge : !backward)) {
+        const decision = decideSwipe({
+          along,
+          across,
+          atEdge: isScrolledToEdge(gesture.scroller, direction),
+          canPullBack: !!latest.current.overscroll && !gesture.scroller,
+        });
+        // Not far enough to tell yet: leave the touch alone, so a tap stays a tap.
+        if (decision === "undecided") return;
+        if (decision === "ignore") {
           gesture.state = "ignored";
           return;
         }
@@ -204,6 +211,36 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, options: UseSwipeOp
   }, [enabled, direction]);
 }
 
+/** How far a finger moves before a swipe or a scroll is told apart, in pixels. */
+const SWIPE_SLOP = 6;
+
+/**
+ * Whether a touch that has moved `along` the swipe's way (negative: back
+ * against it) and `across` it is a swipe. Decided only once it has moved
+ * SWIPE_SLOP, since the first few pixels of a scroll or a tap often drift
+ * sideways: deciding on the first one turned taps that wobbled a pixel into
+ * swipes (and iOS drops a tap whose touchmove was stopped) and stole
+ * scrolls that began with a sideways twitch. A swipe has to go clearly its
+ * way, twice as far along as across. `atEdge`: whatever's under the finger
+ * can't scroll that way any further. `canPullBack`: a backward pull is
+ * allowed (overscroll, with nothing there to scroll instead).
+ */
+export function decideSwipe({
+  along,
+  across,
+  atEdge,
+  canPullBack,
+}: {
+  along: number;
+  across: number;
+  atEdge: boolean;
+  canPullBack: boolean;
+}): "undecided" | "swipe" | "ignore" {
+  if (Math.hypot(along, across) < SWIPE_SLOP) return "undecided";
+  if (Math.abs(along) < Math.abs(across) * 2) return "ignore";
+  return along > 0 ? (atEdge ? "swipe" : "ignore") : canPullBack ? "swipe" : "ignore";
+}
+
 /**
  * Whether there's nothing left to scroll the way a swipe would pull: at the
  * top for one down, the left for one right, the right for one left.
@@ -221,7 +258,11 @@ function getScroller(
   root: HTMLElement,
   vertical: boolean,
 ): HTMLElement | null {
-  for (let element: HTMLElement | null = target; element && element !== root; element = element.parentElement) {
+  for (
+    let element: HTMLElement | null = target;
+    element && element !== root;
+    element = element.parentElement
+  ) {
     const style = getComputedStyle(element);
     const overflow = vertical ? style.overflowY : style.overflowX;
     const scrolls = vertical

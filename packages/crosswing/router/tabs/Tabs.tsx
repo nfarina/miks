@@ -428,7 +428,11 @@ export const StyledTabs = styled.div`
     align-items: center;
   }
 
-  &[data-presentation="strip"]:has(> ${TabContent}.active [data-hide-tab-bar="true"])
+  /* Only for the page on top, as with the floating bar: the page you came
+     back from waits forward, and would keep the bar gone. */
+  &[data-presentation="strip"]:has(
+      > ${TabContent}.active ${StyledNavs} > .item[data-top="true"] [data-hide-tab-bar="true"]
+    )
   > ${StyledTabBar} {
     display: none;
   }
