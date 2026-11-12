@@ -60,7 +60,7 @@ export function TerminalView({
       theme: dark ? darkTheme : lightTheme,
     });
     const fit = new FitAddon();
-    const commands = trackCommands(terminal);
+    const commands = trackCommands(terminal, () => rememberComposable(tabId));
     const search = new SearchAddon();
     terminal.loadAddon(search);
     const searched = search.onDidChangeResults(({ resultIndex, resultCount }) => setFindResult({ count: resultCount, current: resultIndex }));
@@ -648,7 +648,12 @@ export function openComposer(tabId: string) {
   const open = view.terminal.element?.parentElement?.querySelector("textarea.composer");
   if (open instanceof HTMLTextAreaElement) return open.focus({ preventScroll: true });
 
-  if (!view.commands.composable()) return view.compose({ text: "", cursor: 0, captured: false });
+  // A prompt with no mark (after a reload) counts if this tab's shell has
+  // shown one before and the daemon sees it at its prompt.
+  const composable = view.commands.composable();
+  const tab = tabOf(tabId);
+  const ask = composable === "yes" || (composable === "unknown" && tab?.running === null && !!tab.key && composableShells().includes(tab.key));
+  if (!ask) return view.compose({ text: "", cursor: 0, captured: false });
   view.asked = Date.now();
   // A key no one types, bound to `__miks_compose` in Miks's .zshrc.
   daemon.send({ type: "input", tabId, data: "\x1b[24;9~" });
@@ -659,6 +664,33 @@ export function openComposer(tabId: string) {
     }
   }, COMPOSE_WAIT_MS);
 }
+
+/**
+ * The tabs (by `key`, which a restore keeps) whose shells have shown they
+ * can hand over their line, in this Mac's storage so a reload remembers.
+ * A shell that has stays able: a restored one starts from the bundle's
+ * `.zshrc`, which is at least as new.
+ */
+const COMPOSABLE_KEY = "Composer:shells";
+function composableShells(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(COMPOSABLE_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+function rememberComposable(tabId: string) {
+  const key = tabOf(tabId)?.key;
+  const known = composableShells();
+  if (!key || known.includes(key)) return;
+  try {
+    // The latest few hundred: closed tabs' keys don't come back.
+    localStorage.setItem(COMPOSABLE_KEY, JSON.stringify([...known, key].slice(-300)));
+  } catch {}
+}
+
+const tabOf = (tabId: string) =>
+  daemon.getSnapshot().state?.workspaces.flatMap((workspace) => workspace.tabs).find((tab) => tab.id === tabId);
 
 function decodeBase64(encoded: string): string {
   try {

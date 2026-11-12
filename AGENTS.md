@@ -378,9 +378,11 @@ resizes); keep it passing.
   which answers `OSC 6973;compose;<cursor in characters>;<base64>` and
   empties the line (with `$PREBUFFER`, leaving a continuation). Only to a
   prompt whose `133;A` carries `miks_compose=1`: zsh eats characters around
-  a sequence it hasn't bound, or types junk (tested), so an older shell, or
-  any after a reload until its next prompt, gets an empty composer whose
-  text is pasted. Every window sees the OSC; only the one that asked opens.
+  a sequence it hasn't bound, or types junk (tested), so an older shell gets
+  an empty composer whose text is pasted. Snapshots carry no marks, so after
+  a reload a prompt counts if the tab's shell has shown the mark before (its
+  `key` in `Composer:shells`, localStorage) and `running` is null. Every
+  window sees the OSC; only the one that asked opens.
 - macOS's `/etc/zshrc` sets `HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`, and
   runs while ZDOTDIR is Miks's folder: without a HISTFILE of your own,
   history went inside Miks.app (invalidating its signature) until `.zshrc`
