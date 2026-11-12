@@ -442,9 +442,10 @@ export function ChatLayout({
         openedForContent.current = true;
         setChatOpen(tab, true);
       }
-    } else if (files.length === 0 && !page && !isTool(showing) && (openedForContent.current || chatClosed) && (before.files.size > 0 || before.page)) {
+    } else if (files.length === 0 && !page && !isTool(view) && (openedForContent.current || chatClosed) && (before.files.size > 0 || before.page)) {
       // With its conversation closed too, there's nothing left: it comes
-      // back the next time the panel opens.
+      // back the next time the panel opens. By what was picked, not what's
+      // now on show, which with the file gone (Done) has fallen to Files.
       openedForContent.current = false;
       chatClosedTabs.set(tab, false);
       setChatOpen(tab, false);

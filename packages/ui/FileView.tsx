@@ -23,7 +23,7 @@ import { codemirrorLight } from "./highlighting/codemirrorLight";
 import { isMarkdown } from "./markdown";
 import { headingPending, MarkdownView } from "./MarkdownView";
 import { autoFocus, DEVICE_SETTINGS, getSettings, updateSettings, useSettings } from "./settings";
-import { terminalScrollbarCSS } from "./TerminalView";
+import { focusActiveTerminal, terminalScrollbarCSS } from "./TerminalView";
 
 /** Shown as images: raster ones only ever, and SVGs by default, with their source a click away. */
 const isRaster = (path: string) => /\.(apng|avif|bmp|gif|ico|jpe?g|png|webp)$/i.test(path);
@@ -133,6 +133,14 @@ export function FileView({
     event.preventDefault();
     switchFocus.current = true;
     showPreview(!previewRef.current);
+  }
+
+  // ⌘↩ is Done, ahead of CodeMirror (where it would insert a blank line).
+  function onKeyDownCapture(event: KeyboardEvent) {
+    if (!file.wait || event.key !== "Enter" || !event.metaKey || event.shiftKey || event.altKey || event.ctrlKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!saving) void done();
   }
 
   useEffect(() => {
@@ -428,9 +436,12 @@ export function FileView({
     daemon.send({ type: "openFile", tabId: tab.id, path });
   }
 
-  // `--wait` (as $EDITOR): saved, closed, and whatever waited goes on.
+  // `--wait` (as $EDITOR): saved, closed, and whatever waited goes on, in
+  // the terminal, which takes the keyboard back.
   async function done() {
-    if (await save()) daemon.send({ type: "closeFile", tabId: tab.id, fileId: file.id });
+    if (!(await save())) return;
+    daemon.send({ type: "closeFile", tabId: tab.id, fileId: file.id });
+    focusActiveTerminal();
   }
 
   function resolveConflict(take: "disk" | "mine") {
@@ -513,7 +524,7 @@ export function FileView({
         </button>
       )}
       {file.wait && (
-        <button className="action primary" disabled={saving} onClick={() => void done()} {...tooltip("Save and close, and let what's waiting go on", { delay: true })}>
+        <button className="action primary" disabled={saving} onClick={() => void done()} {...tooltip("Save and close, and let what's waiting go on", { hotkey: "cmd+Enter", delay: true })}>
           Done
         </button>
       )}
@@ -526,7 +537,7 @@ export function FileView({
   );
 
   return (
-    <StyledFileView ref={rootRef} onKeyDown={onKeyDown}>
+    <StyledFileView ref={rootRef} onKeyDown={onKeyDown} onKeyDownCapture={onKeyDownCapture}>
       {toolbar === undefined ? (
         <div className="header">
           <div className="name" {...tooltip(file.path, { delay: true })}>

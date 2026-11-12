@@ -141,5 +141,11 @@ for __miks_key __miks_widget in '^[[1;3D' backward-word '^[[1;3C' forward-word; 
 done
 unset __miks_key __miks_widget
 
+# ⌃X⌃E edits the line in $EDITOR, as bash has it: miks-editor, so the
+# panel, and Done puts it back.
+autoload -Uz edit-command-line
+zle -N edit-command-line
+[[ $(bindkey -- '^X^E') == *undefined-key ]] && bindkey -- '^X^E' edit-command-line
+
 # Without -l there's no .zlogin to come.
 [[ -o login ]] || __miks_restore_zdotdir
