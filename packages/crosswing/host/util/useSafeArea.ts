@@ -8,6 +8,7 @@ export function useSafeArea(
   container: HostContainer,
   features: HostFeatures | undefined,
   viewport: HostViewport,
+  { behindKeyboard = false }: { behindKeyboard?: boolean } = {},
 ): SafeArea | undefined {
   const [customSafeArea, setCustomSafeArea] = useState<string | null>(null);
 
@@ -43,8 +44,13 @@ export function useSafeArea(
       return {
         top: "env(safe-area-inset-top)",
         right: "env(safe-area-inset-right)",
-        // When the keyboard is visible, safe area is not required.
-        bottom: keyboardVisible ? "0px" : "env(safe-area-inset-bottom)",
+        // When the keyboard is visible, the page ends at it, which leaves no
+        // bottom inset. A page behind the keyboard keeps the screen's, which
+        // what floats over the bottom stands on as the keyboard covers it
+        // (see safeAreaResting); the keyboard's own inset is added to it (see
+        // extendThroughFold).
+        bottom:
+          keyboardVisible && !behindKeyboard ? "0px" : "env(safe-area-inset-bottom)",
         left: "env(safe-area-inset-left)",
       };
     } else {

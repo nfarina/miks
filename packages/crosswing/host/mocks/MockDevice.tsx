@@ -1,4 +1,4 @@
-import { CSSProperties, HTMLAttributes } from "react";
+import { CSSProperties, HTMLAttributes, useRef } from "react";
 import { styled } from "styled-components";
 import { colors } from "../../colors/colors.js";
 import { HostLayout, HostPlatform, HostRect } from "../util/types.js";
@@ -74,10 +74,19 @@ export function MockDevice({
       ? division.y + division.height
       : keyboard;
 
+  const windowRef = useRef<HTMLDivElement>(null);
+
   return (
-    <MockHostProvider {...host} layout={layout} viewport={viewport} behindKeyboard={behindKeyboard}>
+    <MockHostProvider
+      {...host}
+      layout={layout}
+      viewport={viewport}
+      behindKeyboard={behindKeyboard}
+      screen={windowRef}
+    >
       <StyledMockDevice style={{ width: screen.width, height: screen.height, ...style }} {...rest}>
         <div
+          ref={windowRef}
           className="window"
           style={{
             left: appWindow.x,

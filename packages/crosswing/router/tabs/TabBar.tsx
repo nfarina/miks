@@ -22,15 +22,12 @@ export function TabBar({
   tabs,
   selectedTab,
   presentation = "bottom",
-  floating,
   getTabLink,
   onReselect,
 }: {
   tabs: ReactElement<TabProps>[];
   selectedTab: ReactElement<TabProps>;
   presentation?: TabBarPresentation;
-  /** A capsule floating over the content, for the bottom presentations. */
-  floating?: boolean;
   getTabLink: (tab: ReactElement<TabProps>) => string;
   /** A tap on the current tab, at its root, with nothing to scroll home. */
   onReselect?: (tab: ReactElement<TabProps>, target: HTMLElement) => void;
@@ -41,7 +38,6 @@ export function TabBar({
     <StyledTabBar
       data-container={container}
       data-presentation={presentation}
-      data-floating={!!floating}
     >
       {tabs.map((tab) => (
         <TabLink
@@ -61,32 +57,11 @@ export const StyledTabBar = styled.div`
   display: flex;
   align-items: center;
 
-  &[data-presentation="bottom"],
+  /* Short, with titles beside the icons. */
   &[data-presentation="bottom-inline"] {
-    background: ${colors.textBackground()};
-    border-top: 1px solid ${colors.separator()};
-    height: calc(var(--tab-bar-height) + ${safeArea.bottom()});
-    padding-left: ${safeArea.left()};
-    padding-right: ${safeArea.right()};
-    padding-bottom: ${safeArea.bottom()};
-
     > ${StyledTabLink} {
-      flex-basis: 0;
-      flex-grow: 1;
-    }
-  }
-
-  /* Short bars read best as a centered cluster, like Photos. */
-  &[data-presentation="bottom-inline"] {
-    justify-content: center;
-    gap: 24px;
-
-    > ${StyledTabLink} {
-      flex-basis: auto;
-      flex-grow: 0;
       flex-flow: row;
       gap: 6px;
-      padding: 0 6px;
 
       > .text {
         margin-top: 0;
@@ -102,9 +77,9 @@ export const StyledTabBar = styled.div`
   }
 
   /* A capsule over the content, like iOS's tab bars since iOS 26. */
-  &[data-floating="true"] {
+  &[data-presentation="bottom"],
+  &[data-presentation="bottom-inline"] {
     ${barStripPill}
-    border-top: none;
     border-radius: calc(var(--tab-bar-height) / 2);
     height: var(--tab-bar-height);
     padding: 4px;

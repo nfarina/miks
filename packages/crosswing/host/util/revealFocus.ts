@@ -102,13 +102,13 @@ function follow(
 
 /**
  * Scrolls the field's scrollers, nearest first, until it's above the
- * keyboard as it is this frame (the bottom safe area, which moves with it),
- * taking `ease` of the way there.
+ * keyboard as it is this frame (the bottom safe area, which moves with it,
+ * and anything floating above it), taking `ease` of the way there.
  */
 function reveal(hostElement: HTMLElement | null, field: HTMLElement, ease: number) {
   if (!hostElement || !field.isConnected) return;
 
-  const keyboardTop = getKeyboardTop(hostElement);
+  const keyboardTop = getVisibleBottom(hostElement, field);
   const shown = getShown(field, keyboardTop);
   let behind = shown.bottom + MARGIN - keyboardTop;
   if (behind < 0.5) return;
@@ -130,10 +130,34 @@ function reveal(hostElement: HTMLElement | null, field: HTMLElement, ease: numbe
   }
 }
 
-/** The top of the keyboard this frame, in the viewport. */
-function getKeyboardTop(hostElement: HTMLElement): number {
-  const inset = parseFloat(getComputedStyle(hostElement).getPropertyValue("--safe-area-bottom")) || 0;
+/**
+ * The top of the keyboard this frame, in the viewport, or of whatever floats
+ * above it over the field's scroller: something that floats over the bottom
+ * of the content and stays above the keyboard adds to the content's bottom
+ * safe area (see overlaySafeArea), and the field should clear that too. Never
+ * less than the keyboard itself, since a container that pads for the inset
+ * clears it for what's inside.
+ */
+function getKeyboardTop(hostElement: HTMLElement, field: HTMLElement): number {
+  const scroller = scrollerOf(field);
+  const inset = Math.max(getBottomInset(hostElement), scroller ? getBottomInset(scroller) : 0);
   return hostElement.getBoundingClientRect().bottom - inset;
+}
+
+/**
+ * How far down the field can show: above the keyboard (getKeyboardTop), and
+ * inside its scroller, which can end above the keyboard (under a form's
+ * buttons pinned between the two, say), hiding a field below its edge that
+ * the keyboard alone doesn't cover.
+ */
+function getVisibleBottom(hostElement: HTMLElement, field: HTMLElement): number {
+  const keyboardTop = getKeyboardTop(hostElement, field);
+  const scroller = scrollerOf(field);
+  return scroller ? Math.min(keyboardTop, scroller.getBoundingClientRect().bottom) : keyboardTop;
+}
+
+function getBottomInset(element: HTMLElement): number {
+  return parseFloat(getComputedStyle(element).getPropertyValue("--safe-area-bottom")) || 0;
 }
 
 /**
@@ -249,7 +273,7 @@ function makeRoom(hostElement: HTMLElement | null, field: HTMLElement): boolean 
   if (!hostElement || !scroller || padded.has(scroller)) return false;
 
   const host = getComputedStyle(hostElement);
-  const keyboardTop = getKeyboardTop(hostElement);
+  const keyboardTop = getKeyboardTop(hostElement, field);
   const behind = getShown(field, keyboardTop).bottom + MARGIN - keyboardTop;
   const left = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
   if (behind < 0.5 || left >= behind) return false;

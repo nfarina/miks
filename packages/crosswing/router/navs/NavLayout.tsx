@@ -13,9 +13,13 @@ import { BarEdgeContext } from "../../host/context/BarEdgeContext.js";
 import { HostContext } from "../../host/context/HostContext.js";
 import { useHostStatusBar } from "../../host/features/HostStatusBar.js";
 import { StatusBarStyleAttribute } from "../../host/util/useAutoStatusBar.js";
-import { provideSafeArea, safeArea, safeAreaCorners } from "../../safearea/safeArea.js";
+import {
+  provideSafeArea,
+  safeArea,
+  safeAreaCorners,
+  safeAreaResting,
+} from "../../safearea/safeArea.js";
 import { RouterContext } from "../context/RouterContext.js";
-import { TabsContext } from "../tabs/TabsContext.js";
 import {
   NavAccessory,
   NavAccessoryView,
@@ -56,7 +60,12 @@ export interface NavProps {
   hideHeaderFade?: boolean;
   /** Pass true to hide the auto-generated back button (if displayed). */
   hideBackButton?: boolean;
-  /** Pass true to hide the tab bar, if presented inside <Tabs>. */
+  /**
+   * Pass true to send the tab bar away while this page is on top, if
+   * presented inside <Tabs>. The page then keeps clear of just what was there
+   * before the bar. Not beside the root of split <Navs>, which leaves no way
+   * off the page without it.
+   */
   hideTabBar?: boolean;
   /** Pass true to render a transparent header. */
   transparentHeader?: boolean;
@@ -122,8 +131,6 @@ export function NavLayout({
   const regularWidth = layout?.sizeClass.horizontal === "regular";
   const statusBar = useHostStatusBar();
 
-  const tabs = use(TabsContext);
-
   // Where the system runs bars vertically (the iPhone Duo's outer display, or
   // its inner display in landscape), icon controls move to a strip along that
   // edge: Back first, then the rest. Titles and text buttons stay up top.
@@ -138,10 +145,6 @@ export function NavLayout({
   const backAccessory: NavAccessory = customBackAccessory
     ? { ...customBackAccessory, to: resolvedBack, back: true }
     : { icon: <ArrowLeft />, to: resolvedBack, back: true };
-
-  // Keep the content clear of a floating tab bar, unless it runs under it (or
-  // the bar is hidden for this page).
-  const underTabBar = tabs.floatingTabBar && !hideTabBar;
 
   // While the keyboard's up for something inside us, a checkmark for
   // dismissing it takes the place of our right-hand controls (in the strip
@@ -210,7 +213,6 @@ export function NavLayout({
       data-transparent={!!transparent}
       data-full-bleed={!!fullBleed}
       data-extends-under-bars={!!extendsUnderBars}
-      data-floating-tab-bar={underTabBar}
       // A full-bleed page's content reaches the very top of the layout, so
       // advertise that intent: an app shell (e.g. TaskBannerLayout) can detect
       // this and let the content extend up under the status bar/safe area
@@ -218,7 +220,9 @@ export function NavLayout({
       data-extend-under-status-bar={!!fullBleed || !!extendsUnderBars}
       data-disabled={!!disabled}
       data-hidden={!!hidden}
-      data-hide-tab-bar={!!hideTabBar}
+      // Not beside the root of split <Navs>, which has no Back: with the bar
+      // gone too, there'd be no way off the page.
+      data-hide-tab-bar={!!hideTabBar && !besideRoot}
       data-fit-content={!!fitContent}
       data-regular-width={regularWidth}
       {...StatusBarStyleAttribute(lightStatusBar ? "light" : "default")} // Picked up on by useAutoStatusBar.
@@ -239,7 +243,6 @@ export function NavLayout({
         {getRightAccessory()}
       </StyledNavHeader>
       {children}
-      {extendsUnderBars && underTabBar && <div className="bottom-edge" />}
       {fullBleed && darkenUnderStatusBar && statusBar && <div className="top-fade" />}
       {vertical && stripAccessories.length > 0 && (
         <BarStrip edge={barEdge}>
@@ -558,17 +561,29 @@ export const StyledNavLayout = styled.div`
      under them. Captured here since the content redefines the safe area in
      terms of them. */
   --nav-header-height: calc(54px + ${headerTop});
-  --nav-tab-bar-height: var(--floating-tab-bar-height, 0px);
+
+  /* Content that doesn't run under the bars ends where whatever covers the
+     bottom beyond the screen's own inset begins (a floating tab bar, the
+     keyboard), and keeps clear of what's left itself, as it always has. */
+  --nav-bottom-base: var(--safe-area-bottom-base, ${safeArea.bottom()});
+  --nav-bottom-margin: max(0px, calc(${safeArea.bottom()} - var(--nav-bottom-base)));
+  --nav-bottom-inset: calc(${safeArea.bottom()} - var(--nav-bottom-margin));
+  --nav-bottom-resting: min(${safeAreaResting.bottom()}, var(--nav-bottom-base));
 
   &[data-transparent="false"] {
     background: ${colors.textBackground()};
   }
 
-  /* Create new stacking context so our children's z-index will work.
-     we can't "position: relative" because if we're presented in a
-     <NavStack> (which we probably are) then it will assign us a
-     "position: absolute". */
+  /* Create new stacking context so our children's z-index will work. */
   isolation: isolate;
+
+  /* What our absolutely placed header (under bars, or full bleed) is placed
+     in, when nothing else positions us, as in a panel that wraps us (the
+     sign-in page's, say). At no specificity, since a <NavStack> positions us
+     absolutely, and that comes first. */
+  :where(&) {
+    position: relative;
+  }
 
   > ${StyledNavHeader} {
     flex-shrink: 0;
@@ -627,41 +642,12 @@ export const StyledNavLayout = styled.div`
     &:not([data-hidden="true"]) > *:nth-child(2):not(${StyledBarStrip}) {
       ${provideSafeArea({ top: "var(--nav-header-height)" })}
     }
-
-    &[data-floating-tab-bar="true"] > *:nth-child(2):not(${StyledBarStrip}) {
-      ${provideSafeArea({ bottom: "var(--nav-tab-bar-height)" })}
-    }
-
-    /* The same effect, fainter, behind a floating tab bar. */
-    > .bottom-edge {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: var(--nav-tab-bar-height);
-      pointer-events: none;
-      background: linear-gradient(
-        ${colors.textBackground({ alpha: 0 })},
-        ${colors.textBackground({ alpha: 0.6 })}
-      );
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      mask-image: linear-gradient(transparent, black 60%);
-      -webkit-mask-image: linear-gradient(transparent, black 60%);
-    }
   }
 
-  /* Other content stays clear of a floating tab bar, and the bar covers the
-     bottom edge so it doesn't need to. */
-  &[data-extends-under-bars="false"][data-floating-tab-bar="true"]
-  > *:nth-child(2):not(${StyledBarStrip}) {
-    margin-bottom: var(--nav-tab-bar-height);
-    ${provideSafeArea({ bottom: "0px" })}
-  }
-
-  /* Any layouts nested in our content are clear of the tab bar already. */
-  &[data-floating-tab-bar="true"] > *:nth-child(2):not(${StyledBarStrip}) {
-    --floating-tab-bar-height: 0px;
+  &[data-extends-under-bars="false"] > *:nth-child(2):not(${StyledBarStrip}) {
+    margin-bottom: var(--nav-bottom-margin);
+    ${provideSafeArea({ bottom: "var(--nav-bottom-inset)" })}
+    --safe-area-bottom-resting: var(--nav-bottom-resting);
   }
 
   /* The header has the top inset covered, either by sitting below it or by

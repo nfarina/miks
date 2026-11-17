@@ -19,36 +19,41 @@ import { BarEdgeContext } from "../../host/context/BarEdgeContext.js";
 import { HostContext } from "../../host/context/HostContext.js";
 import { SizeClasses, sizeClassesForSize } from "../../host/util/sizeClass.js";
 import { HostLayout } from "../../host/util/types.js";
-import { provideSafeArea, safeArea } from "../../safearea/safeArea.js";
+import {
+  overlaySafeArea,
+  provideSafeArea,
+  safeArea,
+  safeAreaResting,
+} from "../../safearea/safeArea.js";
 import { RouterLocation } from "../RouterLocation.js";
 import { RouterContext } from "../context/RouterContext.js";
 import { StyledNavs } from "../navs/NavStack.js";
 import { Redirect } from "../redirect/Redirect.js";
 import { StyledTabBar, TabBar, TabBarPresentation } from "./TabBar.js";
 import { TabProps } from "./TabLink.js";
-import { TabsContext } from "./TabsContext.js";
 import { TabReselectContext, TabReselectHandler } from "./useTabReselect.js";
 
 export * from "./TabBar.js";
 export * from "./TabLink.js";
-export * from "./TabsContext.js";
 export * from "./UnreadBadge.js";
 export * from "./useTabReselect.js";
 
 const debug = Debug("router:Tabs");
 
+/**
+ * Tabs, with a bar of them along the bottom: a capsule floating over the
+ * content, like iOS's tab bars since iOS 26. The content runs down behind it,
+ * with the bar's space as its bottom safe area (see overlaySafeArea), so it
+ * stays clear of it the way it would any other inset. A page can send the bar
+ * away while it's on top with NavLayout's `hideTabBar`.
+ */
 export function Tabs({
   children,
-  floating,
+  floating: _floating,
   ...rest
 }: {
   children: ReactNode;
-  /**
-   * Float the bar along the bottom as a capsule over the content, like iOS's
-   * tab bars since iOS 26, instead of a bar that claims its own space. Pages
-   * are kept clear of it (see TabsContext), unless their NavLayout extends
-   * under bars, in which case their content scrolls on behind it.
-   */
+  /** @deprecated The bar always floats now. */
   floating?: boolean;
 } & HTMLAttributes<HTMLDivElement>) {
   // Coerce children to array, flattening fragments and falsy conditionals.
@@ -174,23 +179,16 @@ export function Tabs({
     return <TabContent key={tabPath} className="inactive" />;
   }
 
-  // No longer auto-collapsing the tab bar on android. It's just worse. I don't
-  // care if it's the "android way".
-  // const atTabRoot = location.unclaimedPath() === selected.tab.props.path;
+  // A page behind the keyboard leaves the bar where it is for the keyboard to
+  // cover, as iOS does, since it sits on the screen's own inset. Ending the
+  // page at the keyboard would carry the bar up on it, so it goes then
+  // instead. So does the strip, which the keyboard leaves too short to hold
+  // the tabs and the nav's buttons.
+  const collapsed =
+    !!viewport.keyboardVisible && (presentation === "strip" || !behindKeyboard);
 
-  // const collapsed = viewport.keyboardVisible; //|| (container === "android" && !atTabRoot);
-
-  // Keyboard detection isn't working well on some Android devices.
-  // (Outdated comment - we're trying it again anyway!) A bar along the bottom
-  // would ride up on the keyboard, so we hide it. So does the strip, since
-  // the keyboard leaves it too short to hold the tabs and the nav's buttons.
-  const collapsed = /*container !== "android" &&*/ !!viewport.keyboardVisible;
-
-  // A page behind the keyboard keeps a floating bar's inset, hidden, as the
-  // keyboard rises past it, so the page's bottom moves on from there with the
-  // keyboard rather than jumping (see --floating-tab-bar-height).
-  const floatingBar =
-    !!floating && presentation.startsWith("bottom") && (!collapsed || !!behindKeyboard);
+  // The bar along the bottom, over the content.
+  const floatingBar = presentation.startsWith("bottom") && !collapsed;
 
   return (
     <StyledTabs
@@ -202,14 +200,12 @@ export function Tabs({
       data-bar-edge={barEdge ?? undefined}
       {...rest}
     >
-      <TabsContext value={{ floatingTabBar: floatingBar }}>
-        {tabs.map(renderTabContents)}
-      </TabsContext>
+      {tabs.map(renderTabContents)}
+      {floatingBar && <TabBarEdge />}
       <TabBar
         tabs={tabs}
         selectedTab={nextSelected.tab}
         presentation={presentation}
-        floating={floatingBar}
         getTabLink={getTabLink}
         onReselect={(tab, target) => getReselectHandler(tab.props.path).current?.(target)}
       />
@@ -289,20 +285,12 @@ function isTab(item: ReactNode): item is ReactElement<TabProps> {
 
 const TabContent = styled.div``;
 
+const TabBarEdge = styled.div``;
+
 export const StyledTabs = styled.div`
   position: relative; /* Reset z-index. */
   background: ${colors.textBackground()};
   overflow: hidden;
-
-  --tab-bar-height: 49px;
-
-  &[data-container="android"] {
-    --tab-bar-height: 58px;
-  }
-
-  &[data-presentation="bottom-inline"] {
-    --tab-bar-height: 32px;
-  }
 
   > ${TabContent}.inactive, > ${TabContent}.active {
     z-index: 0;
@@ -321,17 +309,6 @@ export const StyledTabs = styled.div`
     }
   }
 
-  /* Bars along the bottom claim their space, and cover the bottom edge so the
-     content doesn't need to. */
-  &[data-presentation^="bottom"]:not([data-collapsed="true"]):not([data-floating="true"])
-  > ${TabContent} {
-    bottom: calc(var(--tab-bar-height) + ${safeArea.bottom()});
-
-    &:not(:has(*[data-hide-tab-bar="true"])) > * {
-      ${provideSafeArea({ bottom: "0px" })}
-    }
-  }
-
   > ${TabContent}.active {
     /* In case any children want to render above the tab bar. */
     z-index: 2;
@@ -340,13 +317,6 @@ export const StyledTabs = styled.div`
     ${StyledNavs} {
       overflow: visible;
     }
-  }
-
-  /* Special data attribute added by <NavLayout>. Our approach to hiding the tab bar used to be complex, but is now simple, we just stretch the content of any <NavLayout> to cover up the tabs. Not while the bar is collapsed for the keyboard, though: it takes no space then, so there's nothing to cover, and stretching would push the page's bottom (a text field, say) behind the keyboard. */
-  &[data-presentation^="bottom"]:not([data-floating="true"]):not([data-collapsed="true"])
-  > ${TabContent}.active
-  *[data-hide-tab-bar="true"] {
-    bottom: calc(0px - var(--tab-bar-height) - ${safeArea.bottom()});
   }
 
   > ${TabContent}.inactive {
@@ -363,15 +333,8 @@ export const StyledTabs = styled.div`
     display: none;
   }
 
-  &[data-presentation^="bottom"] > ${StyledTabBar} {
-    left: 0;
-    right: 0;
-    bottom: 0;
-  }
-
-  /* A floating bar hovers over the content, which runs to the bottom edge
-     behind it. How much of the content it covers is passed down for the pages
-     to keep clear of (see NavLayout). */
+  /* The bar hovers over the content, which runs to the bottom edge behind it
+     and gets the bar's space as its bottom safe area. */
   &[data-floating="true"] {
     --tab-bar-height: 62px;
     /* On the screen's own bottom inset, not the keyboard's (see
@@ -385,12 +348,43 @@ export const StyledTabs = styled.div`
       --tab-bar-height: 44px;
     }
 
-    > ${TabContent} > * {
-      /* Or the keyboard, once it rises past the bar. */
-      --floating-tab-bar-height: max(
-        ${safeArea.bottom()},
-        calc(var(--floating-tab-bar-bottom) + var(--tab-bar-height) + 8px)
+    /* How far up the bar reaches, a little past its top. */
+    --floating-tab-bar-cover: calc(var(--floating-tab-bar-bottom) + var(--tab-bar-height) + 8px);
+
+    > ${TabContent} {
+      ${overlaySafeArea({ bottom: "var(--floating-tab-bar-cover)" })}
+
+      /* For a page that hides the bar (below). */
+      --tab-content-bottom: ${safeArea.bottom()};
+      --tab-content-bottom-resting: ${safeAreaResting.bottom()};
+
+      /* A page that hides the bar (NavLayout's hideTabBar) keeps clear of
+         just what was there before it. */
+      [data-hide-tab-bar="true"] {
+        ${provideSafeArea({ bottom: "var(--tab-content-bottom)" })}
+        --safe-area-bottom-resting: var(--tab-content-bottom-resting);
+      }
+    }
+
+    /* A soft blur where the content scrolls under the bar, fainter than the
+       header's, and still while pages slide past beneath it. */
+    > ${TabBarEdge} {
+      z-index: 3;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: var(--floating-tab-bar-cover);
+      pointer-events: none;
+      background: linear-gradient(
+        ${colors.textBackground({ alpha: 0 })},
+        ${colors.textBackground({ alpha: 0.6 })}
       );
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      mask-image: linear-gradient(transparent, black 60%);
+      -webkit-mask-image: linear-gradient(transparent, black 60%);
+      transition: opacity 0.3s ${easing.outCubic};
     }
 
     > ${StyledTabBar} {
@@ -411,11 +405,16 @@ export const StyledTabs = styled.div`
        hold any space to give back. That's the page on top, which isn't always
        the last one: a page you came back from waits off-screen after it, to
        swipe forward to (see NavStack), and mustn't keep the bar hidden. */
-    &:has(> ${TabContent}.active ${StyledNavs} > .item[data-top="true"] [data-hide-tab-bar="true"])
-    > ${StyledTabBar} {
-      transform: translateY(calc(100% + var(--floating-tab-bar-bottom)));
-      opacity: 0;
-      pointer-events: none;
+    &:has(> ${TabContent}.active ${StyledNavs} > .item[data-top="true"] [data-hide-tab-bar="true"]) {
+      > ${StyledTabBar} {
+        transform: translateY(calc(100% + var(--floating-tab-bar-bottom)));
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      > ${TabBarEdge} {
+        opacity: 0;
+      }
     }
   }
 
@@ -426,15 +425,11 @@ export const StyledTabs = styled.div`
     bottom: var(--bar-strip-bottom, 0px);
     width: var(--bar-strip-width, 44px);
     align-items: center;
-  }
-
-  /* Only for the page on top, as with the floating bar: the page you came
-     back from waits forward, and would keep the bar gone. */
-  &[data-presentation="strip"]:has(
-      > ${TabContent}.active ${StyledNavs} > .item[data-top="true"] [data-hide-tab-bar="true"]
-    )
-  > ${StyledTabBar} {
-    display: none;
+    /* Off past its edge, as the floating bar goes off the bottom. */
+    --strip-away: calc(100% + var(--bar-strip-edge-inset, 20px));
+    transition:
+      transform 0.3s ${easing.outCubic},
+      opacity 0.3s ${easing.outCubic};
   }
 
   &[data-presentation="strip"][data-bar-edge="right"] > ${StyledTabBar} {
@@ -443,5 +438,17 @@ export const StyledTabs = styled.div`
 
   &[data-presentation="strip"][data-bar-edge="left"] > ${StyledTabBar} {
     left: var(--bar-strip-edge-inset, 20px);
+    --strip-away: calc(-100% - var(--bar-strip-edge-inset, 20px));
+  }
+
+  /* Only for the page on top, as with the floating bar: the page you came
+     back from waits forward, and would keep the bar gone. */
+  &[data-presentation="strip"]:has(
+      > ${TabContent}.active ${StyledNavs} > .item[data-top="true"] [data-hide-tab-bar="true"]
+    )
+  > ${StyledTabBar} {
+    transform: translateX(var(--strip-away));
+    opacity: 0;
+    pointer-events: none;
   }
 `;

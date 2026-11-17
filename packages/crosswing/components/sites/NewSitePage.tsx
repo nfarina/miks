@@ -2,7 +2,6 @@ import { HTMLAttributes, ReactNode } from "react";
 import { styled } from "styled-components";
 import { BorderVisibility } from "../AutoBorderView";
 import { PanelLayout } from "../PanelLayout";
-import { provideSafeArea, safeArea } from "../../safearea/safeArea";
 import { NewSiteHeader, StyledNewSiteHeader } from "./NewSiteHeader";
 import { NewSitePanel } from "./NewSitePanel";
 
@@ -110,11 +109,6 @@ const PageLayout = styled.div`
   flex-flow: column;
   position: relative;
 
-  /* How much of our bottom edge is covered: by a floating tab bar when we're
-     under one (see Tabs), or else just the safe area. Captured here since the
-     content redefines the safe area in terms of it. */
-  --page-bottom-inset: max(var(--floating-tab-bar-height, 0px), ${safeArea.bottom()});
-
   > * {
     flex-shrink: 0;
   }
@@ -128,11 +122,6 @@ const PageLayout = styled.div`
     flex-grow: 1;
     display: flex;
     flex-flow: column;
-
-    /* The content runs down behind a floating tab bar, and keeps clear of it
-       the same way it would any other safe area (like NavLayout's does). */
-    ${provideSafeArea({ bottom: "var(--page-bottom-inset)" })}
-    --floating-tab-bar-height: 0px;
 
     > * {
       height: 0;

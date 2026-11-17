@@ -1,4 +1,4 @@
-import { ReactNode, use } from "react";
+import { ReactNode, RefObject, use, useRef } from "react";
 import { BarEdgeContext } from "../context/BarEdgeContext.js";
 import { HostContext, defaultHostContext } from "../context/HostContext.js";
 import { StyledHostProvider } from "../context/HostProvider.js";
@@ -9,7 +9,9 @@ import {
   reserveSafeArea,
 } from "../util/barStrip.js";
 import { extendThroughFold, getFoldStyle } from "../util/fold.js";
+import { getKeyboardStyle, registerSafeAreaBottom } from "../util/keyboardMotion.js";
 import { getPointerStyle } from "../util/pointer.js";
+import { useRevealFocus } from "../util/revealFocus.js";
 import { HostContextValue } from "../util/types.js";
 
 /**
@@ -23,8 +25,18 @@ export function MockHostProvider({
   children,
   inherit,
   behindKeyboard,
+  screen,
   ...host
-}: { children?: ReactNode; inherit?: boolean; behindKeyboard?: boolean } & Partial<HostContextValue>) {
+}: {
+  children?: ReactNode;
+  inherit?: boolean;
+  behindKeyboard?: boolean;
+  /**
+   * What stands in for the screen, whose bottom the keyboard rises from, when
+   * it isn't our own element (MockDevice's window, inside its frame).
+   */
+  screen?: RefObject<HTMLElement | null>;
+} & Partial<HostContextValue>) {
   const parent = use(HostContext);
 
   // A mock layout implies its safe area, unless you gave one explicitly.
@@ -49,12 +61,20 @@ export function MockHostProvider({
     ...(behindKeyboard != null && { behindKeyboard }),
   };
 
+  // As HostProvider does, so a mock keyboard covers what the real one would,
+  // and a focused field scrolls up clear of it.
+  const element = useRef<HTMLDivElement>(null);
+  if (behindKeyboard) registerSafeAreaBottom();
+  useRevealFocus(screen ?? element, value.viewport, !!behindKeyboard);
+
   return (
     <HostContext value={value}>
       <BarEdgeContext value={value.layout?.barEdge ?? null}>
         {/* We need an actual HTML element in the DOM to attach our CSS custom properties to. */}
         <StyledHostProvider
+          ref={element}
           $safeArea={value.safeArea}
+          $behindKeyboard={behindKeyboard}
           style={{
             ...getPointerStyle(value.pointer),
             ...getBarStripStyle(value.layout),
@@ -62,6 +82,7 @@ export function MockHostProvider({
             ...getSafeAreaCornersStyle(value.layout),
             // As HostProvider does, so a mock device places a top bar where the real one would.
             ...getTopBarStyle(value.layout),
+            ...getKeyboardStyle(value.viewport, behindKeyboard ? base.safeArea : undefined),
           }}
           children={children}
         />

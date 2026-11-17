@@ -53,6 +53,60 @@ export const safeAreaTopBar = {
     `max(0px, calc(var(--safe-area-top, 0px) - var(--safe-area-top-bar-top, var(--safe-area-top, 0px)) - ${height}))`,
 };
 
+/**
+ * The bottom inset as it is with the keyboard down. The bottom safe area moves
+ * with the keyboard, for content to stay clear of it; something floating over
+ * the bottom (a floating tab bar, floating buttons) stays put at this instead,
+ * and lets the keyboard cover it, as on iOS. Includes what floats beneath it
+ * (see overlaySafeArea). Takes an optional length to add, like safeArea.
+ */
+export const safeAreaResting = {
+  bottom: (plus?: string) => withPlus(RESTING_BOTTOM, plus),
+};
+
+/**
+ * Where the resting bottom inset is kept: set by overlaySafeArea, and cleared
+ * with the rest of the bottom by provideSafeArea. Without either, the screen's
+ * own inset (`--safe-area-bottom-base`, from a host running the page behind
+ * the keyboard), or the plain one, where the keyboard never moves it.
+ */
+const RESTING_BOTTOM =
+  "var(--safe-area-bottom-resting, var(--safe-area-bottom-base, var(--safe-area-bottom, 0px)))";
+
+/**
+ * CSS for something that floats over the bottom of some content, like a
+ * floating tab bar or buttons: the content's bottom safe area grows to clear
+ * it, so whatever pads by the safe area (padSafeArea, a field scrolled above
+ * the keyboard) stays clear of it too, without knowing it's there. Apply it to
+ * a parent of the content, which is `content` among its children (all of
+ * them, by default; leave out the floating things themselves, which place
+ * themselves by the inset as it was).
+ *
+ * `bottom` is how far up from the screen's bottom edge the floating thing
+ * reaches with the keyboard down, which usually builds on
+ * `safeAreaResting.bottom()`. The keyboard covers it, so with the keyboard up
+ * the content's inset is the keyboard's, whichever is more.
+ *
+ *     const PageLayout = styled.div`
+ *       ${overlaySafeArea({ bottom: safeAreaResting.bottom("80px"), content: StyledScrollable })}
+ *     `;
+ */
+export function overlaySafeArea({ bottom, content = "*" }: { bottom: string; content?: unknown }) {
+  // Captured here and provided to the content, since a custom property can't
+  // refer to its own inherited value.
+  return `
+    --overlay-safe-area-bottom: max(${safeArea.bottom()}, ${bottom});
+    --overlay-safe-area-bottom-resting: max(${safeAreaResting.bottom()}, ${bottom});
+    --overlay-safe-area-bottom-base: var(--safe-area-bottom-base, ${safeArea.bottom()});
+
+    > ${String(content)} {
+      ${provideSafeArea({ bottom: "var(--overlay-safe-area-bottom)" })}
+      --safe-area-bottom-resting: var(--overlay-safe-area-bottom-resting);
+      --safe-area-bottom-base: var(--overlay-safe-area-bottom-base);
+    }
+  `;
+}
+
 function withPlus(inset: string, plus?: string) {
   return plus ? `calc(${inset} + ${plus})` : inset;
 }
@@ -83,10 +137,12 @@ export function provideSafeArea(edges: Partial<SafeArea>) {
   // The corner-aware insets (see safeAreaCorners) and the top bar's (see
   // safeAreaTopBar) change along with the plain ones, so clearing an edge
   // clears them all.
+  // So does the bottom's resting inset (see safeAreaResting).
   return Object.entries(edges)
     .map(
       ([edge, value]) =>
-        `--safe-area-${edge}: ${value}; --safe-area-corner-${edge}: ${value}; --safe-area-top-bar-${edge}: ${value};`,
+        `--safe-area-${edge}: ${value}; --safe-area-corner-${edge}: ${value}; --safe-area-top-bar-${edge}: ${value};` +
+        (edge === "bottom" ? ` --safe-area-bottom-resting: ${value};` : ""),
     )
     .join("\n");
 }

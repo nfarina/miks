@@ -82,7 +82,7 @@ export function HostProvider({
   const features = useFeatures();
   const hostViewport = useHostViewport();
   const layout = useHostLayout(features);
-  const hostSafeArea = useSafeArea(container, features, hostViewport);
+  const hostSafeArea = useSafeArea(container, features, hostViewport, { behindKeyboard });
   const { safeArea, viewport } = hostSafeArea
     ? extendThroughFold(reserveSafeArea(hostSafeArea, layout), layout, hostViewport, {
         behindKeyboard,
