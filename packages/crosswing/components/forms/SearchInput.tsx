@@ -80,9 +80,15 @@ export function SearchInput({
     // This only makes sense on mobile where the keyboard gets in the way.
     if (container === "web") return;
 
+    // Only a scroll you're dragging counts. The host scrolls a focused field
+    // into view itself once the keyboard is up, and that mustn't blur it.
+    let touching = false;
+    const onTouchStart = () => (touching = true);
+    const onTouchEnd = (e: TouchEvent) => (touching = e.touches.length > 0);
+
     const onScroll = (e: Event) => {
       const input = inputRef.current;
-      if (!input) return;
+      if (!input || !touching) return;
 
       // If we're not focused, nothing to do.
       if (document.activeElement !== input) return;
@@ -98,8 +104,16 @@ export function SearchInput({
     // Begin listening for window-level touch move events so we can blur on
     // scrolling.
     window.addEventListener("scroll", onScroll, true); // useCapture = true
+    window.addEventListener("touchstart", onTouchStart, true);
+    window.addEventListener("touchend", onTouchEnd, true);
+    window.addEventListener("touchcancel", onTouchEnd, true);
 
-    return () => window.removeEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("touchstart", onTouchStart, true);
+      window.removeEventListener("touchend", onTouchEnd, true);
+      window.removeEventListener("touchcancel", onTouchEnd, true);
+    };
   }, []);
 
   //
