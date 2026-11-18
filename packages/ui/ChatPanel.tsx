@@ -1649,7 +1649,9 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
         >
           {dictation.state === "transcribing" ? <LoaderCircle size={18} /> : dictation.state === "recording" ? <Square size={11} fill="currentColor" /> : <Mic size={19} />}
         </button>
-        {status === "working" && !text ? (
+        {/* Not while dictating: beside the red Stop, Send (or a second Stop,
+            Claude's) is one button too many. */}
+        {dictation.state !== "idle" ? null : status === "working" && !text ? (
           <button
             type="button"
             className="send"

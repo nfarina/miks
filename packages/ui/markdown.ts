@@ -52,9 +52,15 @@ const marked = new Marked(
   highlight(),
 );
 
+// An agent's links to apps (`harbor://…`, `vscode://…`) are links: DOMPurify
+// keeps only the web's and a few others' schemes, leaving the rest an `<a>`
+// with no `href` that looks like a link and does nothing. Never script,
+// `data:` or `file:` ones.
+const CHAT_URI = /^(?!(?:javascript|vbscript|data|file):)(?:[a-z][a-z0-9+.-]*:|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i;
+
 /** Markdown as safe HTML. With `breaks`, each newline is one, as typed (your own messages). */
 export function renderMarkdown(text: string, { breaks = false }: { breaks?: boolean } = {}): string {
-  return DOMPurify.sanitize(marked.parse(text, { async: false, breaks }));
+  return DOMPurify.sanitize(marked.parse(text, { async: false, breaks }), { ALLOWED_URI_REGEXP: CHAT_URI });
 }
 
 // A markdown file, as the file panel shows it: its headings have GitHub's
