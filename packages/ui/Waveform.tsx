@@ -1,9 +1,9 @@
 import { colors } from "crosswing/colors";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { styled } from "styled-components";
 
-/** How many levels it keeps; a narrow composer shows the latest that fit. */
-const BARS = 48;
+/** A bar's width plus the gap after it. */
+const BAR_PITCH = 5;
 
 /** Frames between samples: the bars scroll by about 15 a second. */
 const FRAMES_PER_BAR = 4;
@@ -14,6 +14,16 @@ const FRAMES_PER_BAR = 4;
  */
 export function Waveform({ stream }: { stream: MediaStream }) {
   const [levels, setLevels] = useState<number[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+  // As many levels as fill its width, which follows the composer's.
+  const bars = useRef(48);
+
+  useEffect(() => {
+    const element = ref.current!;
+    const observer = new ResizeObserver(() => (bars.current = Math.ceil(element.clientWidth / BAR_PITCH) + 1));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const context = new AudioContext();
@@ -35,7 +45,7 @@ export function Waveform({ stream }: { stream: MediaStream }) {
         let sum = 0;
         for (const value of data) sum += (value / 255) ** 2;
         const level = Math.min(1, Math.sqrt(sum / data.length) * 2.5);
-        setLevels((previous) => [...previous.slice(-(BARS - 1)), level]);
+        setLevels((previous) => [...previous.slice(-(bars.current - 1)), level]);
       }
       request = requestAnimationFrame(animate);
     };
@@ -49,7 +59,7 @@ export function Waveform({ stream }: { stream: MediaStream }) {
   }, [stream]);
 
   return (
-    <StyledWaveform aria-label="Listening">
+    <StyledWaveform ref={ref} aria-label="Listening">
       {levels.map((level, index) => (
         <div key={index - levels.length} className="bar" style={{ height: Math.max(3, Math.round(level * 20)) }} />
       ))}
