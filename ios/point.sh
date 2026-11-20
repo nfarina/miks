@@ -38,8 +38,16 @@
 # is what a bundle is for avoiding. Deploy the server side first, or use
 # --live with --backend.
 #
+# Opening the link on an iPhone or iPad goes through devicectl, which only
+# reaches a device over USB or the local network, unlocked. When it can't (the
+# phone is out of the house, or locked), everything else still happens: the
+# bundle is built and served over Tailscale, and the link is printed. Opening
+# that link on the device itself does the same job from anywhere on the
+# tailnet, so hand it to the user to tap, as a Markdown link.
+#
 # Exits nonzero unless the device really switched, which it checks by reading
-# the app's own settings and bundle back off the device.
+# the app's own settings and bundle back off the device. (2 when all that's
+# left is for the user to open the link.)
 
 set -euo pipefail
 
@@ -172,6 +180,10 @@ read_app_state() {
 DEVICE=""
 DEVICE_NAME="the Mac app"
 
+# Why we can't open the link on the device ourselves, when we can't. The rest
+# goes ahead, and the user opens the link.
+LINK_ONLY=""
+
 # Settled before anything else, as a build takes a while to end in a question.
 if [[ "$DEVICE_QUERY" != "mac" ]]; then
   xcrun devicectl list devices --json-output "$WORK/devices.json" >/dev/null 2>&1
@@ -210,8 +222,11 @@ if query:
     q = query.lower()
     matches = [d for d in matches if q in name(d).lower() or q in d["identifier"].lower()]
 
+if not matches:
+    sys.exit(3)
+
 if len(matches) != 1:
-    print("Pick a device:" if matches else "No device found.", file=sys.stderr)
+    print("Pick a device:", file=sys.stderr)
     for d in matches:
         print(f'  {again} "{name(d)}"', file=sys.stderr)
     print(f"  {again} mac", file=sys.stderr)
@@ -220,20 +235,27 @@ if len(matches) != 1:
 print(matches[0]["identifier"])
 print(name(matches[0]))
 PY
-)"
-  DEVICE="${PICKED%%$'\n'*}"
-  DEVICE_NAME="${PICKED##*$'\n'}"
+)" || PICK_STATUS=$?
 
-  if xcrun devicectl device info lockState --device "$DEVICE" 2>/dev/null | grep -q "passcodeRequired: true"; then
-    echo "Unlock $DEVICE_NAME first." >&2
+  if [[ "${PICK_STATUS:-0}" == 3 ]]; then
+    DEVICE_NAME="${DEVICE_QUERY:-the iPhone}"
+    LINK_ONLY="this machine can't reach it (devicectl needs USB or the same network)"
+  elif [[ "${PICK_STATUS:-0}" != 0 ]]; then
     exit 1
+  else
+    DEVICE="${PICKED%%$'\n'*}"
+    DEVICE_NAME="${PICKED##*$'\n'}"
+
+    if xcrun devicectl device info lockState --device "$DEVICE" 2>/dev/null | grep -q "passcodeRequired: true"; then
+      LINK_ONLY="it's locked"
+    fi
   fi
 fi
 
 # Links are ignored without Developer mode, and nothing tells you so. Only a
 # build we can read the settings of can be checked (not TestFlight, say).
-read_app_state
-if [[ -f "$WORK/prefs.plist" ]] && ! python3 -c 'import plistlib, sys; sys.exit(not plistlib.load(open(sys.argv[1], "rb")).get("developer_mode"))' "$WORK/prefs.plist"; then
+[[ -z "$LINK_ONLY" ]] && read_app_state
+if [[ -z "$LINK_ONLY" && -f "$WORK/prefs.plist" ]] && ! python3 -c 'import plistlib, sys; sys.exit(not plistlib.load(open(sys.argv[1], "rb")).get("developer_mode"))' "$WORK/prefs.plist"; then
   echo "Developer mode is off on $DEVICE_NAME. Turn it on in Settings → $APP_NAME, or Developer Settings… (⌥⌘,) in the Mac app." >&2
   exit 1
 fi
@@ -299,6 +321,11 @@ PY
 )"
 
 echo "$URL"
+if [[ -n "$LINK_ONLY" ]]; then
+  echo "Not opened on $DEVICE_NAME: $LINK_ONLY." >&2
+  echo "Opening the link above on the device does the same thing, from anywhere on the tailnet (the app must be in Developer mode). Give it to the user to tap, as a Markdown link: [Open in $APP_NAME]($URL)" >&2
+  exit 2
+fi
 if [[ -n "$DEVICE" ]]; then
   echo "Opening on $DEVICE_NAME"
   LAUNCH_ARGS=()

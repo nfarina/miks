@@ -1,6 +1,6 @@
 import { RefObject, useEffect, useRef } from "react";
 
-export type SwipeDirection = "down" | "right" | "left";
+export type SwipeDirection = "down" | "up" | "right" | "left";
 
 export type SwipeEnd = {
   /** How far it was dragged, in pixels (only negative with overscroll). */
@@ -32,7 +32,7 @@ export interface UseSwipeOptions {
 }
 
 /**
- * Follows a finger dragging an element down, right or left, like a sheet
+ * Follows a finger dragging an element down, up, right or left, like a sheet
  * being pulled away or a page being swiped back (or forward), and says where
  * it was let go.
  *
@@ -57,7 +57,7 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, options: UseSwipeOp
     const element = ref.current;
     if (!enabled || !element) return;
 
-    const vertical = direction === "down";
+    const vertical = direction === "down" || direction === "up";
 
     type Gesture = {
       identifier: number;
@@ -91,12 +91,21 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, options: UseSwipeOp
       const along =
         direction === "down"
           ? y - gesture.start.y
-          : direction === "right"
-            ? x - gesture.start.x
-            : gesture.start.x - x;
+          : direction === "up"
+            ? gesture.start.y - y
+            : direction === "right"
+              ? x - gesture.start.x
+              : gesture.start.x - x;
       const across = vertical ? x - gesture.start.x : y - gesture.start.y;
 
       if (gesture.state === "pending") {
+        // Something inside us is already swiping with this touch (a row in a
+        // list, say), and stopped it from scrolling: it's theirs.
+        if (e.defaultPrevented) {
+          gesture.state = "ignored";
+          return;
+        }
+
         const decision = decideSwipe({
           along,
           across,
@@ -129,7 +138,8 @@ export function useSwipe(ref: RefObject<HTMLElement | null>, options: UseSwipeOp
 
       const time = e.timeStamp;
       // Measured along the swipe, so speed comes out positive going its way.
-      const position = vertical ? y : direction === "right" ? x : -x;
+      const position =
+        direction === "down" ? y : direction === "up" ? -y : direction === "right" ? x : -x;
       gesture.samples = [
         ...gesture.samples.filter((sample) => time - sample.time < 100),
         { position, time },
@@ -243,11 +253,20 @@ export function decideSwipe({
 
 /**
  * Whether there's nothing left to scroll the way a swipe would pull: at the
- * top for one down, the left for one right, the right for one left.
+ * top for one down, the bottom for one up, the left for one right, the right
+ * for one left.
  */
 function isScrolledToEdge(scroller: HTMLElement | null, direction: SwipeDirection): boolean {
   if (!scroller) return true;
-  if (direction === "down") return scroller.scrollTop <= 0;
+  if (direction === "down" || direction === "up") {
+    // How far down from the top it's scrolled. A list kept to the bottom
+    // (column-reverse, like BottomScrollable) counts scrollTop up from its
+    // bottom instead, as zero or less.
+    const most = scroller.scrollHeight - scroller.clientHeight;
+    const reversed = getComputedStyle(scroller).flexDirection === "column-reverse";
+    const fromTop = reversed ? most + scroller.scrollTop : scroller.scrollTop;
+    return direction === "down" ? fromTop <= 1 : fromTop >= most - 1;
+  }
   if (direction === "right") return scroller.scrollLeft <= 0;
   return scroller.scrollLeft >= scroller.scrollWidth - scroller.clientWidth - 1;
 }

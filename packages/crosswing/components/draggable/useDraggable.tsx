@@ -8,6 +8,13 @@ import { findAncestor } from "./draggableUtils.js";
 
 const log = (...args: any[]) => {};
 
+/**
+ * How far (in pixels) a finger may wander while we wait out the hold that
+ * starts a drag. Kept under the distance at which browsers begin a scroll,
+ * since a scroll that's already begun can't be taken back.
+ */
+const HOLD_MOVE_TOLERANCE = 6;
+
 export type DragState = {
   isDragging: boolean;
 };
@@ -176,8 +183,17 @@ export function useDraggable({
         manager.startDragging();
       }, delay);
 
+      const start = getCoordinate(e, identifier, "touches");
+
       const onMove = (e: TouchEvent | MouseEvent) => {
         if (isDraggingRef.current === null && isTouchEvent(e)) {
+          // A finger resting on the screen is never perfectly still, so a
+          // little movement while we wait out the hold isn't a scroll yet.
+          const now = getCoordinate(e, identifier, "changedTouches");
+          const distance =
+            start && now ? Math.hypot(now.x - start.x, now.y - start.y) : Infinity;
+          if (distance <= HOLD_MOVE_TOLERANCE) return;
+
           // Cancel the whole operation, you're likely trying to scroll.
           log("onTouchMove (canceling)");
           cleanup();
