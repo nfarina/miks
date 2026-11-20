@@ -72,14 +72,14 @@
   "dependencies": {
     "dayjs": "^1.11.23",
     "debug": "^4.4.3",
-    "lucide-react": "^1.66.0",
+    "lucide-react": "^1.72.0",
     "react-transition-group": "^4.4.5"
   },
   "devDependencies": {
     "@svgr/core": "^8.1.0",
     "@svgr/plugin-jsx": "^8.1.0",
     "@svgr/plugin-svgo": "^8.1.0",
-    "glob": "^13.0.6",
+    "glob": "^13.0.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-is": "^19.3.1"
