@@ -5,7 +5,8 @@
 // - Miks-macos.zip, the app (also the README's download link);
 // - update.json, the feed, which Squirrel.Mac compares with its own version.
 //
-// Then commits the version bump and tags it. Without --notes it opens
+// Then commits the version bump and tags it, and deploys the web bundle the
+// iOS app loads (`yarn deploy:web`). Without --notes it opens
 // $EDITOR for release notes, which show in the update prompt.
 //
 // One-time setup: a Developer ID Application certificate in the keychain, and
@@ -106,6 +107,10 @@ run("git", ["push", "origin", "HEAD", tag]);
 const notesFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "miks-release-")), "notes.md");
 fs.writeFileSync(notesFile, notes + "\n");
 run("gh", ["release", "create", tag, zipPath, updatePath, "--repo", repo, "--title", tag, "--notes-file", notesFile]);
+
+// The iOS app's UI is the web bundle, not the release: without this, it
+// kept the last one deployed, fixes and all missing.
+run("node", ["scripts/deploy-web.ts"]);
 
 console.log(`\nPublished ${tag}: https://github.com/${repo}/releases/tag/${tag}`);
 
