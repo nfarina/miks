@@ -1,5 +1,6 @@
 import { colors } from "crosswing/colors";
 import { fonts } from "crosswing/fonts";
+import { tooltip } from "crosswing/modals/popup";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createGlobalStyle, styled } from "styled-components";
@@ -45,7 +46,8 @@ export function focusFind(input: HTMLInputElement | null) {
 
 /**
  * The find bar, which takes the keyboard as it opens. Enter and ⇧Enter step, Escape closes; those stay here, since
- * what's around it takes them for its own.
+ * what's around it takes them for its own. ⌘G and ⌘⇧G step too, as in every Mac app, with the keyboard anywhere in
+ * what it searches (a terminal, a chat and its composer).
  */
 export function FindBar({
   inputRef,
@@ -67,8 +69,21 @@ export function FindBar({
 }) {
   useLayoutEffect(() => focusFind(inputRef.current), []);
 
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "g" || !event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!ref.current?.parentElement?.contains(document.activeElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onStep(event.shiftKey ? -1 : 1);
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+  });
+
   return (
-    <StyledFindBar className="find-bar" style={style}>
+    <StyledFindBar ref={ref} className="find-bar" style={style}>
       <FindHighlights />
       <input
         ref={inputRef}
@@ -88,13 +103,25 @@ export function FindBar({
       />
       <span className="status">{status}</span>
       {/* Keeping the keyboard in the field. */}
-      <button type="button" aria-label="Previous" onMouseDown={(event) => event.preventDefault()} onClick={() => onStep(-1)}>
+      <button
+        type="button"
+        aria-label="Previous"
+        {...tooltip("Previous", { hotkey: "cmd+shift+g", delay: true, placement: "below" })}
+        onMouseDown={(event) => event.preventDefault()} onClick={() => onStep(-1)}>
         <ChevronUp size={16} />
       </button>
-      <button type="button" aria-label="Next" onMouseDown={(event) => event.preventDefault()} onClick={() => onStep(1)}>
+      <button
+        type="button"
+        aria-label="Next"
+        {...tooltip("Next", { hotkey: "cmd+g", delay: true, placement: "below" })}
+        onMouseDown={(event) => event.preventDefault()} onClick={() => onStep(1)}>
         <ChevronDown size={16} />
       </button>
-      <button type="button" aria-label="Close" onMouseDown={(event) => event.preventDefault()} onClick={onClose}>
+      <button
+        type="button"
+        aria-label="Close"
+        {...tooltip("Close", { hotkey: "Escape", delay: true, placement: "below" })}
+        onMouseDown={(event) => event.preventDefault()} onClick={onClose}>
         <X size={16} />
       </button>
     </StyledFindBar>
