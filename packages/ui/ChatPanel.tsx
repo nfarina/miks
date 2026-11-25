@@ -41,6 +41,7 @@ import { closeFile, FileView } from "./FileView";
 import { accentColor, addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
 import { autoFocus, DEVICE_SETTINGS, useSettings } from "./settings";
+import { windowInUse } from "./inUse";
 import { openLink } from "./links";
 import {
   attachedText,
@@ -217,6 +218,21 @@ export const isChatOpen = openTabs.has;
 export function setChatOpen(tab: Tab, open: boolean) {
   if (openTabs.set(tab, open)) sendPanel(tab, { open });
 }
+
+/**
+ * Tabs whose panel this window opened for their session (it starting, a
+ * long reply), which close again when it ends, unless you've done anything
+ * with the panel since.
+ */
+const openedForSession = new Set<string>();
+
+/** Opens a tab's panel for its session, from the window in use only (inUse.ts). */
+export function openForSession(tab: Tab): boolean {
+  if (isChatOpen(tab) || !windowInUse()) return false;
+  openedForSession.add(keyOf(tab));
+  setChatOpen(tab, true);
+  return true;
+}
 export const useChatOpen = openTabs.useFlag;
 export const useExpanded = expandedTabs.useFlag;
 
@@ -268,6 +284,8 @@ export function togglePanel(tab: Tab) {
  */
 const AUTO_OPEN_KEY = "ChatPanel:autoOpen";
 const AUTO_OPEN_CHANGED_MIND = 20_000;
+/** How long a session's been gone before the panel it opened closes. */
+const SESSION_GONE = 3000;
 let autoOpened: { key: string; time: number } | null = null;
 
 function autoOpens(): boolean {
@@ -287,6 +305,7 @@ function choosePanel(tab: Tab, open: boolean) {
     } catch {}
   }
   autoOpened = null;
+  openedForSession.delete(keyOf(tab));
   setChatOpen(tab, open);
 }
 
@@ -438,6 +457,7 @@ export function ChatLayout({
       // For the daemon too: a window connecting later shows it as well.
       pickView(arrived);
       if (arrived === "page" && page?.fill) expandedTabs.set(tab, true);
+      openedForSession.delete(keyOf(tab));
       if (!isChatOpen(tab)) {
         openedForContent.current = true;
         setChatOpen(tab, true);
@@ -455,15 +475,25 @@ export function ChatLayout({
   // A Claude session you start here opens the panel (one a restore brought
   // back was left as it was), its composer taking the keyboard if it's on
   // screen, unless that would bring up an on-screen one (autoFocus()).
+  // Only the window in use does: another, with nobody at it, went by its
+  // own settings. And a panel opened so closes when the session ends (after
+  // a moment: `/clear` ends one and starts the next).
   const hadAgent = useRef(!!tab.agent);
   useEffect(() => {
     const had = hadAgent.current;
     hadAgent.current = !!tab.agent;
+    if (had && !tab.agent && openedForSession.has(keyOf(tab))) {
+      const timer = setTimeout(() => {
+        if (!openedForSession.delete(keyOf(tab)) || files.length > 0 || page) return;
+        setChatOpen(tab, false);
+      }, SESSION_GONE);
+      return () => clearTimeout(timer);
+    }
     if (!had && tab.agent) chatClosedTabs.set(tab, false);
     if (had || !tab.agent || tab.agent.restored || isChatOpen(tab) || !autoOpens()) return;
+    if (!openForSession(tab)) return;
     autoOpened = { key: keyOf(tab), time: Date.now() };
     if (active) focusOnShow = true;
-    setChatOpen(tab, true);
   }, [!!tab.agent]);
 
   // Coming back to the tab, the keyboard goes back where it was: into the

@@ -19,8 +19,7 @@ import {
   focusPanelOf,
   focusTerminalOf,
   hasPanel,
-  isChatOpen,
-  setChatOpen,
+  openForSession,
   showView,
   stepPanel,
   revealFile,
@@ -793,7 +792,7 @@ function useLongReplyOpening(state: DaemonState | null) {
   const longReply = agent?.status === "done" && (agent.replyLines ?? 0) >= LONG_REPLY_LINES ? `${tab?.id}:${agent.since}` : null;
 
   useEffect(() => {
-    if (longReply && tab && chatForLongReplies && !isChatOpen(tab)) setChatOpen(tab, true);
+    if (longReply && tab && chatForLongReplies) openForSession(tab);
   }, [longReply]);
 }
 

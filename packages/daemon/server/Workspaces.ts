@@ -20,7 +20,7 @@ import {
   type Tab,
 } from "../shared/protocol.ts";
 import { type FileContents, readForPanel, writeFromPanel } from "./Files.ts";
-import { Pane } from "./Pane.ts";
+import { Pane, ZSH_INTEGRATION } from "./Pane.ts";
 import { BackgroundTasks } from "./BackgroundTasks.ts";
 import { GrokTranscript, grokHook } from "./Grok.ts";
 import { AGY_ASKING, AGY_BUSY, AGY_READY, AgyTranscript, agyHook, agyReply, agyTranscriptPath, findAgyConversation } from "./Antigravity.ts";
@@ -965,7 +965,13 @@ export class Workspaces extends EventEmitter<{
    */
   private thenShell(command: string): string[] {
     const shell = this.command?.[0] ?? (process.env.SHELL || "/bin/zsh");
-    return [shell, "-ilc", `${command}; exec ${shell} -l`];
+    // Miks's startup files hand zsh back yours as they finish, so the shell
+    // after the command would read only yours: no `miks` function (`miks
+    // keep` got the executable's usage), no tab history (↑ was any tab's
+    // last command), no prompt marks. Pointed at Miks's again, as a pane's is.
+    const integration =
+      path.basename(shell) === "zsh" ? `export MIKS_USER_ZDOTDIR="\${ZDOTDIR:-$HOME}" ZDOTDIR=${shellQuote(ZSH_INTEGRATION)}; ` : "";
+    return [shell, "-ilc", `${command}; ${integration}exec ${shell} -l`];
   }
 
   /**
@@ -1405,3 +1411,6 @@ function clamp(value: number, min: number, max: number): number {
 function shortId(): string {
   return randomUUID().slice(0, 8);
 }
+
+/** A single-quoted word for a POSIX shell. */
+const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;

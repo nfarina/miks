@@ -10,7 +10,7 @@ const { Terminal } = headless;
 const SCROLLBACK = 10_000;
 
 /** Startup files that mark prompts and commands in zsh (see .zshenv there). */
-const ZSH_INTEGRATION = path.resolve(import.meta.dirname, "../shell/zsh");
+export const ZSH_INTEGRATION = path.resolve(import.meta.dirname, "../shell/zsh");
 
 /** Someone watching a pane: in practice, one UI connection. */
 export type PaneViewer = {
