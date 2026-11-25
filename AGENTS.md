@@ -71,7 +71,8 @@ Never SIGTERM a Miks UI; that's an ordinary quit.
 - `yarn release <version>` (`scripts/release.ts`) notarizes and publishes a
   GitHub release with `Miks-macos.zip` and `update.json`, the feed
   `packages/app/updates.ts` reads (Electron's autoUpdater, Squirrel.Mac, in
-  `serverType: "json"` mode) from `releases/latest/download/`. Notarizing
+  `serverType: "json"` mode) from `releases/latest/download/`, then deploys
+  the iOS app's web bundle (`yarn deploy:web`, below). Notarizing
   uses notarytool's keychain profile `miks-notary`, which Claude Code's
   sandbox hides ("No Keychain password item found", though Keychain Access
   shows it): run the release outside the sandbox. Squirrel
@@ -754,6 +755,12 @@ resizes); keep it passing.
   `App.tsx`): only for status changes seen while connected, and not for the
   tab on screen in a focused window. A finished turn's shows the start of its reply
   (the Stop hook's `last_assistant_message`, as `AgentState.reply`), as plain text.
+- Chromium 152 (Electron 44.11) refuses a canvas `font` starting with a
+  space, and xterm's WebGL atlas wrote `${italic} ${weight} …`: everything
+  but italic drew at 10px sans-serif in full-size cells.
+  `patches/xterm-addon-webgl-font.patch` (a yarn patch; `.yarn/` is
+  ignored, so patches go in `patches/`) says `normal` instead. Drop it
+  once xterm builds the string without the space.
 - Claude Code sets DEC mode 2031 at startup and never queries the scheme, so
   the daemon (`Pane.ts`) reports the current one as soon as the mode is set,
   then on every change the UI reports (`appearance`). xterm.js has no 2031.
