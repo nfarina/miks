@@ -8,7 +8,7 @@ import type { MachineSettings } from "./settings.ts";
  * Bumped when a message changes shape or appears, so a UI talking to another
  * Mac's daemon can tell it's a different Miks. Before 2 there was none.
  */
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /**
  * What a coding agent in a pane is up to, as reported by its hooks.
@@ -52,7 +52,33 @@ export type AgentState = {
 export type ChatEntry =
   | { id: string; kind: "prompt"; text: string; time: number }
   | { id: string; kind: "reply"; text: string; time: number }
-  | { id: string; kind: "tool"; name: string; summary: string; detail?: string; time: number };
+  | {
+      id: string;
+      kind: "tool";
+      name: string;
+      summary: string;
+      detail?: string;
+      time: number;
+      /** Questions the agent asked you (Claude Code's AskUserQuestion), with the call's ID. Since protocol 24. */
+      ask?: { toolUseId: string; questions: AskQuestion[] };
+      /** Your answers to an `ask`: a line of its own, as they come later. Since protocol 24. */
+      answered?: AskAnswers & { toolUseId: string };
+    };
+
+/** One of the questions in an AskUserQuestion, as Claude Code's tool takes them. */
+export type AskQuestion = {
+  question: string;
+  /** A short label for it ("Auth method"). */
+  header?: string;
+  multiSelect?: boolean;
+  options: { label: string; description?: string; preview?: string }[];
+};
+
+/**
+ * Answers, by each question's text: an option's label, your own words, or
+ * for `multiSelect`, the labels picked. Notes go with an answer.
+ */
+export type AskAnswers = { answers: Record<string, string | string[]>; notes?: Record<string, string> };
 
 export type Tab = {
   /** Also the pane's id; a tab holds exactly one pane for now. */
@@ -82,6 +108,11 @@ export type Tab = {
   background?: Background;
   /** Its panel, as a window last left it, for every window to show alike. Since protocol 23. */
   panel?: TabPanel;
+  /**
+   * Its agent is asking you questions (`AskQuestion`) that an `answer` from
+   * here can answer, while its terminal asks them too. Since protocol 24.
+   */
+  asking?: boolean;
 };
 
 /**
@@ -428,7 +459,9 @@ export type ClientMessage =
   /** What's written in a tab's chat panel so far, for its other windows (`draft` to them). Since protocol 11. */
   | { type: "draft"; tabId: string; text: string }
   /** A tab's panel opened, closed or showing something else, in some window: it goes to the others in `state`. Since protocol 23. */
-  | { type: "panel"; tabId: string; open?: boolean; view?: string };
+  | { type: "panel"; tabId: string; open?: boolean; view?: string }
+  /** Answers the questions the tab's agent is `asking`. Since protocol 24. */
+  | ({ type: "answer"; tabId: string } & AskAnswers);
 
 //
 // Daemon → client.

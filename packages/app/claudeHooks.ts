@@ -4,7 +4,21 @@
 import fs from "fs";
 import path from "path";
 
-const EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "Notification", "Stop", "SessionEnd"];
+const EVENTS: HookEvent[] = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "PostToolUse",
+  "Notification",
+  "Stop",
+  "SessionEnd",
+  // Questions, which the script waits on until they're answered, in the
+  // terminal or the chat panel: as long as anyone takes (a day, Claude
+  // Code's default being a minute, after which only the terminal can).
+  { event: "PermissionRequest", matcher: "AskUserQuestion", timeout: 86400 },
+];
+
+/** An event to hook, or one with a matcher (its tool) and a timeout (seconds). */
+export type HookEvent = string | { event: string; matcher?: string; timeout?: number };
 
 /** Ours, wherever it was installed from (older setups pointed into the repo). */
 const isOurs = (hook: any) =>
@@ -49,7 +63,7 @@ export function syncHooks({
   bundledScript: string;
   installedScript: string;
   settingsPath: string;
-  events: string[];
+  events: HookEvent[];
   isOurs: (hook: any) => boolean;
 }) {
   if (enabled) {
@@ -79,8 +93,10 @@ export function syncHooks({
     else delete hooks[event];
   }
   if (enabled) {
-    for (const event of events) {
-      hooks[event] = [...(hooks[event] ?? []), { hooks: [{ type: "command", command: hookCommand(installedScript) }] }];
+    for (const each of events) {
+      const { event, matcher, timeout } = typeof each === "string" ? { event: each } : each;
+      const hook = { type: "command", command: hookCommand(installedScript), ...(timeout && { timeout }) };
+      hooks[event] = [...(hooks[event] ?? []), { ...(matcher && { matcher }), hooks: [hook] }];
     }
   }
 

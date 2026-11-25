@@ -215,6 +215,22 @@ export async function serve({
       );
     }
 
+    // Claude asking questions (claude-hook.sh): held until they're answered,
+    // here or in its terminal (Workspaces.ask), what it's told the answer.
+    if (req.method === "POST" && url.pathname === "/api/hook/ask") {
+      const pane = url.searchParams.get("pane") ?? "";
+      return readJson(req).then((payload) => {
+        const respond = (output: object | null) => {
+          if (res.writableEnded) return;
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(output ? JSON.stringify(output) : "");
+        };
+        // Its hook gone (timed out, or Claude Code quit): nothing to answer.
+        res.on("close", () => workspaces.releaseAsk(pane, null, respond));
+        workspaces.ask(pane, payload, respond);
+      });
+    }
+
     const hookAgent = HOOK_ROUTES[url.pathname];
     if (req.method === "POST" && hookAgent) {
       const pane = url.searchParams.get("pane");
@@ -311,6 +327,8 @@ export async function serve({
         }
         case "panel":
           return workspaces.setPanel(message.tabId, { open: message.open, view: message.view });
+        case "answer":
+          return workspaces.answer(message.tabId, message);
         case "createWorkspace":
           workspaces.createWorkspace(message);
           return;

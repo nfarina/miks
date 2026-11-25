@@ -1027,6 +1027,43 @@ test("the hook script posts to the daemon from inside a pane", async () => {
   await waitFor(async () => daemon.workspaces.getState().workspaces[0].tabs[0].agent?.status === "working");
 });
 
+test("Claude's questions wait in the hook for an answer from the panel, or for the terminal's", async () => {
+  daemon.workspaces.createWorkspace({ cwd: home });
+  const tabId = activeTab(daemon.workspaces.getState());
+  const script = path.resolve(import.meta.dirname, "../hooks/claude-hook.sh");
+  const asking = () => daemon.workspaces.getState().workspaces[0].tabs[0].asking;
+  const questions = [{ question: "Which color?", header: "Color", options: [{ label: "Red" }, { label: "Blue" }] }];
+  const payload = JSON.stringify({ hook_event_name: "PermissionRequest", tool_name: "AskUserQuestion", tool_input: { questions } });
+  const out = path.join(home, "out.json");
+  const ask = () => daemon.workspaces.getPane(tabId)!.write(`echo '${payload}' | ${script} > '${out}'; echo done >> '${out}'\n`);
+
+  // Answered from the panel: what Claude Code takes as the answer.
+  ask();
+  await waitFor(() => asking() === true);
+  // Claude Code's Notification, right after: still asking.
+  await postHook(tabId, { hook_event_name: "Notification", notification_type: "permission_prompt" });
+  expect(asking()).toBe(true);
+  // Not what it's asking.
+  daemon.workspaces.answer(tabId, { answers: { "Which shape?": "Round" } });
+  expect(asking()).toBe(true);
+  daemon.workspaces.answer(tabId, { answers: { "Which color?": "Blue" }, notes: { "Which color?": "a dark one" } });
+  await waitFor(() => fs.existsSync(out) && fs.readFileSync(out, "utf8").endsWith("done\n"));
+  const output = JSON.parse(fs.readFileSync(out, "utf8").replace(/done\n$/, ""));
+  expect(output.hookSpecificOutput.decision).toEqual({
+    behavior: "allow",
+    updatedInput: { questions, answers: { "Which color?": "Blue" }, annotations: { "Which color?": { notes: "a dark one" } } },
+  });
+  expect(asking()).toBeUndefined();
+
+  // Answered in the terminal: the next hook lets it go, saying nothing.
+  fs.rmSync(out);
+  ask();
+  await waitFor(() => asking() === true);
+  await postHook(tabId, { hook_event_name: "PostToolUse" });
+  await waitFor(() => fs.existsSync(out) && fs.readFileSync(out, "utf8") === "done\n");
+  expect(asking()).toBeUndefined();
+});
+
 //
 // Helpers.
 //

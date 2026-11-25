@@ -37,6 +37,10 @@ test("installs the script and a hook for each event, keeping the rest of the set
   expect(settings.model).toBe("opus");
   expect(settings.hooks.Stop).toEqual([theirs, { hooks: [{ type: "command", command: hookCommand(paths.installedScript) }] }]);
   expect(settings.hooks.SessionStart).toHaveLength(1);
+  // Questions, waited on for as long as they take.
+  expect(settings.hooks.PermissionRequest).toEqual([
+    { matcher: "AskUserQuestion", hooks: [{ type: "command", command: hookCommand(paths.installedScript), timeout: 86400 }] },
+  ]);
   expect(fs.statSync(paths.installedScript).mode & 0o111).toBeTruthy();
 
   // Again changes nothing.

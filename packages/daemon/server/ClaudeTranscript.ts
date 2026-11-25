@@ -1,4 +1,4 @@
-import type { ChatEntry } from "../shared/protocol.ts";
+import type { AskQuestion, ChatEntry } from "../shared/protocol.ts";
 import type { TranscriptFormat } from "./Transcript.ts";
 
 /**
@@ -120,6 +120,8 @@ function parseRecord(record: any): ChatEntry[] {
   }
 
   if (record.type === "user") {
+    const answered = askAnswers(record);
+    if (answered) return [{ id, kind: "tool", name: "AskUserQuestion", summary: "Answered", time, answered }];
     const text =
       typeof content === "string"
         ? content
@@ -139,6 +141,13 @@ function parseRecord(record: any): ChatEntry[] {
       if (block?.type === "text" && typeof block.text === "string" && block.text.trim()) {
         return [{ id: blockId, kind: "reply", text: block.text, time }];
       }
+      if (block?.type === "tool_use" && block.name === "AskUserQuestion" && typeof block.id === "string") {
+        const questions = askQuestions(block.input?.questions);
+        if (questions) {
+          const summary = questions[0].question.split("\n")[0].slice(0, 200);
+          return [{ id: blockId, kind: "tool", name: block.name, time, summary, ask: { toolUseId: block.id, questions } }];
+        }
+      }
       if (block?.type === "tool_use" && typeof block.name === "string") {
         return [{ id: blockId, kind: "tool", name: block.name, time, ...describeTool(block.name, block.input) }];
       }
@@ -147,6 +156,56 @@ function parseRecord(record: any): ChatEntry[] {
   }
 
   return [];
+}
+
+/** An AskUserQuestion's questions, if they're as its tool takes them. */
+function askQuestions(input: unknown): AskQuestion[] | null {
+  if (!Array.isArray(input) || input.length === 0) return null;
+  const questions: AskQuestion[] = [];
+  for (const each of input) {
+    if (typeof each?.question !== "string" || !Array.isArray(each.options)) return null;
+    const options = each.options
+      .filter((option: any) => typeof option?.label === "string")
+      .map((option: any) => ({
+        label: option.label as string,
+        ...(typeof option.description === "string" && { description: option.description as string }),
+        ...(typeof option.preview === "string" && { preview: option.preview as string }),
+      }));
+    questions.push({
+      question: each.question,
+      ...(typeof each.header === "string" && { header: each.header }),
+      ...(each.multiSelect === true && { multiSelect: true }),
+      options,
+    });
+  }
+  return questions;
+}
+
+/**
+ * The answers in an AskUserQuestion's result: `toolUseResult` holds them as
+ * the tool returned them, `answers` by question, with `annotations` for
+ * notes. Answered nothing (Esc), it's an error result, and so no answers.
+ */
+function askAnswers(record: any) {
+  const result = record.toolUseResult;
+  const block = Array.isArray(record.message?.content)
+    ? record.message.content.find((each: any) => each?.type === "tool_result")
+    : undefined;
+  if (typeof block?.tool_use_id !== "string" || !Array.isArray(result?.questions)) return null;
+  if (!result.answers || typeof result.answers !== "object") return null;
+
+  const answers: Record<string, string | string[]> = {};
+  for (const [question, answer] of Object.entries(result.answers)) {
+    if (typeof answer === "string" || (Array.isArray(answer) && answer.every((each) => typeof each === "string"))) {
+      answers[question] = answer as string | string[];
+    }
+  }
+  const notes: Record<string, string> = {};
+  for (const [question, annotation] of Object.entries(result.annotations ?? {})) {
+    const note = (annotation as any)?.notes;
+    if (typeof note === "string" && note) notes[question] = note;
+  }
+  return { toolUseId: block.tool_use_id as string, answers, ...(Object.keys(notes).length > 0 && { notes }) };
 }
 
 /**

@@ -37,6 +37,7 @@ import { daemon } from "./daemon";
 import { useDictation } from "./dictation";
 import { onFind, useFind } from "./find";
 import { StyledWaveform, Waveform } from "./Waveform";
+import { Questions } from "./Questions";
 import { closeFile, FileView } from "./FileView";
 import { accentColor, addCopyButtons, copyCode, markdownCSS, renderMarkdown } from "./markdown";
 import { type Notice, Pill } from "./Pill";
@@ -1094,7 +1095,10 @@ const hostOf = (url = "") => {
 type Item =
   | { kind: "prompt"; entry: ChatEntry & { text: string } }
   | { kind: "reply"; entry: ChatEntry & { text: string }; final?: boolean }
-  | { kind: "tools"; entries: Extract<ChatEntry, { kind: "tool" }>[] };
+  | { kind: "tools"; entries: Extract<ChatEntry, { kind: "tool" }>[] }
+  | { kind: "ask"; entry: ToolEntry & { ask: NonNullable<ToolEntry["ask"]> }; answered?: ToolEntry["answered"] };
+
+type ToolEntry = Extract<ChatEntry, { kind: "tool" }>;
 
 /**
  * Tool calls in a row become one line. And the start of each turn's final
@@ -1104,9 +1108,15 @@ type Item =
  */
 function group(entries: ChatEntry[], working: boolean): Item[] {
   const items: Item[] = [];
+  // Questions' answers come later, in lines of their own, and go with them.
+  const answers = new Map<string, ToolEntry["answered"]>();
+  for (const entry of entries) if (entry.kind === "tool" && entry.answered) answers.set(entry.answered.toolUseId, entry.answered);
   for (const entry of entries) {
     const last = items.at(-1);
-    if (entry.kind === "tool") {
+    if (entry.kind === "tool" && entry.answered) continue;
+    if (entry.kind === "tool" && entry.ask) {
+      items.push({ kind: "ask", entry: { ...entry, ask: entry.ask }, answered: answers.get(entry.ask.toolUseId) });
+    } else if (entry.kind === "tool") {
       if (last?.kind === "tools") last.entries.push(entry);
       else items.push({ kind: "tools", entries: [entry] });
     } else {
@@ -1318,7 +1328,10 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
 
   const session = chat?.session ?? null;
   // A permission prompt or a question takes keys, not messages.
-  const asking = status === "waiting";
+  const asking = status === "waiting" || !!tab.asking;
+  // The questions the panel can answer: the latest, while its hook waits.
+  const items = group(chat?.entries ?? [], status === "working");
+  const openAsk = tab.asking ? items.findLast((item) => item.kind === "ask" && !item.answered) : undefined;
   const canSend = !!session && !asking && !!text.trim();
 
   function send() {
@@ -1490,6 +1503,7 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
 
   function placeholder(): string {
     if (!session) return "No agent session";
+    if (tab.asking) return `${AGENT_NAMES[agentKind]} is asking you above`;
     if (asking) return `${AGENT_NAMES[agentKind]} is asking something in the terminal`;
     if (status === "working") return "Queue a message";
     return "Reply";
@@ -1545,8 +1559,17 @@ function Conversation({ tab, visible, showing }: { tab: Tab; visible: boolean; s
             <div className="note">Start Claude Code, Codex, Antigravity or Grok in this tab, and its conversation shows up here.</div>
           )}
           {chat && session && chat.entries.length === 0 && <div className="note">Nothing said yet.</div>}
-          {group(chat?.entries ?? [], status === "working").map((item) =>
-            item.kind === "tools" ? (
+          {items.map((item) =>
+            item.kind === "ask" ? (
+              <Questions
+                key={item.entry.id}
+                questions={item.entry.ask.questions}
+                answered={item.answered}
+                onAnswer={
+                  item === openAsk ? (answers) => daemon.send({ type: "answer", tabId: tab.id, ...answers }) : undefined
+                }
+              />
+            ) : item.kind === "tools" ? (
               <ToolCalls key={item.entries[0].id} entries={item.entries} />
             ) : item.kind === "prompt" ? (
               <div key={item.entry.id} className="prompt">

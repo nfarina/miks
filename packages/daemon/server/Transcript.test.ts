@@ -100,3 +100,45 @@ test("a rewound conversation shows the path it took, and a compaction carries on
   transcript.close();
   expect(transcript.entries.map((entry) => ("text" in entry ? entry.text : ""))).toEqual(["One", "Two", "Three", "Four", "Instead"]);
 });
+
+test("Claude's questions come with their options, and their answers (with notes) as lines of their own", () => {
+  const questions = [
+    {
+      question: "Which color?",
+      header: "Color",
+      multiSelect: false,
+      options: [
+        { label: "Red", description: "Warm" },
+        { label: "Blue", description: "Cool" },
+      ],
+    },
+  ];
+  const [asked] = parseTranscriptLine(
+    line({ type: "assistant", message: { content: [{ type: "tool_use", id: "toolu_1", name: "AskUserQuestion", input: { questions } }] } }),
+  );
+  expect(asked).toMatchObject({
+    kind: "tool",
+    name: "AskUserQuestion",
+    summary: "Which color?",
+    ask: { toolUseId: "toolu_1", questions: [{ question: "Which color?", header: "Color", options: questions[0].options }] },
+  });
+
+  // As a real one was written, notes and all.
+  const answered = parseTranscriptLine(
+    line({
+      type: "user",
+      message: { content: [{ type: "tool_result", tool_use_id: "toolu_1", content: 'The user answered: "Which color?"="Blue" notes: dark' }] },
+      toolUseResult: { questions, answers: { "Which color?": "Blue" }, annotations: { "Which color?": { notes: "dark" } } },
+    }),
+  );
+  expect(answered).toEqual([
+    {
+      id: "u1",
+      kind: "tool",
+      name: "AskUserQuestion",
+      summary: "Answered",
+      time: Date.parse("2026-10-20T12:00:00.000Z"),
+      answered: { toolUseId: "toolu_1", answers: { "Which color?": "Blue" }, notes: { "Which color?": "dark" } },
+    },
+  ]);
+});

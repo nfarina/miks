@@ -7,6 +7,8 @@ import path from "path";
 import {
   type AgentKind,
   type AgentState,
+  type AskAnswers,
+  type AskQuestion,
   type Background,
   type ChatEntry,
   type DaemonState,
@@ -159,6 +161,12 @@ export class Workspaces extends EventEmitter<{
   private readonly pendingDone = new Map<string, NodeJS.Timeout>();
   /** The title each tab's Codex was last looked up by, so it's once per title. */
   private readonly codexLookups = new Map<string, string>();
+  /**
+   * The questions each tab's Claude is asking (AskUserQuestion), its hook
+   * held open meanwhile: answering it is how the panel answers them (see
+   * `ask`).
+   */
+  private readonly asks = new Map<string, { questions: AskQuestion[]; respond: (output: object | null) => void }>();
   /** A permission request waits a moment before it's `waiting` (see applyHook). */
   private readonly pendingWaiting = new Map<string, { timer?: NodeJS.Timeout; message?: string }>();
   /**
@@ -643,6 +651,9 @@ export class Workspaces extends EventEmitter<{
     if (kind === "codex" && payload?.agent_id) return;
 
     const event: string | undefined = payload?.hook_event_name;
+    // The questions were answered (in the terminal, say), or went
+    // unanswered. Not a Notification, which says they're being asked.
+    if (event !== "Notification") this.releaseAsk(tabId);
     // Session IDs are UUIDs; anything else isn't one we'd put in a command.
     const sessionId = payload?.session_id;
     if (typeof sessionId === "string" && /^[\w-]+$/.test(sessionId)) {
@@ -815,6 +826,56 @@ export class Workspaces extends EventEmitter<{
     this.codexTitled.delete(tabId);
     this.restoredSessions.delete(tabId);
     this.updateChat(tabId);
+  }
+
+  /**
+   * Claude asking you questions (AskUserQuestion's `PermissionRequest`), its
+   * hook waiting on `respond`. Claude Code shows them in the terminal all
+   * the while and takes whichever answer comes first, the terminal's or the
+   * hook's (both tried live), so the panel can answer them too, by
+   * answering the hook (`answer`). Claude Code never stops a hook it's done
+   * waiting for, so the next hook for the tab (but its Notification, which
+   * comes right after) ends this one, with nothing.
+   */
+  ask(tabId: string, payload: any, respond: (output: object | null) => void) {
+    if (!this.panes.has(tabId)) return respond(null);
+    this.applyHook(tabId, payload);
+    const questions = payload?.tool_input?.questions;
+    if (!Array.isArray(questions) || questions.length === 0) return respond(null);
+    this.asks.set(tabId, { questions, respond });
+    this.emit("change");
+  }
+
+  /** Answers the questions a tab's Claude is asking, if those are what it's asking. */
+  answer(tabId: string, { answers, notes }: AskAnswers) {
+    const ask = this.asks.get(tabId);
+    if (!ask || !answers || typeof answers !== "object") return;
+    const asked = new Set(ask.questions.map((question: any) => question?.question));
+    if (!Object.keys(answers).every((question) => asked.has(question))) return;
+
+    const annotations = Object.fromEntries(
+      Object.entries(notes ?? {})
+        .filter(([question, note]) => asked.has(question) && typeof note === "string" && note.trim())
+        .map(([question, note]) => [question, { notes: note.trim() }]),
+    );
+    this.releaseAsk(tabId, {
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest",
+        decision: {
+          behavior: "allow",
+          updatedInput: { questions: ask.questions, answers, ...(Object.keys(annotations).length > 0 && { annotations }) },
+        },
+      },
+    });
+  }
+
+  /** Lets a tab's question hook go, with what to say, if anything; or, given the one it was, only if that's still it (its hook gone). */
+  releaseAsk(tabId: string, output: object | null = null, only?: (output: object | null) => void) {
+    const ask = this.asks.get(tabId);
+    if (!ask || (only && ask.respond !== only)) return;
+    this.asks.delete(tabId);
+    ask.respond(output);
+    this.emit("change");
   }
 
   private cancelWaiting(tabId: string) {
@@ -1317,6 +1378,7 @@ export class Workspaces extends EventEmitter<{
       page: this.pages.get(id),
       background: this.backgrounds.get(id)?.counts(),
       panel: this.panels.get(id),
+      asking: this.asks.has(id) || undefined,
     };
   }
 
@@ -1330,6 +1392,7 @@ export class Workspaces extends EventEmitter<{
     clearTimeout(this.pendingDone.get(tabId));
     this.pendingDone.delete(tabId);
     this.cancelWaiting(tabId);
+    this.releaseAsk(tabId);
     this.panes.delete(tabId);
     this.agents.delete(tabId);
     this.sessions.delete(tabId);

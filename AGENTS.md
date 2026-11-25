@@ -465,6 +465,17 @@ resizes); keep it passing.
   `replyLines`, which is how a long reply opens the panel. crosswing's
   `TextArea` with `autoTrim={false}` never takes a new `value` from outside
   (it wouldn't clear after sending), so the composer keeps the default.
+  Claude's questions (AskUserQuestion; `ui/Questions.tsx`) are answered
+  through a hook: `PermissionRequest` (matcher `AskUserQuestion`, a day's
+  timeout) runs `claude-hook.sh`, which posts to `/api/hook/ask` and waits;
+  the daemon holds it (`Tab.asking`, since protocol 24) until an `answer`,
+  and replies `allow` with `updatedInput` `{questions, answers,
+  annotations: {[q]: {notes}}}`. Claude Code shows its own picker
+  meanwhile and takes whichever answers first (verified live both ways);
+  it never kills a hook it's stopped waiting for, so the tab's next hook,
+  except the `Notification` that comes right after, lets it go. The answer
+  is a later `tool_result` line (`toolUseResult.answers`); several picked
+  come back as one string, labels joined by ", ".
   Each tab has its own panel, in its own area (`ChatLayout`), open or not
   per tab, and shown only while `tab.agent` is set. Open or not and what
   it shows are every window's (`Tab.panel`, from `panel` messages, since
