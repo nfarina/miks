@@ -59,7 +59,7 @@ export function Questions({
   }
 
   return (
-    <StyledQuestions data-live={live}>
+    <StyledQuestions data-live={live} data-answered={!!answered || sent}>
       {questions.map((question, index) => {
         const pick = picks[index];
         // Answered: what was picked, by label, and anything else was your own words.
@@ -98,7 +98,7 @@ export function Questions({
                   }
                 >
                   <span className="mark" data-multi={!!question.multiSelect}>
-                    {chosen(option.label) && <Check size={11} strokeWidth={3} />}
+                    {chosen(option.label) && <Check size={answered || sent ? 15 : 11} strokeWidth={3} />}
                   </span>
                   <span className="body">
                     <span className="label">{option.label}</span>
@@ -340,6 +340,31 @@ export const StyledQuestions = styled.div`
       font: ${fonts.display({ size: 12, line: "18px" })};
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+  }
+
+  /* Not to be picked (answered, or only in the terminal): a list, not
+     buttons. Once answered, what was picked stands out from the rest. */
+  &[data-live="false"] > .question > .options > .option {
+    border-color: transparent;
+    background: none;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  &[data-answered="true"] > .question > .options > .option {
+    &[data-chosen="false"] {
+      opacity: 0.4;
+
+      > .mark {
+        visibility: hidden;
+      }
+    }
+
+    &[data-chosen="true"] > .mark {
+      border: none;
+      background: none;
+      color: ${colors.darkBlue()};
     }
   }
 
